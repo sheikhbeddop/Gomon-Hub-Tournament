@@ -205,6 +205,17 @@ def init_db():
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         );
 
+        CREATE TABLE IF NOT EXISTS withdrawals (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            amount INTEGER NOT NULL,
+            bkash_number TEXT NOT NULL,
+            status TEXT DEFAULT 'pending',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            reviewed_at DATETIME,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+
         CREATE TABLE IF NOT EXISTS audit_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             admin_id INTEGER,
@@ -463,6 +474,10 @@ class DepositRequest(BaseModel):
     amount: int
     trx_id: str
 
+
+class WithdrawRequest(BaseModel):
+    amount: int
+    bkash_number: str
 class JoinMatchRequest(BaseModel):
     match_id: int
 
@@ -1063,6 +1078,82 @@ def get_wallet_history(user: dict = Depends(get_current_user)):
         "deposits": [dict(d) for d in deposits],
         "logs": [dict(l) for l in logs]
     }
+
+@app.post("/api/wallet/withdraw")
+def request_withdraw(data: WithdrawRequest, user: dict = Depends(get_current_user)):
+    if data.amount <= 0:
+        raise HTTPException(status_code=400, detail="উইথড্র পরিমাণ ০ এর বেশি হতে হবে")
+    if len(data.bkash_number.strip()) < 11:
+        raise HTTPException(status_code=400, detail="সঠিক ১১ ডিজিটের বিকাশ নাম্বার আবশ্যক")
+    
+    conn = get_db()
+    u = conn.execute("SELECT digits_balance FROM users WHERE id = ?", (user["id"],)).fetchone()
+    current_balance = u["digits_balance"] if u else 0
+    if current_balance < data.amount:
+        conn.close()
+        raise HTTPException(status_code=400, detail=f"অপর্যাপ্ত ব্যালেন্স! আপনার ব্যালেন্স BDT {current_balance} ডিজিট।")
+    
+    with conn:
+        conn.execute("UPDATE users SET digits_balance = digits_balance - ? WHERE id = ?", (data.amount, user["id"]))
+        conn.execute("""
+        INSERT INTO withdrawals (user_id, amount, bkash_number, status)
+        VALUES (?, ?, ?, 'pending')
+        """, (user["id"], data.amount, data.bkash_number.strip()))
+        conn.execute("""
+        INSERT INTO audit_logs (admin_id, target_user_id, action, amount, reason)
+        VALUES (?, ?, 'WITHDRAW_REQUEST', ?, ?)
+        """, (user["id"], user["id"], data.amount, f"Withdrawal request to bKash {data.bkash_number.strip()}"))
+    conn.close()
+
+    new_bal = current_balance - data.amount
+    schedule_broadcast({
+        "type": "BALANCE_UPDATED",
+        "user_id": user["id"],
+        "digits_balance": new_bal
+    })
+
+    return {
+        "success": True,
+        "message": f"BDT {data.amount} টাকা উইথড্র রিকোয়েস্ট সফলভাবে জমা হয়েছে! অ্যাডমিন শীঘ্রই পেমেন্ট করবেন।",
+        "new_balance": new_bal
+    }
+
+@app.get("/api/wallet/withdraw/history")
+def get_withdraw_history(user: dict = Depends(get_current_user)):
+    conn = get_db()
+    withdrawals = conn.execute("""
+    SELECT * FROM withdrawals WHERE user_id = ? ORDER BY id DESC LIMIT 20
+    """, (user["id"],)).fetchall()
+    conn.close()
+    return {"withdrawals": [dict(w) for w in withdrawals]}
+
+@app.get("/api/leaderboard")
+def get_leaderboard():
+    conn = get_db()
+    rows = conn.execute("""
+    SELECT id, player_id, username, win_points,
+           (SELECT COUNT(*) FROM participations p JOIN matches m ON p.match_id = m.id WHERE p.user_id = users.id AND m.status = 'completed') as matches_won,
+           (SELECT COUNT(*) FROM participations WHERE user_id = users.id) as matches_joined
+    FROM users
+    WHERE role != 'admin' AND status = 'active'
+    ORDER BY win_points DESC, matches_won DESC, id ASC
+    LIMIT 20
+    """).fetchall()
+    conn.close()
+    return {"leaderboard": [dict(r) for r in rows]}
+
+@app.get("/api/matches/results")
+def get_matches_results():
+    conn = get_db()
+    rows = conn.execute("""
+    SELECT id, title, match_type, map_name, match_time, entry_fee, prize_pool, per_kill, total_slots, status, completed_at
+    FROM matches
+    WHERE status = 'completed'
+    ORDER BY id DESC
+    LIMIT 30
+    """).fetchall()
+    conn.close()
+    return {"results": [dict(r) for r in rows]}
 
 # -------------------------------------------------------------
 # Web Push Notifications Subscription
@@ -1968,7 +2059,7 @@ app.mount("/static", StaticFiles(directory=public_dir), name="static")
 def serve_index():
     index_file = os.path.join(public_dir, "index.html")
     if os.path.exists(index_file):
-        return FileResponse(index_file)
+        return FileResponse(index_file, headers={"Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache", "Expires": "0"})
     return {"status": "Frontend loading..."}
 
 @app.get("/sw.js")

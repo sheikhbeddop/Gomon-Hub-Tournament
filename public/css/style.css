@@ -786,7 +786,11 @@ body {
 }
 
 .admin-section {
+    display: none;
     animation: adminFadeIn 0.25s ease-out;
+}
+.admin-section.active {
+    display: block !important;
 }
 
 @keyframes adminFadeIn {
@@ -1242,16 +1246,20 @@ body {
 
     .admin-sidebar {
         width: 100%;
-        position: sticky;
-        top: 55px;
-        z-index: 10;
+        position: relative;
+        top: 0;
+        z-index: 20;
         flex-direction: row;
         overflow-x: auto;
-        padding: 6px;
-        gap: 6px;
+        padding: 8px 6px;
+        gap: 8px;
         white-space: nowrap;
         -webkit-overflow-scrolling: touch;
         scrollbar-width: none;
+        background: #ffffff;
+        border: 1px solid var(--border-glass);
+        border-radius: var(--radius-md);
+        margin-bottom: 6px;
     }
 
     .admin-sidebar::-webkit-scrollbar {
@@ -1264,23 +1272,31 @@ body {
 
     .admin-nav-item {
         width: auto;
-        padding: 8px 12px;
-        font-size: 0.82rem;
+        padding: 9px 14px;
+        font-size: 0.85rem;
         gap: 6px;
-        border-left: none;
-        border-bottom: 2px solid transparent;
+        border-radius: var(--radius-sm);
+        border: 1.5px solid #e2e8f0;
+        background: #f8fafc;
+        color: var(--text-primary);
         flex-shrink: 0;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        touch-action: manipulation;
+        -webkit-tap-highlight-color: rgba(0, 0, 0, 0.05);
     }
 
     .admin-nav-item:hover {
         transform: none;
+        background: #f1f5f9;
     }
 
     .admin-nav-item.active {
-        border-left: none;
-        border-bottom: 2px solid var(--neon-green);
+        border: 1.5px solid var(--neon-green);
         background: #ecfdf5;
         color: var(--neon-green);
+        font-weight: 800;
     }
 
     .admin-grid-stats {

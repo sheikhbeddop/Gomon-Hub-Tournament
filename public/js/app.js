@@ -271,7 +271,12 @@ function togglePasswordVisibility(inputId, el) {
 }
 
 function handleForgotPassword() {
-    alert(`পাসওয়ার্ড ভুলে গেলে বা কোনো সমস্যার জন্য এডমিন সাপোর্টে যোগাযোগ করুন:\n\nbKash / Helpline: ${adminBkashNumber}\nAdmin ID: GOMON HUB Support`);
+    const modal = document.getElementById('forgotPasswordModal');
+    if (modal) {
+        openModal('forgotPasswordModal');
+    } else {
+        alert("So Sad Baby\n\nএডমিন বা GOMON HUB এর সাথে যোগাযোগ করুন। আর কিচ্ছু লাগবে না!\n\nWhatsApp: 01952851550\n২৪ ঘণ্টার যেকোনো সময় সাপোর্ট পাওয়া যাবে।");
+    }
 }
 
 async function handleLoginSubmit(e) {

@@ -736,7 +736,19 @@ async function handleRegisterSubmit(e) {
         return;
     }
 
-    // 3. Password validation (min 8 chars, @ or #, strong password)
+    // 3. Free Fire UID validation (strictly mandatory)
+    const ffUid = document.getElementById('regFFUid') ? document.getElementById('regFFUid').value.trim() : '';
+    const ffIgn = document.getElementById('regFFIgn') ? document.getElementById('regFFIgn').value.trim() : '';
+    if (!ffUid) {
+        showSignupError('ফ্রি ফায়ার ইউআইডি (Free Fire UID) দেওয়া আবশ্যক', 'regFFUid');
+        return;
+    }
+    if (!/^\d{6,15}$/.test(ffUid)) {
+        showSignupError('সঠিক ফ্রি ফায়ার ইউআইডি দিন (৬ থেকে ১৫ ডিজিটের সংখ্যা হতে হবে)', 'regFFUid');
+        return;
+    }
+
+    // 4. Password validation (min 8 chars, @ or #, strong password)
     const passCheck = validatePasswordStrength(password);
     if (!passCheck.valid) {
         showSignupError(passCheck.message, 'regPassword');
@@ -765,8 +777,8 @@ async function handleRegisterSubmit(e) {
                 phone,
                 email,
                 password,
-                ff_ign: username,
-                ff_uid: phone
+                ff_ign: ffIgn || username,
+                ff_uid: ffUid
             })
         });
     } catch (networkErr) {
@@ -798,7 +810,8 @@ async function handleRegisterSubmit(e) {
         } else {
             const errMsg = (data && data.detail) || 'রেজিস্ট্রেশন ব্যর্থ হয়েছে';
             let targetId = null;
-            if (errMsg.includes('ফোন')) targetId = 'regPhone';
+            if (errMsg.includes('ইউআইডি') || errMsg.includes('UID')) targetId = 'regFFUid';
+            else if (errMsg.includes('ফোন')) targetId = 'regPhone';
             else if (errMsg.includes('ইউজারনেম')) targetId = 'regUsername';
             else if (errMsg.includes('পাসওয়ার্ড')) targetId = 'regPassword';
             else if (errMsg.includes('ইমেইল')) targetId = 'regEmail';
@@ -830,13 +843,17 @@ async function handleRegisterSubmit(e) {
 }
 
 // -------------------------------------------------------------
+// -------------------------------------------------------------
 // Matches & Slot Booking Engine
 // -------------------------------------------------------------
+activeCategoryFilter = activeCategoryFilter || 'all';
+
 async function loadMatches() {
     try {
         const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
         const res = await fetch('/api/matches?_t=' + Date.now(), { headers });
-        allMatches = await res.json();
+        const data = await res.json();
+        allMatches = Array.isArray(data) ? data : (data.matches || []);
         renderMatches();
         renderMyMatches();
         if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'moderator')) {
@@ -847,8 +864,30 @@ async function loadMatches() {
     }
 }
 
-function filterMatches(category) {
-    activeCategoryFilter = category;
+function fetchMatches() {
+    return loadMatches();
+}
+
+function filterMatches(category, btnElem) {
+    activeCategoryFilter = category || 'all';
+
+    if (btnElem) {
+        document.querySelectorAll('#tab-matches .filter-pill').forEach(b => b.classList.remove('active'));
+        btnElem.classList.add('active');
+    } else {
+        document.querySelectorAll('#tab-matches .filter-pill').forEach(b => {
+            const txt = (b.innerText || '').trim().toLowerCase();
+            const cat = activeCategoryFilter.toLowerCase();
+            if ((cat === 'all' || cat === 'সব ম্যাচ') && (txt === 'সব ম্যাচ' || txt === 'all')) {
+                b.classList.add('active');
+            } else if (txt === cat) {
+                b.classList.add('active');
+            } else {
+                b.classList.remove('active');
+            }
+        });
+    }
+
     renderMatches();
 }
 
@@ -856,176 +895,215 @@ function renderMatches() {
     const grid = document.getElementById('matchesGrid');
     if (!grid) return;
 
-    let filtered = allMatches;
-    if (activeCategoryFilter !== 'all') {
-        filtered = allMatches.filter(m => m.match_type.toLowerCase() === activeCategoryFilter.toLowerCase());
+    let filtered = allMatches || [];
+    if (activeCategoryFilter && activeCategoryFilter !== 'all' && activeCategoryFilter !== 'সব ম্যাচ') {
+        filtered = (allMatches || []).filter(m => (m.match_type || '').toLowerCase().trim() === activeCategoryFilter.toLowerCase().trim());
     }
 
-    if (filtered.length === 0) {
+    if (!filtered || filtered.length === 0) {
         grid.innerHTML = `
-            <div style="grid-column: 1/-1; text-align: center; padding: 40px; color: var(--text-muted);">
-                কোনো ম্যাচ পাওয়া যায়নি। খুব শীঘ্রই নতুন শিডিউল দেওয়া হবে!
+            <div style="grid-column: 1/-1; text-align: center; padding: 28px 16px; background: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; margin: 10px 0;">
+                <span style="font-size: 1.8rem;">⚡</span>
+                <div style="font-family: 'Rajdhani', sans-serif; font-size: 0.95rem; font-weight: 800; color: #1e293b; margin: 6px 0 2px;">বর্তমানে কোনো একটিভ ম্যাচ নেই</div>
+                <div style="font-size: 0.75rem; color: #64748b;">খুব শীঘ্রই নতুন ম্যাচ যোগ করা হবে, সাথে থাকুন!</div>
             </div>
         `;
         return;
     }
 
     grid.innerHTML = filtered.map(m => {
-        const slotsPercent = Math.min(100, Math.round((m.joined_count / m.total_slots) * 100));
-        const isFull = m.joined_count >= m.total_slots;
+        const slotsPercent = Math.min(100, Math.round(((m.joined_count || 0) / (m.total_slots || 48)) * 100));
+        const isFull = (m.joined_count || 0) >= (m.total_slots || 48);
         const hasJoined = m.has_joined;
 
-        let btnHtml = '';
+        let actionHtml = '';
         if (hasJoined) {
-            btnHtml = `<button class="btn btn-outline" style="width: 100%; border-color: var(--neon-green); color: var(--neon-green);" onclick="switchTab('tab-mymatches')">✅ আপনি ইতিমধ্যে জয়েন করেছেন</button>`;
+            actionHtml = `
+                <div style="display: flex; flex-direction: column; gap: 6px;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; background: rgba(0, 245, 155, 0.08); border: 1px solid rgba(0, 245, 155, 0.25); border-radius: 8px; padding: 6px 10px;">
+                        <span style="font-size: 0.8rem; color: #a7f3d0; font-weight: 700;">✅ আপনি জয়েন করেছেন</span>
+                        <span style="font-family: 'Rajdhani', sans-serif; font-size: 0.95rem; font-weight: 800; color: #00f59b;">স্লট #${m.my_slot || 1}</span>
+                    </div>
+                    <button class="btn btn-neon" style="width: 100%; padding: 8px 12px; font-size: 0.86rem; font-weight: 800; border-radius: 8px;" onclick="openMatchInnerPortal(${m.id})">
+                        🔑 রুম ও প্লেয়ার ডিটেইলস দেখুন
+                    </button>
+                </div>
+            `;
+        } else if (m.status === 'reg_closed') {
+            actionHtml = `
+                <div style="display: flex; flex-direction: column; gap: 6px;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 5px 10px;">
+                        <span style="font-size: 0.78rem; color: #94a3b8; font-weight: 600;">⭕ জয়েন করেননি</span>
+                        <span style="font-size: 0.75rem; color: #ef4444; font-weight: 700;">রেজিস্ট্রেশন বন্ধ</span>
+                    </div>
+                    <div style="display: flex; gap: 6px;">
+                        <button class="btn btn-outline" style="flex: 1; opacity: 0.75; cursor: not-allowed; border-color: #ef4444; color: #ef4444; font-size: 0.8rem; font-weight: 700;" disabled>🔒 রেজিস্ট্রেশন বন্ধ</button>
+                        <button class="btn btn-outline" style="flex: 1; padding: 8px 6px; font-size: 0.8rem; font-weight: 700; border-radius: 8px; border-color: #cbd5e1; color: #64748b;" onclick="openMatchInnerPortal(${m.id})">🔒 রুম ডিটেইলস</button>
+                    </div>
+                </div>
+            `;
+        } else if (m.status === 'completed') {
+            actionHtml = `
+                <div style="display: flex; flex-direction: column; gap: 6px;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 5px 10px;">
+                        <span style="font-size: 0.78rem; color: #94a3b8; font-weight: 600;">⭕ জয়েন করেননি</span>
+                        <span style="font-size: 0.75rem; color: #10b981; font-weight: 700;">ম্যাচ সমাপ্ত</span>
+                    </div>
+                    <button class="btn btn-outline" style="width: 100%; opacity: 0.75; cursor: not-allowed; border-color: #10b981; color: #10b981; font-size: 0.82rem; font-weight: 700;" disabled>🏁 ম্যাচ সমাপ্ত</button>
+                </div>
+            `;
         } else if (isFull) {
-            btnHtml = `<button class="btn btn-outline" style="width: 100%; opacity: 0.6; cursor: not-allowed;" disabled>🔒 রুমের সব স্লট পূর্ণ</button>`;
+            actionHtml = `
+                <div style="display: flex; flex-direction: column; gap: 6px;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 5px 10px;">
+                        <span style="font-size: 0.78rem; color: #94a3b8; font-weight: 600;">⭕ জয়েন করেননি</span>
+                        <span style="font-size: 0.75rem; color: #ef4444; font-weight: 700;">রুম পূর্ণ</span>
+                    </div>
+                    <div style="display: flex; gap: 6px;">
+                        <button class="btn btn-outline" style="flex: 1; opacity: 0.6; cursor: not-allowed; font-size: 0.8rem;" disabled>🔒 সব স্লট পূর্ণ</button>
+                        <button class="btn btn-outline" style="flex: 1; padding: 8px 6px; font-size: 0.8rem; font-weight: 700; border-radius: 8px; border-color: #cbd5e1; color: #64748b;" onclick="openMatchInnerPortal(${m.id})">🔒 রুম ডিটেইলস</button>
+                    </div>
+                </div>
+            `;
         } else {
-            btnHtml = `<button class="btn btn-neon" style="width: 100%; padding: 8px 12px; font-size: 0.84rem; font-weight: 800; border-radius: 8px;" onclick="joinMatch(${m.id}, ${m.entry_fee})">🎮 জয়েন করুন (${m.entry_fee} ডিজিট)</button>`;
+            actionHtml = `
+                <div style="display: flex; flex-direction: column; gap: 6px;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 5px 10px;">
+                        <span style="font-size: 0.78rem; color: #64748b; font-weight: 600;">⭕ আপনি এখনও জয়েন করেননি</span>
+                        <span style="font-size: 0.75rem; color: #0284c7; font-weight: 700;">ফি: ${m.entry_fee}🪙</span>
+                    </div>
+                    <div style="display: flex; gap: 6px;">
+                        <button class="btn btn-neon" style="flex: 1.2; padding: 8px 6px; font-size: 0.82rem; font-weight: 800; border-radius: 8px;" onclick="openJoinMatchModal(${m.id}, '${escapeHtml(m.title)}', ${m.entry_fee})">
+                            🎮 জয়েন করুন (${m.entry_fee}🪙)
+                        </button>
+                        <button class="btn btn-outline" style="flex: 1; padding: 8px 6px; font-size: 0.8rem; font-weight: 700; border-radius: 8px; border-color: #cbd5e1; color: #475569;" onclick="openMatchInnerPortal(${m.id})">
+                            🔒 রুম ডিটেইলস
+                        </button>
+                    </div>
+                </div>
+            `;
         }
 
         return `
             <div class="match-card">
                 <div class="match-card-header">
                     <div>
-                        <span class="match-category">🔥 ${m.match_type}</span>
+                        <span class="match-category">🔥 ${escapeHtml(m.match_type || 'Solo')}</span>
                         <div class="match-title">${escapeHtml(m.title)}</div>
-                        <div class="match-time-badge">⏰ ${m.match_time}</div>
+                        <div class="match-time-badge">⏰ ${escapeHtml(m.match_time || '')}</div>
                     </div>
-                    <div class="match-map">🗺️ ${m.map_name}</div>
+                    <div class="match-map">🗺️ ${escapeHtml(m.map_name || 'Bermuda')}</div>
                 </div>
 
                 <div class="match-stats-row">
                     <div class="stat-item">
                         <span class="stat-label">প্রাইজ পুল</span>
-                        <span class="stat-val prize">৳${m.prize_pool}</span>
+                        <span class="stat-val prize">৳${m.prize_pool || 0}</span>
                     </div>
                     <div class="stat-item">
                         <span class="stat-label">পার কিল</span>
-                        <span class="stat-val kill">৳${m.per_kill}</span>
+                        <span class="stat-val kill">৳${m.per_kill || 0}</span>
                     </div>
                     <div class="stat-item">
                         <span class="stat-label">এন্ট্রি ফি</span>
-                        <span class="stat-val fee">${m.entry_fee}🪙</span>
+                        <span class="stat-val fee">${m.entry_fee || 0}🪙</span>
                     </div>
                 </div>
 
                 <div class="slot-progress-wrapper">
                     <div class="slot-text-row">
                         <span>স্লট বুকিং</span>
-                        <span><b>${m.joined_count}</b> / ${m.total_slots} জন</span>
+                        <span><b>${m.joined_count || 0}</b> / ${m.total_slots || 48} জন</span>
                     </div>
                     <div class="slot-bar-bg">
                         <div class="slot-bar-fill" style="width: ${slotsPercent}%;"></div>
                     </div>
                 </div>
 
-                ${hasJoined && m.room_id !== 'JOIN TO VIEW' ? `
-                    <div class="match-room-info">
-                        <div class="room-row">
-                            <span class="room-lbl">Custom Room ID:</span>
-                            <span class="room-code">${m.room_id}</span>
-                        </div>
-                        <div class="room-row">
-                            <span class="room-lbl">Room Password:</span>
-                            <span class="room-code">${m.room_pass}</span>
-                        </div>
-                    </div>
-                ` : ''}
-
-                <div class="match-card-footer">
-                    ${btnHtml}
+                <div class="match-card-footer" style="margin-top: 10px;">
+                    ${actionHtml}
                 </div>
             </div>
         `;
     }).join('');
 }
 
-function renderMyMatches() {
-    const grid = document.getElementById('myMatchesGrid');
-    if (!grid) return;
-
-    if (!currentUser) {
-        grid.innerHTML = `
-            <div style="grid-column: 1/-1; text-align: center; padding: 40px; color: var(--text-muted);">
-                আপনার জয়েন করা ম্যাচ দেখতে অনুগ্রহ করে <a href="javascript:openModal('authModal')" style="color: var(--neon-green);">লগইন করুন</a>।
-            </div>
-        `;
-        return;
-    }
-
-    const myMatches = allMatches.filter(m => m.has_joined);
-    if (myMatches.length === 0) {
-        grid.innerHTML = `
-            <div style="grid-column: 1/-1; text-align: center; padding: 24px 16px; background: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; margin: 10px 0; box-shadow: 0 2px 8px rgba(0,0,0,0.03);">
-                <span style="font-size: 1.8rem;">🎮</span>
-                <div style="font-family: 'Rajdhani', sans-serif; font-size: 0.95rem; font-weight: 800; color: #1e293b; margin: 6px 0 3px;">আপনি এখনো কোনো ম্যাচে জয়েন করেননি</div>
-                <div style="font-size: 0.75rem; color: #64748b; margin-bottom: 10px;">শিডিউল থেকে আপনার পছন্দের ম্যাচে জয়েন করুন।</div>
-                <button class="btn btn-neon btn-sm" onclick="switchTab('tab-matches')" style="padding: 5px 14px; font-size: 0.78rem; font-weight: 700; border-radius: 6px;">ম্যাচ শিডিউল দেখুন</button>
-            </div>
-        `;
-        return;
-    }
-
-    grid.innerHTML = myMatches.map(m => `
-        <div class="match-card" style="border-color: rgba(0, 245, 155, 0.4);">
-            <div class="match-card-header">
-                <div>
-                    <span class="match-category">✅ জয়েন করা হয়েছে</span>
-                    <div class="match-title">${escapeHtml(m.title)}</div>
-                    <div class="match-time-badge">⏰ ${m.match_time}</div>
-                </div>
-                <div class="match-map">🗺️ ${m.map_name} (${m.match_type})</div>
-            </div>
-
-            <div style="padding: 16px;">
-                <div style="background: rgba(0, 245, 155, 0.1); border: 1px solid var(--neon-green); border-radius: var(--radius-sm); padding: 14px;">
-                    <div style="font-size: 0.85rem; font-weight: 700; color: var(--neon-green); margin-bottom: 8px;">
-                        🎮 কাস্টম রুমের বিস্তারিত:
-                    </div>
-                    <div class="room-row" style="margin-bottom: 6px;">
-                        <span class="room-lbl">Room ID:</span>
-                        <span class="room-code" style="font-size: 1.2rem;">${m.room_id || 'খেলার ১০ মিনিট আগে আসবে'}</span>
-                    </div>
-                    <div class="room-row">
-                        <span class="room-lbl">Room Password:</span>
-                        <span class="room-code" style="font-size: 1.2rem;">${m.room_pass || 'খেলার ১০ মিনিট আগে আসবে'}</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-    `).join('');
-}
-
-// -------------------------------------------------------------
-// Join Match Functionality
-// -------------------------------------------------------------
-async function joinMatch(matchId, entryFee) {
+function openJoinMatchModal(matchId, matchTitle, entryFee) {
     if (!currentUser) {
         showToast('ম্যাচে জয়েন করতে আগে লগইন করুন', 'info');
         openModal('authModal');
         return;
     }
 
-    // Client-side quick balance verification
     if (currentUser.digits_balance < entryFee) {
-        showToast(`পর্যাপ্ত ডিজিট নেই! লাগবে ${entryFee} ডিজিট, আছে ${currentUser.digits_balance} ডিজিট।`, 'error');
-        switchTab('tab-recharge');
+        showToast(`পর্যাপ্ত ডিজিট নেই! আপনার ব্যালেন্স ${currentUser.digits_balance} ডিজিট। জয়েন করতে ${entryFee} ডিজিট লাগবে।`, 'error');
+        switchTab('tab-profile');
+        openWalletModal();
         return;
     }
 
-    if (!confirm(`আপনি কি ${entryFee} ডিজিট দিয়ে এই ম্যাচে জয়েন করতে চান?`)) {
+    const mIdInput = document.getElementById('joinModalMatchId');
+    if (mIdInput) mIdInput.value = matchId;
+    
+    const titleEl = document.getElementById('joinModalMatchTitle');
+    if (titleEl) titleEl.innerText = matchTitle || 'Free Fire Match';
+
+    const feeEl = document.getElementById('joinModalMatchFee');
+    if (feeEl) feeEl.innerText = `${entryFee} ডিজিট`;
+
+    const balEl = document.getElementById('joinModalUserBal');
+    if (balEl) balEl.innerText = `${currentUser.digits_balance || 0} ডিজিট`;
+
+    const ignInput = document.getElementById('joinPlayerIgn');
+    if (ignInput) ignInput.value = currentUser.ff_ign || currentUser.username || '';
+
+    const uidInput = document.getElementById('joinPlayerUid');
+    if (uidInput) uidInput.value = (currentUser.ff_uid && currentUser.ff_uid !== '0') ? currentUser.ff_uid : '';
+
+    openModal('joinMatchModal');
+}
+
+async function handleJoinMatchFormSubmit(e) {
+    e.preventDefault();
+    if (!currentUser) {
+        openModal('authModal');
         return;
+    }
+
+    const matchId = parseInt(document.getElementById('joinModalMatchId').value, 10);
+    const ign = document.getElementById('joinPlayerIgn').value.trim();
+    const uid = document.getElementById('joinPlayerUid').value.trim();
+
+    if (!matchId) {
+        showToast('ম্যাচ সিলেক্ট করা হয়নি', 'error');
+        return;
+    }
+    if (!ign) {
+        showToast('ইন-গেম নাম (IGN) প্রদান করুন', 'error');
+        document.getElementById('joinPlayerIgn').focus();
+        return;
+    }
+    if (!uid || !/^\d{6,15}$/.test(uid)) {
+        showToast('সঠিক ফ্রি ফায়ার ইউআইডি (UID) প্রদান করুন (কমপক্ষে ৬-১৫ ডিজিটের সংখ্যা)', 'error');
+        document.getElementById('joinPlayerUid').focus();
+        return;
+    }
+
+    const submitBtn = document.getElementById('joinModalSubmitBtn');
+    const origText = submitBtn ? submitBtn.innerText : '🎮 কনফার্ম ও জয়েন করুন';
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerText = 'জয়েন প্রসেস হচ্ছে...';
     }
 
     try {
-        const res = await fetch('/api/matches/join', {
+        const res = await fetchWithAuth('/api/matches/join', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-            },
-            body: JSON.stringify({ match_id: matchId })
+            body: JSON.stringify({
+                match_id: matchId,
+                player_ign: ign,
+                player_uid: uid
+            })
         });
 
         const data = await res.json();
@@ -1033,16 +1111,280 @@ async function joinMatch(matchId, entryFee) {
             playSound('success');
             showToast(data.message, 'success');
             currentUser.digits_balance = data.new_balance;
+            currentUser.ff_ign = ign;
+            currentUser.ff_uid = uid;
+            localStorage.setItem('ff_user', JSON.stringify(currentUser));
             updateBalanceUI(data.new_balance);
-            await loadMatches();
+            closeModal('joinMatchModal');
+            await fetchMatches();
             switchTab('tab-mymatches');
+            setTimeout(() => {
+                viewMatchParticipants(matchId);
+            }, 300);
         } else {
             showToast(data.detail || 'জয়েন করা সম্ভব হয়নি', 'error');
         }
-    } catch (e) {
+    } catch (err) {
+        console.error('Join match error:', err);
         showToast('সার্ভারে যোগাযোগ করা যায়নি', 'error');
+    } finally {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerText = origText;
+        }
     }
 }
+
+let currentPortalRoomId = '';
+let currentPortalRoomPass = '';
+
+function copyInnerRoomInfo(type) {
+    const val = (type === 'id') ? currentPortalRoomId : currentPortalRoomPass;
+    if (!val || val === 'NOT RELEASED YET' || val.includes('দেওয়া হবে') || val.includes('JOIN')) {
+        showToast('রুম আইডি বা পাসওয়ার্ড এখনও প্রকাশ করা হয়নি', 'info');
+        return;
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(val).then(() => {
+            showToast(`কপি হয়েছে: ${val}`, 'success');
+        }).catch(() => {
+            prompt('কপি করতে সিলেক্ট করে Ctrl+C চাপুন:', val);
+        });
+    } else {
+        prompt('কপি করতে সিলেক্ট করে Ctrl+C চাপুন:', val);
+    }
+}
+
+async function openMatchInnerPortal(matchId) {
+    if (!currentUser) {
+        showToast('ম্যাচের বিস্তারিত ও রুম তথ্য দেখতে আগে লগইন করুন', 'info');
+        openModal('authModal');
+        return;
+    }
+
+    const m = (allMatches || []).find(x => x.id === matchId);
+    if (!m) {
+        showToast('ম্যাচ খুঁজে পাওয়া যায়নি', 'error');
+        return;
+    }
+
+    // STRICT ACCESS CONTROL: Player CANNOT enter inside if they have not joined!
+    if (!m.has_joined) {
+        showToast('🔒 এই ম্যাচের রুম আইডি, পাসওয়ার্ড ও প্লেয়ার তালিকা দেখতে আগে ম্যাচে জয়েন করুন!', 'warning');
+        if (m.status === 'open' && (m.joined_count || 0) < (m.total_slots || 48)) {
+            openJoinMatchModal(m.id, m.title, m.entry_fee);
+        }
+        return;
+    }
+
+    // Player is joined: populate inner details and open modal
+    const titleEl = document.getElementById('portalModalTitle');
+    if (titleEl) titleEl.innerText = `${m.title || 'ম্যাচ বিস্তারিত'}`;
+
+    const subEl = document.getElementById('portalModalSubtitle');
+    if (subEl) subEl.innerText = `ম্যাচ টাইপ: ${m.match_type || 'Solo'} • শিডিউল: ${m.match_time || 'শীঘ্রই'}`;
+
+    const slotEl = document.getElementById('portalModalSlot');
+    if (slotEl) slotEl.innerText = `#${m.my_slot || 1} (Fixed)`;
+
+    const prizeEl = document.getElementById('portalModalPrize');
+    if (prizeEl) prizeEl.innerText = `৳${m.prize_pool || 0}`;
+
+    const killEl = document.getElementById('portalModalKill');
+    if (killEl) killEl.innerText = `৳${m.per_kill || 0}`;
+
+    const feeEl = document.getElementById('portalModalFee');
+    if (feeEl) feeEl.innerText = `${m.entry_fee || 0}🪙`;
+
+    const mapEl = document.getElementById('portalModalMap');
+    if (mapEl) mapEl.innerText = `${m.map_name || 'Bermuda'}`;
+
+    // Room info
+    currentPortalRoomId = m.room_id || '';
+    currentPortalRoomPass = m.room_pass || '';
+
+    const rIdEl = document.getElementById('portalModalRoomId');
+    const rPassEl = document.getElementById('portalModalRoomPass');
+
+    const isReleased = (m.room_id && m.room_id !== 'JOIN TO VIEW' && m.room_id !== 'NOT RELEASED YET' && !m.room_id.includes('দেওয়া হবে'));
+    if (rIdEl) {
+        rIdEl.innerText = isReleased ? m.room_id : 'ম্যাচ শুরুর ১০ মিনিট আগে দেওয়া হবে';
+        rIdEl.style.color = isReleased ? '#38bdf8' : '#94a3b8';
+    }
+    if (rPassEl) {
+        rPassEl.innerText = isReleased ? m.room_pass : 'ম্যাচ শুরুর ১০ মিনিট আগে দেওয়া হবে';
+        rPassEl.style.color = isReleased ? '#00f59b' : '#94a3b8';
+    }
+
+    openModal('matchInnerPortalModal');
+
+    // Load participants
+    const loadingEl = document.getElementById('portalModalLoading');
+    const listEl = document.getElementById('portalModalList');
+    const tbody = document.getElementById('portalModalTableBody');
+    const countEl = document.getElementById('portalModalPartCount');
+
+    if (loadingEl) {
+        loadingEl.style.display = 'block';
+        loadingEl.innerHTML = 'প্লেয়ারদের তালিকা লোড হচ্ছে...';
+    }
+    if (listEl) listEl.style.display = 'none';
+    if (tbody) tbody.innerHTML = '';
+    if (countEl) countEl.innerText = `${m.joined_count || 0}`;
+
+    try {
+        const res = await fetchWithAuth(`/api/matches/${matchId}/participants`);
+        const data = await res.json();
+
+        if (!res.ok) {
+            if (loadingEl) {
+                loadingEl.innerHTML = `<div style="padding: 16px; color: #ef4444; font-weight: 700;">🔒 ${escapeHtml(data.detail || 'অননুমোদিত অ্যাক্সেস!')}</div>`;
+            }
+            showToast(data.detail || 'প্লেয়ার তালিকা দেখা সম্ভব হয়নি', 'error');
+            return;
+        }
+
+        if (countEl) countEl.innerText = `${data.joined_count || 0}`;
+
+        if (!data.participants || data.participants.length === 0) {
+            if (tbody) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="3" style="text-align: center; padding: 20px; color: var(--text-muted);">
+                            বর্তমানে কোনো প্লেয়ার জয়েন করেননি
+                        </td>
+                    </tr>
+                `;
+            }
+        } else {
+            if (tbody) {
+                tbody.innerHTML = data.participants.map(p => {
+                    const isSelf = p.is_self;
+                    return `
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.06); ${isSelf ? 'background: rgba(0, 245, 155, 0.08);' : ''}">
+                            <td style="padding: 10px 6px;">
+                                <span style="font-family: 'Rajdhani', sans-serif; font-weight: 800; font-size: 1.05rem; color: ${isSelf ? 'var(--neon-green)' : '#f8fafc'};">
+                                    #${p.slot_number}
+                                </span>
+                            </td>
+                            <td style="padding: 10px 6px;">
+                                <span style="font-weight: 700; color: ${isSelf ? '#00f59b' : '#e2e8f0'};">
+                                    ${escapeHtml(p.player_ign || 'Anonymous')}
+                                </span>
+                                ${isSelf ? '<span style="font-size: 0.72rem; background: rgba(0, 245, 155, 0.2); color: #00f59b; padding: 2px 6px; border-radius: 4px; font-weight: 800; margin-left: 6px;">👑 আপনি</span>' : ''}
+                            </td>
+                            <td style="padding: 10px 6px; text-align: right;">
+                                <span class="protected-uid" oncopy="return false;" oncontextmenu="return false;" ondragstart="return false;" onselectstart="return false;" title="গোপনীয়তা সুরক্ষার্থে কপি নিষিদ্ধ">
+                                    ${escapeHtml(p.player_uid || '------')}
+                                </span>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+            }
+        }
+
+        if (loadingEl) loadingEl.style.display = 'none';
+        if (listEl) listEl.style.display = 'block';
+
+    } catch (err) {
+        console.error('Fetch participants error:', err);
+        if (loadingEl) {
+            loadingEl.innerHTML = `<div style="padding: 16px; color: #ef4444;">সার্ভারে যোগাযোগ করা যায়নি</div>`;
+        }
+    }
+}
+
+// Backward-compatibility alias
+function viewMatchParticipants(matchId) {
+    openMatchInnerPortal(matchId);
+}
+
+function renderMyMatches() {
+    const grid = document.getElementById('myMatchesGrid');
+    if (!grid) return;
+
+    const joinedMatches = (allMatches || []).filter(m => m.has_joined);
+
+    if (joinedMatches.length === 0) {
+        grid.innerHTML = `
+            <div style="grid-column: 1/-1; text-align: center; padding: 36px 16px; background: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; margin: 10px 0;">
+                <span style="font-size: 2rem;">🎮</span>
+                <div style="font-family: 'Rajdhani', sans-serif; font-size: 1.1rem; font-weight: 800; color: #1e293b; margin: 8px 0 4px;">
+                    আপনি এখনও কোনো টুর্নামেন্ট ম্যাচে অংশ নেননি
+                </div>
+                <div style="font-size: 0.82rem; color: #64748b; margin-bottom: 16px;">
+                    হোম পেজ বা শিডিউল থেকে আপনার পছন্দের ম্যাচে জয়েন করুন এবং জিতে নিন আকর্ষণীয় প্রাইজ!
+                </div>
+                <button class="btn btn-neon" style="padding: 8px 20px; font-size: 0.85rem; font-weight: 800;" onclick="switchTab('tab-matches')">
+                    🔥 টুর্নামেন্ট শিডিউল দেখুন
+                </button>
+            </div>
+        `;
+        return;
+    }
+
+    grid.innerHTML = joinedMatches.map(m => {
+        const slotsPercent = Math.min(100, Math.round(((m.joined_count || 0) / (m.total_slots || 48)) * 100));
+
+        return `
+            <div class="match-card" style="border: 1px solid rgba(0, 245, 155, 0.35); box-shadow: 0 4px 20px rgba(0, 245, 155, 0.08);">
+                <div class="match-card-header">
+                    <div>
+                        <span class="match-category" style="background: rgba(0, 245, 155, 0.15); color: #00f59b;">✅ অংশগ্রহণ নিশ্চিত</span>
+                        <div class="match-title">${escapeHtml(m.title)}</div>
+                        <div class="match-time-badge">⏰ ${escapeHtml(m.match_time || '')}</div>
+                    </div>
+                    <div class="match-map">🗺️ ${escapeHtml(m.map_name || 'Bermuda')}</div>
+                </div>
+
+                <div class="match-stats-row">
+                    <div class="stat-item">
+                        <span class="stat-label">প্রাইজ পুল</span>
+                        <span class="stat-val prize">৳${m.prize_pool || 0}</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">পার কিল</span>
+                        <span class="stat-val kill">৳${m.per_kill || 0}</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">এন্ট্রি ফি</span>
+                        <span class="stat-val fee">${m.entry_fee || 0}🪙</span>
+                    </div>
+                </div>
+
+                <div class="slot-progress-wrapper" style="margin-bottom: 10px;">
+                    <div class="slot-text-row">
+                        <span>স্লট বুকিং</span>
+                        <span><b>${m.joined_count || 0}</b> / ${m.total_slots || 48} জন</span>
+                    </div>
+                    <div class="slot-bar-bg">
+                        <div class="slot-bar-fill" style="width: ${slotsPercent}%;"></div>
+                    </div>
+                </div>
+
+                <div class="match-card-footer">
+                    <div style="display: flex; flex-direction: column; gap: 6px;">
+                        <div style="display: flex; align-items: center; justify-content: space-between; background: rgba(0, 245, 155, 0.08); border: 1px solid rgba(0, 245, 155, 0.25); border-radius: 8px; padding: 6px 10px;">
+                            <span style="font-size: 0.8rem; color: #a7f3d0; font-weight: 700;">🎯 আপনার নির্ধারিত স্লট:</span>
+                            <span style="font-family: 'Rajdhani', sans-serif; font-size: 0.95rem; font-weight: 800; color: #00f59b;">#${m.my_slot || 1} (Fixed)</span>
+                        </div>
+                        <button class="btn btn-neon" style="width: 100%; padding: 9px 12px; font-size: 0.86rem; font-weight: 800; border-radius: 8px;" onclick="openMatchInnerPortal(${m.id})">
+                            🔑 রুম ও প্লেয়ার ডিটেইলস দেখুন
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+// Backward-compatibility wrapper for joinMatch
+function joinMatch(matchId, entryFee) {
+    const m = (allMatches || []).find(x => x.id === matchId);
+    openJoinMatchModal(matchId, m ? m.title : 'Free Fire Match', entryFee);
+}
+
 
 // -------------------------------------------------------------
 // bKash Deposit Form
@@ -2869,57 +3211,102 @@ function openSupportModal() {
     openModal('supportModal');
 }
 
-async function loadCompletedResults() {
+let currentResultsCategory = 'all';
+
+async function loadCompletedResults(category, btnElem) {
+    if (category) currentResultsCategory = category;
+    
+    if (btnElem) {
+        document.querySelectorAll('#tab-results .filter-pill').forEach(b => b.classList.remove('active'));
+        btnElem.classList.add('active');
+    }
+
     const container = document.getElementById('completedMatchesList');
     if (!container) return;
 
-    container.innerHTML = '<div style="text-align:center; padding:30px; color:#64748b;">ম্যাচ ফলাফল লোড হচ্ছে...</div>';
+    container.innerHTML = '<div style="text-align:center; padding:30px; color:#64748b; font-size:0.85rem;">ফলাফল লোড হচ্ছে...</div>';
 
     try {
-        const res = await fetch('/api/matches/results');
+        const catParam = currentResultsCategory !== 'all' ? `?category=${encodeURIComponent(currentResultsCategory)}` : '';
+        const res = await fetchWithAuth(`/api/matches/results${catParam}`);
         const data = await res.json();
         const results = data.results || [];
+
+        if (data.not_logged_in) {
+            container.innerHTML = `
+                <div style="text-align:center; padding:24px 16px; background:#ffffff; border-radius:12px; border:1px solid #e2e8f0; margin:10px 0; box-shadow:0 2px 8px rgba(0,0,0,0.03);">
+                    <span style="font-size:1.8rem;">🔒</span>
+                    <h4 style="font-family:'Rajdhani',sans-serif; font-size:0.95rem; font-weight:800; margin:6px 0 2px; color:#1e293b;">আপনার রেজাল্ট দেখতে লগইন করুন</h4>
+                    <p style="color:#64748b; font-size:0.75rem; margin-bottom:12px;">আপনি যেসব টুর্নামেন্টে জয়েন করবেন, সেগুলোর ফলাফল ও আপনার পুরস্কার দেখতে লগইন করুন।</p>
+                    <button class="btn btn-neon btn-sm" onclick="openModal('authModal')" style="padding:5px 14px; font-size:0.78rem;">লগইন / রেজিস্টার করুন</button>
+                </div>
+            `;
+            return;
+        }
 
         if (results.length === 0) {
             container.innerHTML = `
                 <div style="text-align:center; padding:24px 16px; background:#ffffff; border-radius:12px; border:1px solid #e2e8f0; margin:10px 0; box-shadow:0 2px 8px rgba(0,0,0,0.03);">
                     <span style="font-size:1.8rem;">🏆</span>
-                    <h4 style="font-family:'Rajdhani',sans-serif; font-size:0.95rem; font-weight:800; margin:6px 0 2px; color:#1e293b;">কোনো সমাপ্ত ম্যাচ নেই</h4>
-                    <p style="color:#64748b; font-size:0.75rem; margin:0; line-height:1.35;">বর্তমান টুর্নামেন্টগুলো শেষ হলে এখানে সরাসরি ফলাফল প্রদর্শিত হবে।</p>
+                    <h4 style="font-family:'Rajdhani',sans-serif; font-size:0.95rem; font-weight:800; margin:6px 0 2px; color:#1e293b;">আপনার কোনো সমাপ্ত ম্যাচের রেজাল্ট নেই</h4>
+                    <p style="color:#64748b; font-size:0.75rem; margin:0; line-height:1.35;">আপনি যেসব ম্যাচে জয়েন করবেন, খেলা শেষ হওয়ার পর শুধুমাত্র সেগুলোর ফলাফল ও আপনার পুরস্কার এখানে প্রদর্শিত হবে।</p>
                 </div>
             `;
             return;
         }
 
         container.innerHTML = results.map(m => `
-            <div class="results-card">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                    <span class="badge badge-solo">${escapeHtml(m.match_type || 'Solo')}</span>
-                    <span style="font-size:0.8rem; color:#64748b;">সমাপ্তি: ${(m.completed_at || m.match_time || '').split(' ')[0]}</span>
+            <div class="results-card" style="background:#ffffff; border:1px solid #e2e8f0; border-radius:12px; padding:12px 14px; margin-bottom:12px; box-shadow:0 2px 8px rgba(0,0,0,0.03);">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                    <span class="filter-pill" style="background:#e0f2fe; color:#0369a1; border:none; padding:2px 8px; font-size:0.68rem; font-weight:700;">🔥 ${escapeHtml(m.match_type || 'Solo')}</span>
+                    <span style="font-size:0.72rem; color:#64748b;">সমাপ্তি: ${(m.completed_at || m.match_time || '').split(' ')[0]}</span>
                 </div>
-                <h3 style="font-family:'Rajdhani',sans-serif; font-size:1.15rem; font-weight:800; color:#0f172a; margin-bottom:8px;">
+                <h3 style="font-family:'Rajdhani',sans-serif; font-size:0.98rem; font-weight:800; color:#0f172a; margin:0 0 8px 0;">
                     ${escapeHtml(m.title)}
                 </h3>
-                <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; background:#f8fafc; padding:10px; border-radius:8px; text-align:center;">
-                    <div>
-                        <span style="font-size:0.75rem; color:#64748b;">ম্যাপ</span>
-                        <div style="font-weight:700; color:#1e293b;">${escapeHtml(m.map_name || 'Bermuda')}</div>
+                
+                ${data.is_personal ? `
+                    <!-- Personalized Player Result Box -->
+                    <div style="background: linear-gradient(135deg, #0f766e 0%, #115e59 100%); color:white; border-radius:10px; padding:10px 12px; margin-bottom:10px; box-shadow: 0 3px 10px rgba(15, 118, 110, 0.2);">
+                        <div style="font-size:0.68rem; color:#a7f3d0; font-weight:700; text-transform:uppercase; margin-bottom:3px;">🎯 আপনার ম্যাচের ফলাফল</div>
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <div>
+                                <div style="font-size:0.82rem; font-weight:700;">স্থান: ${m.my_rank ? '#' + m.my_rank : 'পার্টিসিপেন্ট'} • কিল: ${m.my_kills || 0} টি</div>
+                                <div style="font-size:0.7rem; color:#e6fffa; margin-top:1px;">(কিল প্রাইজ: ৳${m.my_kill_prize || 0} + স্থান প্রাইজ: ৳${m.my_rank_prize || 0})</div>
+                            </div>
+                            <div style="text-align:right;">
+                                <div style="font-size:0.65rem; color:#a7f3d0;">মোট অর্জিত টাকা</div>
+                                <div style="font-family:'Rajdhani',sans-serif; font-size:1.15rem; font-weight:800; color:#ffffff;">+৳${m.my_total_prize || 0}</div>
+                            </div>
+                        </div>
                     </div>
-                    <div>
-                        <span style="font-size:0.75rem; color:#64748b;">প্রাইজ পুল</span>
-                        <div style="font-weight:800; color:#16a34a;">৳${m.prize_pool}</div>
+                ` : ''}
+
+                <!-- Match Top Winners / Scoreboard -->
+                ${m.winners && m.winners.length > 0 ? `
+                    <div style="background:#f8fafc; border:1px solid #f1f5f9; border-radius:8px; padding:8px 10px;">
+                        <div style="font-size:0.7rem; font-weight:700; color:#475569; margin-bottom:4px;">🏆 সেরা বিজয়ী তালিকা:</div>
+                        <div style="display:flex; flex-direction:column; gap:3px;">
+                            ${m.winners.map(w => `
+                                <div style="display:flex; justify-content:space-between; font-size:0.72rem; color:#334155;">
+                                    <span>${w.rank_position ? '#' + w.rank_position : '🎖️'} <b>${escapeHtml(w.ff_ign || w.username)}</b> (${w.kills} কিল)</span>
+                                    <span style="font-weight:700; color:#059669;">৳${w.total_prize}</span>
+                                </div>
+                            `).join('')}
+                        </div>
                     </div>
-                    <div>
-                        <span style="font-size:0.75rem; color:#64748b;">প্রতি কিল</span>
-                        <div style="font-weight:800; color:#2563eb;">৳${m.per_kill}</div>
+                ` : `
+                    <div style="font-size:0.72rem; color:#64748b; background:#f8fafc; padding:6px 10px; border-radius:6px; text-align:center;">
+                        ম্যাচ সম্পন্ন হয়েছে (প্রাইজ ডিস্ট্রিবিউট সম্পন্ন)
                     </div>
-                </div>
+                `}
             </div>
         `).join('');
     } catch (err) {
-        container.innerHTML = '<div style="text-align:center; color:#ef4444; padding:20px;">ফলাফল লোড করা সম্ভব হয়নি</div>';
+        container.innerHTML = '<div style="text-align:center; color:#ef4444; padding:20px; font-size:0.8rem;">ফলাফল লোড করা সম্ভব হয়নি</div>';
     }
 }
+
 
 
 function openModal(id) {
@@ -3102,4 +3489,243 @@ function incrementVersion(v) {
     }
 }
 
+
+
+
+// =============================================================
+
+// =============================================================
+// ADMIN RESULT PUBLISHING & AUTO-PRIZE LOGIC (ENHANCED)
+// =============================================================
+let adminAllMatchesCache = [];
+let currentAdminResultFilter = 'all';
+let currentAdminResultMatchData = null;
+
+async function openPublishResultModal(preselectedMatchId = null) {
+    if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'moderator')) {
+        showToast('এই অপশনটি শুধুমাত্র অ্যাডমিনদের জন্য!', 'error');
+        return;
+    }
+    
+    openModal('publishResultModal');
+    
+    try {
+        const res = await fetchWithAuth('/api/admin/matches');
+        const data = await res.json();
+        adminAllMatchesCache = data.matches || allMatches || [];
+    } catch (e) {
+        adminAllMatchesCache = allMatches || [];
+    }
+
+    filterAdminResultMatches('all');
+
+    if (preselectedMatchId) {
+        const select = document.getElementById('adminResultMatchSelect');
+        if (select) {
+            select.value = preselectedMatchId;
+            onAdminSelectResultMatch();
+        }
+    }
+}
+
+function openPublishResultModalForMatch(matchId) {
+    openPublishResultModal(matchId);
+}
+
+function filterAdminResultMatches(category, btnElem) {
+    currentAdminResultFilter = category || 'all';
+    
+    if (btnElem) {
+        document.querySelectorAll('#publishResultModal .filter-pill').forEach(b => b.classList.remove('active'));
+        btnElem.classList.add('active');
+    } else {
+        document.querySelectorAll('#publishResultModal .filter-pill').forEach(b => {
+            b.classList.toggle('active', b.id === `adminResCat-${category}`);
+        });
+    }
+
+    const select = document.getElementById('adminResultMatchSelect');
+    if (!select) return;
+
+    let filtered = adminAllMatchesCache;
+    if (currentAdminResultFilter !== 'all') {
+        filtered = adminAllMatchesCache.filter(m => (m.match_type || '').toLowerCase().trim() === currentAdminResultFilter.toLowerCase().trim());
+    }
+
+    if (filtered.length === 0) {
+        select.innerHTML = `<option value="">-- [${currentAdminResultFilter.toUpperCase()}] ক্যাটাগরিতে কোনো ম্যাচ নেই --</option>`;
+    } else {
+        select.innerHTML = '<option value="">-- যেকোনো একটি ম্যাচ সিলেক্ট করুন --</option>' + 
+            filtered.map(m => {
+                const statusTxt = m.status === 'completed' ? '🏁 সমাপ্ত' : (m.status === 'reg_closed' ? '🔒 বন্ধ' : '🟢 চালু');
+                return `<option value="${m.id}">#${m.id} [${m.match_type}] ${escapeHtml(m.title)} (${statusTxt})</option>`;
+            }).join('');
+    }
+
+    // Hide details until a match is explicitly selected
+    document.getElementById('adminSelectedMatchInfo').style.display = 'none';
+    document.getElementById('adminResultParticipantsContainer').style.display = 'none';
+    document.getElementById('adminPublishBtnWrapper').style.display = 'none';
+}
+
+async function onAdminSelectResultMatch() {
+    const select = document.getElementById('adminResultMatchSelect');
+    const matchId = select.value;
+    if (!matchId) {
+        document.getElementById('adminSelectedMatchInfo').style.display = 'none';
+        document.getElementById('adminResultParticipantsContainer').style.display = 'none';
+        document.getElementById('adminPublishBtnWrapper').style.display = 'none';
+        return;
+    }
+
+    try {
+        const res = await fetchWithAuth(`/api/admin/matches/${matchId}/participants`);
+        const data = await res.json();
+        if (!res.ok) {
+            showToast(data.detail || 'তথ্য পাওয়া যায়নি', 'error');
+            return;
+        }
+
+        currentAdminResultMatchData = data;
+        const m = data.match;
+        const participants = data.participants || [];
+
+        // Show banner
+        document.getElementById('resMatchTitleText').innerText = `#${m.id} - ${m.title}`;
+        document.getElementById('resMatchTypeText').innerText = m.match_type;
+        document.getElementById('resPerKillRate').innerText = m.per_kill || 0;
+        document.getElementById('resPrizePool').innerText = m.prize_pool || 0;
+        document.getElementById('resJoinedCount').innerText = participants.length;
+        document.getElementById('adminSelectedMatchInfo').style.display = 'block';
+
+        const tbody = document.getElementById('adminResultTableBody');
+        if (participants.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:16px; color:#64748b;">এই ম্যাচে এখনো কোনো খেলোয়াড় জয়েন করেনি</td></tr>';
+            document.getElementById('adminResultParticipantsContainer').style.display = 'block';
+            document.getElementById('adminPublishBtnWrapper').style.display = 'none';
+            return;
+        }
+
+        tbody.innerHTML = participants.map((p, idx) => {
+            const kills = p.kills || 0;
+            const rankPos = p.rank_position || '';
+            const rankPrize = p.rank_prize || 0;
+            const killPrize = kills * (m.per_kill || 0);
+            const totalPrize = p.total_prize || (killPrize + rankPrize);
+
+            return `
+                <tr id="resRow_${p.user_id}" style="border-bottom:1px solid #f1f5f9;">
+                    <td style="padding:6px 8px; font-weight:700; color:#64748b;">#${p.slot_number || (idx + 1)}</td>
+                    <td style="padding:6px 8px;">
+                        <div style="font-weight:700; color:#0f172a;">${escapeHtml(p.ff_ign || p.username)}</div>
+                        <div style="font-size:0.68rem; color:#64748b;">@${escapeHtml(p.username)} • UID: ${escapeHtml(p.ff_uid || 'N/A')}</div>
+                    </td>
+                    <td style="padding:6px 8px;">
+                        <input type="number" id="resRank_${p.user_id}" class="input-glow" value="${rankPos}" min="0" max="50" placeholder="Rank" style="width:100%; padding:4px 6px; font-size:0.75rem; border-radius:4px; border:1px solid #cbd5e1;" oninput="calcRowPrize(${p.user_id})">
+                    </td>
+                    <td style="padding:6px 8px;">
+                        <input type="number" id="resKills_${p.user_id}" class="input-glow" value="${kills}" min="0" max="99" placeholder="0" style="width:100%; padding:4px 6px; font-size:0.75rem; border-radius:4px; border:1px solid #cbd5e1;" oninput="calcRowPrize(${p.user_id})">
+                    </td>
+                    <td style="padding:6px 8px;">
+                        <input type="number" id="resRankPrize_${p.user_id}" class="input-glow" value="${rankPrize}" min="0" placeholder="0" style="width:100%; padding:4px 6px; font-size:0.75rem; border-radius:4px; border:1px solid #cbd5e1;" oninput="calcRowPrize(${p.user_id})">
+                    </td>
+                    <td style="padding:6px 8px; text-align:right;">
+                        <span id="resTotalPrizeText_${p.user_id}" style="font-family:'Rajdhani',sans-serif; font-size:0.95rem; font-weight:800; color:#059669;">৳${totalPrize}</span>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+
+        document.getElementById('adminResultParticipantsContainer').style.display = 'block';
+        document.getElementById('adminPublishBtnWrapper').style.display = 'block';
+
+    } catch (err) {
+        showToast('তথ্য লোড করতে সমস্যা হয়েছে', 'error');
+    }
+}
+
+function calcRowPrize(userId) {
+    if (!currentAdminResultMatchData || !currentAdminResultMatchData.match) return;
+    const perKill = currentAdminResultMatchData.match.per_kill || 0;
+    
+    const killsInput = document.getElementById(`resKills_${userId}`);
+    const rankPrizeInput = document.getElementById(`resRankPrize_${userId}`);
+    const totalSpan = document.getElementById(`resTotalPrizeText_${userId}`);
+
+    const kills = parseInt(killsInput ? killsInput.value : 0) || 0;
+    const rankPrize = parseInt(rankPrizeInput ? rankPrizeInput.value : 0) || 0;
+    const total = (kills * perKill) + rankPrize;
+
+    if (totalSpan) {
+        totalSpan.innerText = '৳' + total;
+    }
+}
+
+async function submitMatchResultsPublish() {
+    if (!currentAdminResultMatchData || !currentAdminResultMatchData.match) {
+        showToast('অনুগ্রহ করে একটি ম্যাচ সিলেক্ট করুন', 'error');
+        return;
+    }
+
+    const matchId = currentAdminResultMatchData.match.id;
+    const participants = currentAdminResultMatchData.participants || [];
+
+    const results = [];
+    for (const p of participants) {
+        const rankInput = document.getElementById(`resRank_${p.user_id}`);
+        const killsInput = document.getElementById(`resKills_${p.user_id}`);
+        const rankPrizeInput = document.getElementById(`resRankPrize_${p.user_id}`);
+
+        const rankPos = parseInt(rankInput ? rankInput.value : 0) || 0;
+        const kills = parseInt(killsInput ? killsInput.value : 0) || 0;
+        const rankPrize = parseInt(rankPrizeInput ? rankPrizeInput.value : 0) || 0;
+
+        results.push({
+            user_id: p.user_id,
+            rank_position: rankPos,
+            kills: kills,
+            rank_prize: rankPrize
+        });
+    }
+
+    try {
+        const res = await fetchWithAuth(`/api/admin/matches/${matchId}/publish-results`, {
+            method: 'POST',
+            body: JSON.stringify({
+                match_id: matchId,
+                results: results
+            })
+        });
+
+        const data = await res.json();
+        if (res.ok) {
+            showToast(data.message || 'রেজাল্ট সফলভাবে প্রকাশিত হয়েছে!', 'success');
+            closeModal('publishResultModal');
+            fetchMatches();
+            loadCompletedResults();
+            if (typeof renderAdminMatches === 'function') {
+                renderAdminMatches();
+            }
+        } else {
+            showToast(data.detail || 'রেজাল্ট প্রকাশ ব্যর্থ হয়েছে', 'error');
+        }
+    } catch (e) {
+        showToast('সার্ভারে যোগাযোগ করা যায়নি', 'error');
+    }
+}
+
+// Global Anti-Copy Protection for Free Fire UIDs
+document.addEventListener('copy', function(e) {
+    if (e.target && (e.target.closest('#matchInnerPortalModal .participants-table') || e.target.closest('#matchParticipantsModal .participants-table') || e.target.closest('.protected-uid') || e.target.closest('.participants-table'))) {
+        e.preventDefault();
+        showToast('⚠️ খেলোয়াড়দের ফ্রি ফায়ার UID কপি করা সম্পূর্ণ নিষিদ্ধ!', 'warning');
+    }
+});
+
+document.addEventListener('contextmenu', function(e) {
+    if (e.target && (e.target.closest('.protected-uid') || e.target.closest('.participants-table'))) {
+        e.preventDefault();
+        showToast('⚠️ খেলোয়াড়দের ফ্রি ফায়ার UID কপি বা সিলেক্ট করা সম্পূর্ণ নিষিদ্ধ!', 'warning');
+    }
+});
 

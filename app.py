@@ -344,8 +344,8 @@ class RegisterRequest(BaseModel):
     password: str
     phone: str
     email: str
-    ff_ign: str
-    ff_uid: str
+    ff_ign: Optional[str] = ""
+    ff_uid: Optional[str] = ""
 
 class LoginRequest(BaseModel):
     username: str
@@ -403,7 +403,7 @@ class PushSubscribeRequest(BaseModel):
 # -------------------------------------------------------------
 # Public & Auth Endpoints
 # -------------------------------------------------------------
-CURRENT_CODE_VERSION = "v2.3.0"
+CURRENT_CODE_VERSION = "v2.5.0"
 
 @app.get("/api/info")
 def get_public_info():
@@ -412,7 +412,7 @@ def get_public_info():
     conn.close()
     settings = {r["key"]: r["value"] for r in settings_rows}
     current_ver = settings.get("app_version")
-    if not current_ver or current_ver in ["v1.0.0", "v1.1.0", "v2.1.0", "v2.2.0"]:
+    if not current_ver or current_ver in ["v1.0.0", "v1.1.0", "v2.1.0", "v2.2.0", "v2.3.0", "v2.4.0"]:
         current_ver = CURRENT_CODE_VERSION
     return {
         "site_title": settings.get("site_title", "GOMON HUB"),
@@ -439,6 +439,8 @@ def register(data: RegisterRequest):
     username = data.username.strip()
     phone = data.phone.strip()
     email = data.email.strip().lower()
+    ff_ign = (data.ff_ign.strip() if data.ff_ign else "") or username
+    ff_uid = (data.ff_uid.strip() if data.ff_uid else "") or "0"
 
     if len(username) < 3:
         raise HTTPException(status_code=400, detail="Username must be at least 3 characters")
@@ -448,8 +450,6 @@ def register(data: RegisterRequest):
         raise HTTPException(status_code=400, detail="ফোন নম্বর আবশ্যক")
     if not email or "@" not in email:
         raise HTTPException(status_code=400, detail="সঠিক ইমেইল অ্যাড্রেস প্রদান করুন")
-    if not data.ff_uid.strip() or not data.ff_ign.strip():
-        raise HTTPException(status_code=400, detail="Free Fire In-Game Name এবং UID আবশ্যক")
 
     conn = get_db()
 
@@ -468,7 +468,19 @@ def register(data: RegisterRequest):
         if banned["email"] and banned["email"].lower() == email.lower():
             raise HTTPException(status_code=403, detail=f"🚨 ইমেইল '{email}' স্থায়ীভাবে ব্যান করা হয়েছে (BANNED)! এই ইমেইল দিয়ে আর কোনোদিন অ্যাকাউন্ট তৈরি করা যাবে না।")
 
-    # 2. Check Existing Users in users table
+    # 2. Check Password against banned records and banned accounts
+    banned_hashes = conn.execute("""
+    SELECT password_hash FROM banned_records WHERE password_hash != ''
+    UNION
+    SELECT password_hash FROM users WHERE status = 'banned'
+    """).fetchall()
+
+    for b_row in banned_hashes:
+        if b_row["password_hash"] and verify_password(data.password, b_row["password_hash"]):
+            conn.close()
+            raise HTTPException(status_code=403, detail="🚨 এই পাসওয়ার্ডটি পূর্বে ব্যানকৃত অ্যাকাউন্টে ব্যবহৃত হয়েছিল! সুরক্ষা নিশ্চিত করতে অন্য একটি নতুন পাসওয়ার্ড দিন।")
+
+    # 3. Check Existing Users in users table
     existing = conn.execute("""
     SELECT * FROM users 
     WHERE username = ? COLLATE NOCASE OR phone = ? OR (email != '' AND email = ? COLLATE NOCASE)
@@ -492,7 +504,7 @@ def register(data: RegisterRequest):
         cursor = conn.execute("""
         INSERT INTO users (player_id, username, password_hash, phone, email, ff_ign, ff_uid, digits_balance, role, status)
         VALUES (?, ?, ?, ?, ?, ?, ?, 0, 'player', 'active')
-        """, (rand_id, username, pass_hash, phone, email, data.ff_ign.strip(), data.ff_uid.strip()))
+        """, (rand_id, username, pass_hash, phone, email, ff_ign, ff_uid))
         user_id = cursor.lastrowid
 
     token = generate_token(user_id, username, "player")
@@ -842,9 +854,9 @@ async def admin_toggle_status(target_user_id: int, admin: dict = Depends(verify_
         if new_status == "banned":
             # Add to permanent blacklist so these credentials can NEVER re-register
             conn.execute("""
-            INSERT INTO banned_records (username, phone, email, ff_uid, reason)
-            VALUES (?, ?, ?, ?, 'Banned by Super Admin')
-            """, (user["username"], user_phone, user_email, user_ff_uid))
+            INSERT INTO banned_records (username, phone, email, ff_uid, password_hash, reason)
+            VALUES (?, ?, ?, ?, ?, 'Banned by Super Admin')
+            """, (user["username"], user_phone, user_email, user_ff_uid, user["password_hash"]))
         else:
             conn.execute("DELETE FROM banned_records WHERE username = ? COLLATE NOCASE", (user["username"],))
 

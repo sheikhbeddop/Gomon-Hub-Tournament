@@ -106,7 +106,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 // -------------------------------------------------------------
 async function loadPublicInfo() {
     try {
-        const res = await fetch('/api/info');
+        const res = await fetch('/api/info?_t=' + Date.now());
         const data = await res.json();
         adminBkashNumber = data.admin_bkash || '01700000000';
         vapidPublicKey = data.vapid_public_key;
@@ -337,7 +337,7 @@ async function handleRegisterSubmit(e) {
 async function loadMatches() {
     try {
         const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
-        const res = await fetch('/api/matches', { headers });
+        const res = await fetch('/api/matches?_t=' + Date.now(), { headers });
         allMatches = await res.json();
         renderMatches();
         renderMyMatches();
@@ -1022,8 +1022,13 @@ function initWebSocket() {
     ws = new WebSocket(wsUrl);
 
     ws.onopen = () => {
-        document.getElementById('connStatusText').innerText = 'Live Real-time';
-        document.getElementById('connectionStatus').style.color = 'var(--neon-green)';
+        const textEl = document.getElementById('connStatusText');
+        const statusEl = document.getElementById('connectionStatus');
+        if (textEl) textEl.innerText = 'Live Real-time';
+        if (statusEl) statusEl.style.color = 'var(--neon-green)';
+        // Immediately fetch fresh state upon connection/reconnection
+        loadPublicInfo();
+        loadMatches();
     };
 
     ws.onmessage = (event) => {
@@ -1034,8 +1039,10 @@ function initWebSocket() {
     };
 
     ws.onclose = () => {
-        document.getElementById('connStatusText').innerText = 'Reconnecting...';
-        document.getElementById('connectionStatus').style.color = 'var(--neon-amber)';
+        const textEl = document.getElementById('connStatusText');
+        const statusEl = document.getElementById('connectionStatus');
+        if (textEl) textEl.innerText = 'Reconnecting...';
+        if (statusEl) statusEl.style.color = 'var(--neon-amber)';
         setTimeout(initWebSocket, 3000);
     };
 
@@ -1074,11 +1081,33 @@ function handleWsMessage(data) {
         showToast(`🚨 ${data.title}: ${data.message}`, 'error');
         const notifBar = document.getElementById('announcementText');
         if (notifBar) notifBar.innerText = `${data.title}: ${data.message}`;
+    } else if (data.type === 'SETTINGS_UPDATED') {
+        if (data.notice !== undefined) {
+            const notifBar = document.getElementById('announcementText');
+            if (notifBar) notifBar.innerText = data.notice;
+            showToast('📢 নতুন নোটিশ আপডেট হয়েছে!', 'info');
+        }
+        if (data.site_title) {
+            const titleNav = document.getElementById('siteTitleNav');
+            if (titleNav) titleNav.innerText = data.site_title;
+        }
+        if (data.admin_bkash) {
+            adminBkashNumber = data.admin_bkash;
+            const elBkash = document.getElementById('displayBkashNumber');
+            if (elBkash) elBkash.innerText = data.admin_bkash;
+        }
     } else if (data.type === 'APP_UPDATE_AVAILABLE') {
         playSound('alert');
         latestServerVersion = data.version;
         promptAppUpdate(data.version, data.notes);
     }
+}
+
+async function forceSyncAll() {
+    showToast('🔄 সার্ভার থেকে লাইভ ডাটা সিঙ্ক হচ্ছে...', 'info');
+    await loadPublicInfo();
+    await loadMatches();
+    showToast('✅ সর্বশেষ ডাটা সিঙ্ক সম্পন্ন হয়েছে!', 'success');
 }
 
 // -------------------------------------------------------------
@@ -1097,11 +1126,16 @@ async function initServiceWorker() {
 
 function checkNotificationPermission() {
     const badge = document.getElementById('notifBadge');
+    const banner = document.getElementById('pushPromptBanner');
     if (Notification.permission === 'granted') {
-        badge.style.display = 'none';
+        if (badge) badge.style.display = 'none';
+        if (banner) banner.style.display = 'none';
         subscribeUserToPush();
     } else if (Notification.permission === 'default') {
-        badge.style.display = 'block';
+        if (badge) badge.style.display = 'block';
+        if (banner) banner.style.display = 'flex';
+    } else {
+        if (banner) banner.style.display = 'none';
     }
 }
 

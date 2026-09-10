@@ -247,6 +247,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.middleware("http")
+async def add_no_cache_header(request: Request, call_next):
+    response = await call_next(request)
+    path = request.url.path
+    if path == "/" or path.endswith(".html") or path.endswith(".js") or path.endswith(".css") or path.startswith("/api/"):
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+    return response
+
+
 class ConnectionManager:
     def __init__(self):
         self.active_connections: List[WebSocket] = []
@@ -385,18 +396,23 @@ class PushSubscribeRequest(BaseModel):
 # -------------------------------------------------------------
 # Public & Auth Endpoints
 # -------------------------------------------------------------
+CURRENT_CODE_VERSION = "v2.1.0"
+
 @app.get("/api/info")
 def get_public_info():
     conn = get_db()
     settings_rows = conn.execute("SELECT key, value FROM settings").fetchall()
     conn.close()
     settings = {r["key"]: r["value"] for r in settings_rows}
+    current_ver = settings.get("app_version")
+    if not current_ver or current_ver == "v1.0.0":
+        current_ver = CURRENT_CODE_VERSION
     return {
         "site_title": settings.get("site_title", "Free Fire Tournaments"),
         "admin_bkash": settings.get("admin_bkash", "01700000000"),
         "notice": settings.get("notice", ""),
-        "app_version": settings.get("app_version", "v1.0.0"),
-        "app_update_notes": settings.get("app_update_notes", "প্রাথমিক রিলিজ"),
+        "app_version": current_ver,
+        "app_update_notes": settings.get("app_update_notes", "রিচার্জ অপশন সবার প্রথমে আনা হয়েছে ও মোবাইল ইন্টারফেস আপডেট করা হয়েছে।"),
         "vapid_public_key": VAPID_KEYS["public_key"]
     }
 
@@ -905,7 +921,7 @@ def admin_delete_match(match_id: int, admin: dict = Depends(verify_admin)):
     return {"success": True, "message": "Match deleted"}
 
 @app.post("/api/admin/settings")
-def admin_update_settings(data: dict, admin: dict = Depends(verify_admin)):
+async def admin_update_settings(data: dict, admin: dict = Depends(verify_admin)):
     conn = get_db()
     with conn:
         for k, v in data.items():
@@ -914,18 +930,44 @@ def admin_update_settings(data: dict, admin: dict = Depends(verify_admin)):
             ON CONFLICT(key) DO UPDATE SET value = excluded.value
             """, (k, str(v)))
     conn.close()
-    return {"success": True, "message": "Settings updated successfully"}
+
+    # Real-time WebSocket sync to all connected mobile & PC clients
+    await manager.broadcast({
+        "type": "SETTINGS_UPDATED",
+        "notice": data.get("notice"),
+        "site_title": data.get("site_title"),
+        "admin_bkash": data.get("admin_bkash")
+    })
+
+    return {"success": True, "message": "Settings updated and broadcasted successfully"}
 
 @app.post("/api/admin/broadcast")
 async def admin_broadcast_notice(data: AdminNoticeRequest, admin: dict = Depends(verify_admin)):
     title = data.title.strip()
     msg = data.message.strip()
+    full_notice = f"{title}: {msg}"
 
+    # 1. ALWAYS persist notice to settings table so new/reconnecting visitors immediately see it!
+    conn = get_db()
+    with conn:
+        conn.execute("""
+        INSERT INTO settings (key, value) VALUES ('notice', ?)
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value
+        """, (full_notice,))
+    conn.close()
+
+    # 2. Instant Live Alert toast + sound to all active screens
     await manager.broadcast({
         "type": "ADMIN_ANNOUNCEMENT",
         "title": title,
         "message": msg,
         "timestamp": datetime.now().strftime("%I:%M %p")
+    })
+
+    # 3. Also update notice bar live on all phones
+    await manager.broadcast({
+        "type": "SETTINGS_UPDATED",
+        "notice": full_notice
     })
 
     conn = get_db()

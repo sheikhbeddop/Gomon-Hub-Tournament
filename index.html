@@ -8,14 +8,14 @@
     <link rel="icon" type="image/png" href="/static/img/icon.png">
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#00f59b">
-    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="/static/css/style.css?v=2.1.0">
 </head>
 <body>
 
     <!-- Top Navbar -->
     <header class="navbar">
         <div class="nav-container">
-            <div class="brand-logo" onclick="switchTab('tab-matches')">
+            <div class="brand-logo" onclick="switchTab('tab-recharge')">
                 <div class="brand-icon">
                     <img src="/static/img/icon.png" alt="FF Logo" style="width: 26px; height: 26px; border-radius: 4px;">
                 </div>
@@ -47,6 +47,20 @@
         </div>
     </header>
 
+    <!-- Mobile Push Notification Permission Prompt Banner -->
+    <div id="pushPromptBanner" style="display: none; background: rgba(255, 183, 3, 0.15); border-bottom: 1px solid var(--neon-amber); padding: 8px 16px; font-size: 0.85rem; align-items: center; justify-content: space-between; gap: 10px; color: #ffdd57;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 1.1rem;">🔔</span>
+            <span>রুম আইডি ও লাইভ নোটিশ সরাসরি পেতে নোটিফিকেশন চালু করুন!</span>
+        </div>
+        <div style="display: flex; gap: 6px;">
+            <button class="btn btn-sm" style="background: var(--neon-amber); color: #000; font-weight: 800; padding: 4px 10px; border-radius: 4px;" onclick="requestPushPermission()">
+                চালু করুন
+            </button>
+            <button style="background: transparent; border: none; color: #aaa; cursor: pointer; font-size: 1.1rem; padding: 0 4px;" onclick="document.getElementById('pushPromptBanner').style.display='none'">&times;</button>
+        </div>
+    </div>
+
     <!-- PWA App Install Banner -->
     <div id="pwaInstallBanner" style="display: none; background: linear-gradient(90deg, #00f59b, #00d2ff); color: #080b11; padding: 10px 20px; font-weight: 700; align-items: center; justify-content: space-between; gap: 10px; font-size: 0.9rem; box-shadow: 0 4px 15px rgba(0,245,155,0.3);">
         <div style="display: flex; align-items: center; gap: 8px;">
@@ -64,9 +78,14 @@
             <span class="live-tag">⚡ লাইভ নোটিশ</span>
             <span id="announcementText">স্বাগতম! সিডিউল থেকে আপনার পছন্দের ফ্রি ফায়ার ম্যাচে জয়েন করুন।</span>
         </div>
-        <div id="connectionStatus" style="font-size: 0.75rem; color: var(--neon-green); display: flex; align-items: center; gap: 4px;">
-            <span style="display: inline-block; width: 6px; height: 6px; background: var(--neon-green); border-radius: 50%;"></span>
-            <span id="connStatusText">Connected</span>
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <div id="connectionStatus" style="font-size: 0.75rem; color: var(--neon-green); display: flex; align-items: center; gap: 4px;">
+                <span style="display: inline-block; width: 6px; height: 6px; background: var(--neon-green); border-radius: 50%;"></span>
+                <span id="connStatusText">Connected</span>
+            </div>
+            <button onclick="forceSyncAll()" title="লাইভ ডাটা রিফ্রেশ করুন" style="background: transparent; border: none; color: var(--text-secondary); cursor: pointer; font-size: 0.85rem; padding: 2px;">
+                🔄
+            </button>
         </div>
     </div>
 
@@ -78,11 +97,11 @@
 
     <!-- Main Navigation Tabs -->
     <nav class="tabs-nav">
-        <button class="tab-btn active" id="tabBtn-matches" onclick="switchTab('tab-matches')">
-            🎮 ম্যাচ সিডিউল (Lobby)
-        </button>
-        <button class="tab-btn" id="tabBtn-recharge" onclick="switchTab('tab-recharge')">
+        <button class="tab-btn active" id="tabBtn-recharge" onclick="switchTab('tab-recharge')">
             🪙 ডিজিট রিচার্জ (bKash)
+        </button>
+        <button class="tab-btn" id="tabBtn-matches" onclick="switchTab('tab-matches')">
+            🎮 ম্যাচ সিডিউল (Lobby)
         </button>
         <button class="tab-btn" id="tabBtn-mymatches" onclick="switchTab('tab-mymatches')">
             🏆 আমার ম্যাচ ও রুম আইডি
@@ -95,33 +114,21 @@
     <!-- Main Content Container -->
     <main class="main-container">
 
-        <!-- TAB 1: MATCHES LOBBY -->
-        <section class="tab-content active" id="tab-matches">
-            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 16px;">
-                <div>
-                    <h1 style="font-size: 1.5rem; font-weight: 800; font-family: 'Rajdhani', sans-serif;">🔥 ফ্রি ফায়ার আপকামিং ম্যাচ সিডিউল</h1>
-                    <p style="color: var(--text-secondary); font-size: 0.85rem;">স্লট শেষ হওয়ার আগেই এন্ট্রি ফি দিয়ে আপনার সিট নিশ্চিত করুন।</p>
-                </div>
-                <div style="display: flex; gap: 8px;">
-                    <button class="btn btn-outline btn-sm" onclick="filterMatches('all')">সব ম্যাচ</button>
-                    <button class="btn btn-outline btn-sm" onclick="filterMatches('Solo')">Solo</button>
-                    <button class="btn btn-outline btn-sm" onclick="filterMatches('Duo')">Duo</button>
-                    <button class="btn btn-outline btn-sm" onclick="filterMatches('Squad')">Squad</button>
-                </div>
-            </div>
-
-            <!-- Matches List Grid -->
-            <div class="matches-grid" id="matchesGrid">
-                <!-- Dynamically populated -->
-                <div style="grid-column: 1/-1; text-align: center; padding: 40px; color: var(--text-muted);">
-                    ম্যাচ লোড হচ্ছে...
-                </div>
-            </div>
-        </section>
-
-        <!-- TAB 2: DIGIT RECHARGE (bKASH) -->
-        <section class="tab-content" id="tab-recharge">
+        <!-- TAB 1: DIGIT RECHARGE (bKASH) - FIRST TAB -->
+        <section class="tab-content active" id="tab-recharge">
             <div class="recharge-card">
+                <!-- Update Confirmation Indicator -->
+                <div style="background: linear-gradient(90deg, rgba(0, 245, 155, 0.18), rgba(0, 210, 255, 0.18)); border: 1px solid var(--neon-green); border-radius: var(--radius-sm); padding: 10px 16px; margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span style="font-size: 1.4rem;">⚡</span>
+                        <div>
+                            <div style="font-size: 0.92rem; color: #fff; font-weight: 800;">মোবাইল লাইভ আপডেট সম্পন্ন (v2.1.0)</div>
+                            <div style="font-size: 0.75rem; color: var(--neon-green);">১ টাকা = ১ ডিজিট • বিকাশ ডিপোজিট চালু আছে</div>
+                        </div>
+                    </div>
+                    <span class="badge-status approved" style="font-size: 0.75rem; font-weight: 800;">LIVE</span>
+                </div>
+
                 <div style="text-align: center; margin-bottom: 20px;">
                     <h2 style="font-size: 1.6rem; font-family: 'Rajdhani', sans-serif; font-weight: 800;">🪙 ওয়ালেটে ডিজিট রিচার্জ করুন</h2>
                     <p style="color: var(--text-secondary); font-size: 0.9rem;">১ টাকা = ১ ডিজিট। নিচের বিকাশ নম্বরে টাকা পাঠিয়ে ট্রানজেকশন আইডি সাবমিট করুন।</p>
@@ -187,6 +194,30 @@
                             </tbody>
                         </table>
                     </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 2: MATCHES LOBBY -->
+        <section class="tab-content" id="tab-matches">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 16px;">
+                <div>
+                    <h1 style="font-size: 1.5rem; font-weight: 800; font-family: 'Rajdhani', sans-serif;">🔥 ফ্রি ফায়ার আপকামিং ম্যাচ সিডিউল</h1>
+                    <p style="color: var(--text-secondary); font-size: 0.85rem;">স্লট শেষ হওয়ার আগেই এন্ট্রি ফি দিয়ে আপনার সিট নিশ্চিত করুন।</p>
+                </div>
+                <div style="display: flex; gap: 8px;">
+                    <button class="btn btn-outline btn-sm" onclick="filterMatches('all')">সব ম্যাচ</button>
+                    <button class="btn btn-outline btn-sm" onclick="filterMatches('Solo')">Solo</button>
+                    <button class="btn btn-outline btn-sm" onclick="filterMatches('Duo')">Duo</button>
+                    <button class="btn btn-outline btn-sm" onclick="filterMatches('Squad')">Squad</button>
+                </div>
+            </div>
+
+            <!-- Matches List Grid -->
+            <div class="matches-grid" id="matchesGrid">
+                <!-- Dynamically populated -->
+                <div style="grid-column: 1/-1; text-align: center; padding: 40px; color: var(--text-muted);">
+                    ম্যাচ লোড হচ্ছে...
                 </div>
             </div>
         </section>
@@ -357,6 +388,9 @@
                         <input type="text" class="form-input" id="settingNotice">
                     </div>
                     <button type="submit" class="btn btn-neon btn-sm">সেভ করুন</button>
+                </form>
+            </div>
+
             <!-- SECTION E: APP VERSION & LIVE OTA UPDATE CONTROLS -->
             <div class="admin-panel-card" style="border-color: rgba(0, 245, 155, 0.4);">
                 <div class="admin-card-header">
@@ -662,13 +696,13 @@
 
     <!-- Mobile Bottom App Bar (Native Android/iOS App Style) -->
     <nav class="mobile-bottom-nav">
-        <button class="mobile-nav-item active" id="mNav-matches" onclick="switchTab('tab-matches')">
-            <span class="m-icon">🎮</span>
-            <span class="m-label">ম্যাচ</span>
-        </button>
-        <button class="mobile-nav-item" id="mNav-recharge" onclick="switchTab('tab-recharge')">
+        <button class="mobile-nav-item active" id="mNav-recharge" onclick="switchTab('tab-recharge')">
             <span class="m-icon">🪙</span>
             <span class="m-label">রিচার্জ</span>
+        </button>
+        <button class="mobile-nav-item" id="mNav-matches" onclick="switchTab('tab-matches')">
+            <span class="m-icon">🎮</span>
+            <span class="m-label">ম্যাচ</span>
         </button>
         <button class="mobile-nav-item" id="mNav-mymatches" onclick="switchTab('tab-mymatches')">
             <span class="m-icon">🏆</span>
@@ -683,6 +717,6 @@
     <!-- Toast Notification Container -->
     <div class="toast-container" id="toastContainer"></div>
 
-    <script src="/static/js/app.js"></script>
+    <script src="/static/js/app.js?v=2.1.0"></script>
 </body>
 </html>

@@ -31,14 +31,23 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "tournament.db")
 VAPID_FILE = os.path.join(BASE_DIR, "vapid_keys.json")
 SECRET_KEY_FILE = os.path.join(BASE_DIR, "secret.key")
-
+DEFAULT_PERMANENT_SECRET = "GOMON_HUB_TOURNAMENT_PERMANENT_SECRET_2026_PRO_KEY_849204918230912830912"
 if os.path.exists(SECRET_KEY_FILE):
-    with open(SECRET_KEY_FILE, "r") as f:
-        SECRET_KEY = f.read().strip()
+    try:
+        with open(SECRET_KEY_FILE, "r") as f:
+            SECRET_KEY = f.read().strip()
+    except Exception:
+        SECRET_KEY = DEFAULT_PERMANENT_SECRET
 else:
-    SECRET_KEY = secrets.token_hex(32)
-    with open(SECRET_KEY_FILE, "w") as f:
-        f.write(SECRET_KEY)
+    SECRET_KEY = os.environ.get("SECRET_KEY", DEFAULT_PERMANENT_SECRET)
+    try:
+        with open(SECRET_KEY_FILE, "w") as f:
+            f.write(SECRET_KEY)
+    except Exception:
+        pass
+
+if not SECRET_KEY:
+    SECRET_KEY = DEFAULT_PERMANENT_SECRET
 
 # -------------------------------------------------------------
 # VAPID Keys Setup for Free Web Push Notifications
@@ -100,7 +109,7 @@ def generate_token(user_id: int, username: str, role: str) -> str:
         "user_id": user_id,
         "username": username,
         "role": role,
-        "exp": int(time.time()) + (30 * 86400) # 30 days
+        "exp": int(time.time()) + (10 * 365 * 86400) # 10 years permanent token
     }
     payload_str = json.dumps(payload, separators=(',', ':'))
     sig = hmac.new(SECRET_KEY.encode('utf-8'), payload_str.encode('utf-8'), hashlib.sha256).hexdigest()
@@ -224,7 +233,7 @@ def init_db():
         # Default Settings
         conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('admin_bkash', '01700000000 (Personal)')")
         conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('notice', 'স্বাগতম! GOMON HUB টুর্নামেন্টে অংশ নিতে bKash এ ডিপোজিট করে সিডিউল থেকে জয়েন করুন!')")
-        conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('site_title', 'GOMON HUB')")
+        conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('site_title', 'GOMON HUB TOURNAMENT')")
 
         # Create Default Master Admin if not exists
         admin_row = conn.execute("SELECT id FROM users WHERE role = 'admin' LIMIT 1").fetchone()
@@ -403,7 +412,7 @@ class PushSubscribeRequest(BaseModel):
 # -------------------------------------------------------------
 # Public & Auth Endpoints
 # -------------------------------------------------------------
-CURRENT_CODE_VERSION = "v2.6.1"
+CURRENT_CODE_VERSION = "v2.6.4"
 
 @app.get("/api/info")
 def get_public_info():
@@ -412,14 +421,14 @@ def get_public_info():
     conn.close()
     settings = {r["key"]: r["value"] for r in settings_rows}
     current_ver = settings.get("app_version")
-    if not current_ver or current_ver in ["v1.0.0", "v1.1.0", "v2.1.0", "v2.2.0", "v2.3.0", "v2.4.0", "v2.5.0"]:
+    if not current_ver or current_ver in ["v1.0.0", "v1.1.0", "v2.1.0", "v2.2.0", "v2.3.0", "v2.4.0", "v2.5.0", "v2.6.0", "v2.6.1", "v2.6.2", "v2.6.3"]:
         current_ver = CURRENT_CODE_VERSION
     return {
-        "site_title": settings.get("site_title", "GOMON HUB"),
+        "site_title": settings.get("site_title", "GOMON HUB TOURNAMENT"),
         "admin_bkash": settings.get("admin_bkash", "01700000000"),
         "notice": settings.get("notice", ""),
         "app_version": current_ver,
-        "app_update_notes": settings.get("app_update_notes", "GOMON HUB নতুন ইন্টারফেস ও সিকিউরিটি আপডেট।"),
+        "app_update_notes": settings.get("app_update_notes", "GOMON HUB TOURNAMENT নতুন ইন্টারফেস ও সিকিউরিটি আপডেট।"),
         "vapid_public_key": VAPID_KEYS["public_key"]
     }
 

@@ -120,6 +120,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Safety fallback: splash screen will dismiss automatically after 2.5s
     setTimeout(doDismissSplashScreen, 2500);
 
+    // Clear login errors as soon as user types
+    const uInp = document.getElementById('loginUsername');
+    const pInp = document.getElementById('loginPassword');
+    if (uInp) uInp.addEventListener('input', clearLoginError);
+    if (pInp) pInp.addEventListener('input', clearLoginError);
+
+    // Clear signup errors as soon as user types
+    const rU = document.getElementById('regUsername');
+    const rP = document.getElementById('regPhone');
+    const rE = document.getElementById('regEmail');
+    const rPass = document.getElementById('regPassword');
+    if (rU) rU.addEventListener('input', clearSignupError);
+    if (rP) rP.addEventListener('input', clearSignupError);
+    if (rE) rE.addEventListener('input', clearSignupError);
+    if (rPass) rPass.addEventListener('input', clearSignupError);
+
     // Check for admin impersonation banner
     if (sessionStorage.getItem('admin_backup_token')) {
         document.getElementById('impersonationBanner').style.display = 'block';
@@ -206,6 +222,7 @@ async function initAuth() {
             if (mainApp) mainApp.style.display = 'block';
             closeModal('authModal');
             renderLoggedInNav();
+            applyRolePermissionsUI();
             dismissSplashScreen();
             loadMatches();
             initWebSocket();
@@ -227,13 +244,13 @@ async function initAuth() {
             if (mainApp) mainApp.style.display = 'block';
             closeModal('authModal');
             renderLoggedInNav();
+            applyRolePermissionsUI();
             loadWalletHistory();
             loadMatches();
             initWebSocket();
             if (currentUser.role === 'admin') {
-                const adminTabBtn = document.getElementById('tabBtn-admin');
-                if (adminTabBtn) adminTabBtn.style.display = 'inline-flex';
                 loadAdminOverview();
+                loadModeratorScoreboard();
             }
         } else if (res.status === 403) {
             const data = await res.json();
@@ -254,6 +271,8 @@ function renderLoggedInNav() {
     
     const container = document.getElementById('authNavContainer');
     const isAdmin = (currentUser.role === 'admin');
+    const isMod = (currentUser.role === 'moderator');
+    const hasAdminPanel = isAdmin || isMod;
 
     container.innerHTML = `
         <div style="display: flex; align-items: center; gap: 8px;">
@@ -262,20 +281,78 @@ function renderLoggedInNav() {
                 <div style="font-size: 0.72rem; color: var(--text-muted); font-family: monospace;">${currentUser.player_id}</div>
             </div>
             ${isAdmin ? `<button class="btn btn-crimson btn-sm" onclick="switchTab('tab-admin')">👑 ADMIN</button>` : ''}
+            ${isMod ? `<button class="btn btn-neon btn-sm" onclick="switchTab('tab-admin')" style="color: var(--neon-cyan); border-color: var(--neon-cyan);">🛡️ MOD</button>` : ''}
             <button class="btn btn-outline btn-sm" onclick="logout(true)" title="লগআউট">লগআউট</button>
         </div>
     `;
 
-    if (isAdmin) {
-        const mAdmin = document.getElementById('mNav-admin');
+    const adminTabBtn = document.getElementById('tabBtn-admin');
+    const tabBtnText = document.getElementById('tabBtn-admin-text');
+    const tabBtnBadge = document.getElementById('tabBtn-admin-badge');
+    const mAdmin = document.getElementById('mNav-admin');
+    const mAdminIcon = document.getElementById('mNav-admin-icon');
+    const mAdminLabel = document.getElementById('mNav-admin-label');
+
+    if (hasAdminPanel) {
+        if (adminTabBtn) adminTabBtn.style.display = 'inline-flex';
         if (mAdmin) mAdmin.style.display = 'flex';
+
+        if (isMod) {
+            if (tabBtnText) tabBtnText.innerText = '🛡️ মডারেটর কন্ট্রোল';
+            if (tabBtnBadge) {
+                tabBtnBadge.innerText = 'MOD';
+                tabBtnBadge.style.background = 'var(--neon-cyan)';
+                tabBtnBadge.style.color = '#000';
+            }
+            if (mAdminIcon) mAdminIcon.innerText = '🛡️';
+            if (mAdminLabel) mAdminLabel.innerText = 'মডারেটর';
+        } else {
+            if (tabBtnText) tabBtnText.innerText = '👑 অ্যাডমিন কন্ট্রোল';
+            if (tabBtnBadge) {
+                tabBtnBadge.innerText = 'MASTER';
+                tabBtnBadge.style.background = '';
+                tabBtnBadge.style.color = '';
+            }
+            if (mAdminIcon) mAdminIcon.innerText = '👑';
+            if (mAdminLabel) mAdminLabel.innerText = 'অ্যাডমিন';
+        }
     } else {
-        const mAdmin = document.getElementById('mNav-admin');
+        if (adminTabBtn) adminTabBtn.style.display = 'none';
         if (mAdmin) mAdmin.style.display = 'none';
     }
 
+    applyRolePermissionsUI();
+
     if (sessionStorage.getItem('admin_backup_token')) {
         document.getElementById('impersonatedUserText').innerText = `@${currentUser.username} (${currentUser.player_id})`;
+    }
+}
+
+function applyRolePermissionsUI() {
+    if (!currentUser) return;
+    const isMod = (currentUser.role === 'moderator');
+    const isAdmin = (currentUser.role === 'admin');
+
+    const titleEl = document.getElementById('adminPanelTitle');
+    const subEl = document.getElementById('adminPanelSubtitle');
+    const topActionBtns = document.getElementById('adminMasterActionBtns');
+
+    if (isMod) {
+        if (titleEl) titleEl.innerHTML = '🛡️ MODERATOR CONTROL PANEL';
+        if (subEl) subEl.innerText = 'ম্যাচ শিডিউল অনুযায়ী রুম আইডি ও পাসওয়ার্ড আপডেট এবং ম্যাচ সমাপ্তি নিয়ন্ত্রণ কেন্দ্র।';
+        if (topActionBtns) topActionBtns.style.display = 'none';
+
+        document.querySelectorAll('.admin-only-card').forEach(el => {
+            el.style.setProperty('display', 'none', 'important');
+        });
+    } else if (isAdmin) {
+        if (titleEl) titleEl.innerHTML = '👑 SUPER-ADMIN MASTER CONTROL';
+        if (subEl) subEl.innerText = 'ওয়েবসাইট, প্লেয়ার ডিজিট, ম্যাচ ও পেমেন্টের সম্পূর্ণ নিয়ন্ত্রণ কেন্দ্র।';
+        if (topActionBtns) topActionBtns.style.display = 'flex';
+
+        document.querySelectorAll('.admin-only-card').forEach(el => {
+            el.style.removeProperty('display');
+        });
     }
 }
 
@@ -321,6 +398,8 @@ function exitImpersonation() {
 function setAuthMode(mode) {
     const loginCard = document.getElementById('authLoginCard');
     const signupCard = document.getElementById('authSignupCard');
+    clearLoginError();
+    clearSignupError();
 
     if (mode === 'login') {
         if (loginCard) loginCard.style.display = 'block';
@@ -352,10 +431,65 @@ function handleForgotPassword() {
     }
 }
 
+function showLoginError(msg) {
+    const alertBox = document.getElementById('loginErrorAlert');
+    if (alertBox) {
+        alertBox.innerHTML = `
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="8" x2="12" y2="12"></line>
+                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+            </svg>
+            <span>${msg}</span>
+        `;
+        alertBox.style.display = 'flex';
+        alertBox.classList.remove('shake');
+        void alertBox.offsetWidth;
+        alertBox.classList.add('shake');
+    }
+    const loginCard = document.getElementById('authLoginCard');
+    if (loginCard) {
+        loginCard.classList.remove('shake');
+        void loginCard.offsetWidth;
+        loginCard.classList.add('shake');
+    }
+    const passInput = document.getElementById('loginPassword');
+    if (passInput) {
+        passInput.classList.add('input-error');
+        passInput.focus();
+    }
+    showToast(msg, 'error');
+    playSound('alert');
+}
+
+function clearLoginError() {
+    const alertBox = document.getElementById('loginErrorAlert');
+    if (alertBox) alertBox.style.display = 'none';
+    const passInput = document.getElementById('loginPassword');
+    if (passInput) passInput.classList.remove('input-error');
+}
+
 async function handleLoginSubmit(e) {
     e.preventDefault();
+    clearLoginError();
     const u = document.getElementById('loginUsername').value.trim();
     const p = document.getElementById('loginPassword').value;
+
+    if (!u) {
+        showLoginError('অনুগ্রহ করে ইউজারনেম, ফোন অথবা প্লেয়ার আইডি দিন');
+        return;
+    }
+    if (!p) {
+        showLoginError('অনুগ্রহ করে পাসওয়ার্ড দিন');
+        return;
+    }
+
+    const submitBtn = document.getElementById('loginSubmitBtn');
+    const originalBtnText = submitBtn ? submitBtn.innerText : 'Sign In';
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerText = 'লগইন হচ্ছে...';
+    }
 
     try {
         const res = await fetch('/api/auth/login', {
@@ -386,24 +520,186 @@ async function handleLoginSubmit(e) {
                 loadAdminOverview();
             }
         } else {
-            showToast(data.detail || 'লগইন ব্যর্থ হয়েছে', 'error');
+            const errMsg = data.detail || 'ভুল ইউজারনেম বা পাসওয়ার্ড! অনুগ্রহ করে আবার চেষ্টা করুন।';
+            showLoginError(errMsg);
         }
     } catch (err) {
-        showToast('সার্ভারে যোগাযোগ করা যায়নি', 'error');
+        showLoginError('সার্ভারে যোগাযোগ করা যায়নি! অনুগ্রহ করে সার্ভার চালু আছে কিনা চেক করুন।');
+    } finally {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerText = originalBtnText;
+        }
     }
+}
+
+function validatePhoneNumber(raw) {
+    if (!raw) return { valid: false, message: 'সঠিক ফোন নম্বর দিন' };
+    let clean = raw.replace(/\s+/g, '').replace(/[-+]/g, '');
+    if (clean.startsWith('8801') && clean.length === 13) {
+        clean = clean.substring(2);
+    }
+    // 1. Must be exactly 11 digits and all numeric
+    if (!/^\d{11}$/.test(clean)) {
+        return { valid: false, message: 'সঠিক ফোন নম্বর দিন' };
+    }
+    // 2. Must start with a valid Bangladeshi mobile operator code: 013, 014, 015, 016, 017, 018, 019
+    if (!/^01[3-9]/.test(clean)) {
+        return { valid: false, message: 'সঠিক ফোন নম্বর দিন' };
+    }
+    // 3. Cannot be all 11 identical digits (e.g. 00000000000, 11111111111)
+    if (/^(\d)\1{10}$/.test(clean) || new Set(clean.split('')).size === 1) {
+        return { valid: false, message: 'সঠিক ফোন নম্বর দিন' };
+    }
+    // 4. Maximum consecutive identical digits cannot be 5 or more (e.g. 11111, 00000, 77777)
+    if (/(\d)\1{4,}/.test(clean)) {
+        return { valid: false, message: 'সঠিক ফোন নম্বর দিন' };
+    }
+    // 5. Must contain at least 4 distinct digits (rejects dummy numbers like 01909090909, 01707070707)
+    if (new Set(clean.split('')).size < 4) {
+        return { valid: false, message: 'সঠিক ফোন নম্বর দিন' };
+    }
+    // 6. Reject repeating 2-digit patterns repeated 3 or more times (e.g. 090909, 121212, 181818)
+    if (/(\d{2})\1{2,}/.test(clean)) {
+        return { valid: false, message: 'সঠিক ফোন নম্বর দিন' };
+    }
+    // 7. Reject alternating digits pattern repeated 3 or more times (e.g. 909090, 090909, 707070)
+    if (/(\d)(\d)\1\2\1\2/.test(clean)) {
+        return { valid: false, message: 'সঠিক ফোন নম্বর দিন' };
+    }
+    // 8. Reject repeating 3-digit pattern repeated 3 or more times (e.g. 123123123)
+    if (/(\d{3})\1{2,}/.test(clean)) {
+        return { valid: false, message: 'সঠিক ফোন নম্বর দিন' };
+    }
+    // 9. Reject sequential 6 or more digits
+    const sequentialPatterns = [
+        '012345', '123456', '234567', '345678', '456789', '567890',
+        '098765', '987654', '876543', '765432', '654321', '543210'
+    ];
+    if (sequentialPatterns.some(pat => clean.includes(pat))) {
+        return { valid: false, message: 'সঠিক ফোন নম্বর দিন' };
+    }
+    return { valid: true, phone: clean };
+}
+
+function showSignupError(msg, targetInputId = null) {
+    const alertBox = document.getElementById('signupErrorAlert');
+    if (alertBox) {
+        alertBox.innerHTML = `
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="8" x2="12" y2="12"></line>
+                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+            </svg>
+            <span>${msg}</span>
+        `;
+        alertBox.style.display = 'flex';
+        alertBox.classList.remove('shake');
+        void alertBox.offsetWidth;
+        alertBox.classList.add('shake');
+    }
+    const signupCard = document.getElementById('authSignupCard');
+    if (signupCard) {
+        signupCard.classList.remove('shake');
+        void signupCard.offsetWidth;
+        signupCard.classList.add('shake');
+    }
+    if (targetInputId) {
+        const inp = document.getElementById(targetInputId);
+        if (inp) {
+            inp.classList.add('input-error');
+            inp.focus();
+        }
+    }
+    showToast(msg, 'error');
+    playSound('alert');
+}
+
+function validatePasswordStrength(password) {
+    if (!password || password.length < 8) {
+        return { valid: false, message: 'পাসওয়ার্ড কমপক্ষে ৮ অক্ষরের হতে হবে' };
+    }
+    if (!password.includes('@') && !password.includes('#')) {
+        return { valid: false, message: 'পাসওয়ার্ডে অবশ্যই @ অথবা # সিম্বল থাকতে হবে' };
+    }
+    const hasLetter = /[a-zA-Z]/.test(password);
+    const hasDigit = /\d/.test(password);
+    if (!hasLetter || !hasDigit) {
+        return { valid: false, message: 'পাসওয়ার্ডটি খুব সহজ! শক্তিশালী পাসওয়ার্ড তৈরি করুন (অক্ষর, সংখ্যা এবং @ অথবা # মিলিয়ে দিন)' };
+    }
+    const lower = password.toLowerCase();
+    const easyWords = [
+        '12345678', '123456789', '87654321', '12341234',
+        'password', 'pass1234', 'admin123', 'bangladesh',
+        'freefire', 'gomonhub', 'qwertyui', 'asdfghjk'
+    ];
+    for (let w of easyWords) {
+        if (lower.includes(w)) {
+            return { valid: false, message: 'পাসওয়ার্ডটি খুব সহজ! কঠিন পাসওয়ার্ড তৈরি করুন (1234 বা সাধারণ শব্দ ব্যবহার করবেন না)' };
+        }
+    }
+    if (/(.)\1{4,}/.test(password)) {
+        return { valid: false, message: 'পাসওয়ার্ডে একই অক্ষর বারবার ব্যবহার না করে কঠিন পাসওয়ার্ড তৈরি করুন' };
+    }
+    return { valid: true };
+}
+
+function clearSignupError() {
+    const alertBox = document.getElementById('signupErrorAlert');
+    if (alertBox) alertBox.style.display = 'none';
+    document.querySelectorAll('#registerForm .signup-input').forEach(inp => inp.classList.remove('input-error'));
 }
 
 async function handleRegisterSubmit(e) {
     e.preventDefault();
+    clearSignupError();
+
     const username = document.getElementById('regUsername').value.trim();
     const email = document.getElementById('regEmail').value.trim();
-    const phone = document.getElementById('regPhone').value.trim();
+    const phoneRaw = document.getElementById('regPhone').value.trim();
     const password = document.getElementById('regPassword').value;
     const terms = document.getElementById('regTermsCheckbox');
 
-    if (terms && !terms.checked) {
-        showToast('You must agree to the Terms and Conditions and Privacy Policy', 'error');
+    if (!username || username.length < 3) {
+        showSignupError('ইউজারনেম কমপক্ষে ৩ অক্ষরের হতে হবে', 'regUsername');
         return;
+    }
+
+    // 1. Phone validation
+    const phoneCheck = validatePhoneNumber(phoneRaw);
+    if (!phoneCheck.valid) {
+        showSignupError(phoneCheck.message, 'regPhone');
+        return;
+    }
+    const phone = phoneCheck.phone;
+
+    // 2. Email validation (strictly mandatory)
+    if (!email) {
+        showSignupError('ইমেইল অ্যাড্রেস আবশ্যক', 'regEmail');
+        return;
+    }
+    if (!email.includes('@') || !email.includes('.') || email.length < 5) {
+        showSignupError('সঠিক ইমেইল অ্যাড্রেস প্রদান করুন', 'regEmail');
+        return;
+    }
+
+    // 3. Password validation (min 8 chars, @ or #, strong password)
+    const passCheck = validatePasswordStrength(password);
+    if (!passCheck.valid) {
+        showSignupError(passCheck.message, 'regPassword');
+        return;
+    }
+
+    if (terms && !terms.checked) {
+        showSignupError('শর্তাবলী ও নীতিমালা গ্রহণ করা আবশ্যক', 'regTermsCheckbox');
+        return;
+    }
+
+    const submitBtn = document.getElementById('regSubmitBtn');
+    const originalBtnText = submitBtn ? submitBtn.innerText : 'Create Account';
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerText = 'অ্যাকাউন্ট তৈরি হচ্ছে...';
     }
 
     try {
@@ -438,10 +734,21 @@ async function handleRegisterSubmit(e) {
             loadWalletHistory();
             initWebSocket();
         } else {
-            showToast(data.detail || 'রেজিস্ট্রেশন ব্যর্থ হয়েছে', 'error');
+            const errMsg = data.detail || 'রেজিস্ট্রেশন ব্যর্থ হয়েছে';
+            let targetId = null;
+            if (errMsg.includes('ফোন')) targetId = 'regPhone';
+            else if (errMsg.includes('ইউজারনেম')) targetId = 'regUsername';
+            else if (errMsg.includes('পাসওয়ার্ড')) targetId = 'regPassword';
+            else if (errMsg.includes('ইমেইল')) targetId = 'regEmail';
+            showSignupError(errMsg, targetId);
         }
     } catch (err) {
-        showToast('সার্ভারে যোগাযোগ করা যায়নি', 'error');
+        showSignupError('সার্ভারে যোগাযোগ করা যায়নি! অনুগ্রহ করে সার্ভার চালু আছে কিনা চেক করুন।');
+    } finally {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerText = originalBtnText;
+        }
     }
 }
 
@@ -455,7 +762,7 @@ async function loadMatches() {
         allMatches = await res.json();
         renderMatches();
         renderMyMatches();
-        if (currentUser && currentUser.role === 'admin') {
+        if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'moderator')) {
             renderAdminMatches();
         }
     } catch (e) {
@@ -863,6 +1170,7 @@ function renderAdminUsersTable(users) {
             <td>
                 <b>${escapeHtml(u.username)}</b>
                 ${u.role === 'admin' ? '<span class="tab-admin-badge" style="margin-left: 4px;">ADMIN</span>' : ''}
+                ${u.role === 'moderator' ? '<span class="tab-admin-badge" style="margin-left: 4px; background: var(--neon-cyan); color: #000;">MOD</span>' : ''}
             </td>
             <td>
                 <div>${escapeHtml(u.ff_ign)}</div>
@@ -887,6 +1195,15 @@ function renderAdminUsersTable(users) {
                         🔒 রিসেট
                     </button>
                     ${u.role !== 'admin' ? `
+                        ${u.role === 'moderator' ? `
+                            <button class="btn btn-outline btn-sm" onclick="setUserRole(${u.id}, 'player')" style="color: var(--neon-amber); border-color: var(--neon-amber);" title="মডারেটর পদ বাতিল করুন">
+                                🛡️ রিমুভ মড
+                            </button>
+                        ` : `
+                            <button class="btn btn-outline btn-sm" onclick="setUserRole(${u.id}, 'moderator')" style="color: var(--neon-cyan); border-color: var(--neon-cyan);" title="মডারেটর হিসেবে প্রমোট করুন">
+                                🛡️ মডারেটর বানান
+                            </button>
+                        `}
                         <button class="btn btn-neon btn-sm" onclick="impersonateUser(${u.id})" title="প্লেয়ার প্রোফাইলে সরাসরি ঢুকুন">
                             🔑 লগইন
                         </button>
@@ -1079,14 +1396,29 @@ async function toggleUserStatus(targetUserId) {
     }
 }
 
-// Admin Match Controls
+// Admin & Moderator Match Controls
 function renderAdminMatches() {
     const tbody = document.getElementById('adminMatchesTableBody');
     if (!tbody) return;
 
-    tbody.innerHTML = allMatches.map(m => `
+    const isAdmin = (currentUser && currentUser.role === 'admin');
+
+    tbody.innerHTML = allMatches.map(m => {
+        const isCompleted = (m.status === 'completed');
+        const updaterInfo = m.room_updated_by_name ? `
+            <div style="font-size: 0.78rem; color: var(--neon-cyan);">
+                <b>🛡️ ${escapeHtml(m.room_updated_by_name)}</b>
+                <div style="font-size: 0.68rem; color: var(--text-muted);">${m.room_updated_at ? m.room_updated_at.substring(5, 16) : ''}</div>
+                ${m.completed_by_name ? `<div style="font-size: 0.7rem; color: var(--neon-green); margin-top: 2px;">🏁 সমাপ্ত: ${escapeHtml(m.completed_by_name)}</div>` : ''}
+            </div>
+        ` : `<span style="font-size: 0.75rem; color: var(--text-muted);">আপডেট হয়নি</span>`;
+
+        return `
         <tr>
-            <td><b>${escapeHtml(m.title)}</b></td>
+            <td>
+                <b>${escapeHtml(m.title)}</b>
+                ${isCompleted ? '<span class="badge-status approved" style="margin-left: 4px; font-size: 0.65rem;">সমাপ্ত</span>' : ''}
+            </td>
             <td>${m.match_type} (${m.map_name})</td>
             <td style="font-size: 0.8rem;">${m.match_time}</td>
             <td>${m.entry_fee} 🪙 / ৳${m.prize_pool}</td>
@@ -1097,18 +1429,26 @@ function renderAdminMatches() {
                     <div>Pass: <b style="color: var(--neon-cyan);">${m.room_pass || 'দেওয়া হয়নি'}</b></div>
                 </div>
             </td>
+            <td>${updaterInfo}</td>
             <td>
-                <div style="display: flex; gap: 6px;">
+                <div style="display: flex; gap: 6px; flex-wrap: wrap;">
                     <button class="btn btn-neon btn-sm" onclick="openSetRoomModal(${m.id}, '${escapeHtml(m.room_id || '')}', '${escapeHtml(m.room_pass || '')}')">
                         🔑 রুম আইডি
                     </button>
-                    <button class="btn btn-crimson btn-sm" onclick="deleteMatch(${m.id})">
-                        🗑️
-                    </button>
+                    ${!isCompleted ? `
+                        <button class="btn btn-outline btn-sm" onclick="completeMatch(${m.id}, '${escapeHtml(m.title)}')" style="color: var(--neon-green); border-color: var(--neon-green);" title="ম্যাচ সমাপ্ত করুন">
+                            🏁 সমাপ্ত
+                        </button>
+                    ` : ''}
+                    ${isAdmin ? `
+                        <button class="btn btn-crimson btn-sm" onclick="deleteMatch(${m.id})" title="ম্যাচ মুছে ফেলুন">
+                            🗑️
+                        </button>
+                    ` : ''}
                 </div>
             </td>
         </tr>
-    `).join('');
+    `}).join('');
 }
 
 function openSetRoomModal(matchId, currentId, currentPass) {
@@ -1138,6 +1478,12 @@ async function handleSetRoomSubmit(e) {
             showToast('রুম আইডি ও পাসওয়ার্ড সফলভাবে পাবলিশ করা হয়েছে!', 'success');
             playSound('alert');
             loadMatches();
+            if (currentUser && currentUser.role === 'admin') {
+                loadModeratorScoreboard();
+            }
+        } else {
+            const err = await res.json();
+            showToast(err.detail || 'ব্যর্থ হয়েছে', 'error');
         }
     } catch (e) {
         showToast('ব্যর্থ হয়েছে', 'error');
@@ -1190,6 +1536,134 @@ async function deleteMatch(matchId) {
         }
     } catch (e) {
         showToast('ব্যর্থ হয়েছে', 'error');
+    }
+}
+
+async function completeMatch(matchId, title) {
+    if (!confirm(`আপনি কি নিশ্চিত "${title}" ম্যাচটি সফলভাবে সম্পন্ন হয়েছে এবং সমাপ্ত করতে চান?`)) return;
+    try {
+        const res = await fetch(`/api/admin/matches/${matchId}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ status: 'completed' })
+        });
+        if (res.ok) {
+            showToast(`"${title}" ম্যাচটি সফলভাবে সমাপ্ত করা হয়েছে!`, 'success');
+            playSound('alert');
+            loadMatches();
+            if (currentUser && currentUser.role === 'admin') {
+                loadModeratorScoreboard();
+            }
+        } else {
+            const err = await res.json();
+            showToast(err.detail || 'ব্যর্থ হয়েছে', 'error');
+        }
+    } catch (e) {
+        showToast('সার্ভার এরর', 'error');
+    }
+}
+
+// Moderator Scoreboard & Management (Master Admin Only)
+async function loadModeratorScoreboard() {
+    if (!token || !currentUser || currentUser.role !== 'admin') return;
+    try {
+        const res = await fetch('/api/admin/moderators', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.ok) {
+            const mods = await res.json();
+            renderModeratorScoreboard(mods);
+        }
+    } catch (e) {
+        console.error('Failed to load moderator scoreboard:', e);
+    }
+}
+
+function renderModeratorScoreboard(mods) {
+    const tbody = document.getElementById('adminModeratorsTableBody');
+    if (!tbody) return;
+
+    if (!mods || mods.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 20px;">বর্তমানে কোনো মডারেটর নিয়োজিত নেই। নিচের ইনপুটে ইউজার আইডি দিয়ে অথবা প্লেয়ার লিস্ট থেকে "🛡️ মডারেটর বানান" বাটনে ক্লিক করে নিয়োগ করুন।</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = mods.map(m => {
+        const recentAction = m.recent_actions && m.recent_actions.length > 0 
+            ? `<div style="font-size: 0.75rem; color: var(--text-secondary); max-width: 220px;">
+                <b>${escapeHtml(m.recent_actions[0].action)}</b>
+                <div style="font-size: 0.68rem; color: var(--text-muted);">${m.recent_actions[0].timestamp ? m.recent_actions[0].timestamp.substring(5, 16) : ''}</div>
+               </div>`
+            : `<span style="color: var(--text-muted); font-size: 0.75rem;">এখনও কোনো অ্যাকশন নেই</span>`;
+
+        return `
+            <tr>
+                <td style="font-family: monospace; font-weight: 700; color: var(--neon-cyan);">${m.player_id}</td>
+                <td>
+                    <b>${escapeHtml(m.username)}</b>
+                    <div style="font-size: 0.72rem; color: var(--text-muted);">IGN: ${escapeHtml(m.ff_ign || 'N/A')}</div>
+                </td>
+                <td style="font-family: monospace;">${escapeHtml(m.phone || 'N/A')}</td>
+                <td>
+                    <span style="font-family: 'Rajdhani'; font-weight: 800; font-size: 1.15rem; color: var(--neon-green); background: rgba(0, 245, 155, 0.1); padding: 2px 10px; border-radius: 6px; border: 1px solid rgba(0, 245, 155, 0.2);">
+                        ${m.rooms_released_count} টি ম্যাচ
+                    </span>
+                </td>
+                <td>
+                    <span style="font-family: 'Rajdhani'; font-weight: 800; font-size: 1.15rem; color: var(--neon-amber); background: rgba(255, 183, 3, 0.1); padding: 2px 10px; border-radius: 6px; border: 1px solid rgba(255, 183, 3, 0.2);">
+                        ${m.completed_matches_count} টি ম্যাচ
+                    </span>
+                </td>
+                <td>${recentAction}</td>
+                <td>
+                    <button class="btn btn-crimson btn-sm" onclick="setUserRole(${m.id}, 'player')" title="মডারেটর থেকে সাধারণ প্লেয়ারে নামিয়ে দিন">
+                        🛡️ রিমুভ মড
+                    </button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+async function promoteModeratorFromInput() {
+    const input = document.getElementById('promoteModUserIdInput');
+    const userId = input ? parseInt(input.value) : null;
+    if (!userId || isNaN(userId)) {
+        showToast('সঠিক প্লেয়ার User ID দিন', 'error');
+        return;
+    }
+    await setUserRole(userId, 'moderator');
+    if (input) input.value = '';
+}
+
+async function setUserRole(targetUserId, newRole) {
+    const roleName = newRole === 'moderator' ? 'মডারেটর' : 'সাধারণ প্লেয়ার';
+    if (!confirm(`আপনি কি এই ব্যবহারকারীকে "${roleName}" হিসেবে নির্ধারণ করতে চান?`)) return;
+
+    try {
+        const res = await fetch(`/api/admin/users/${targetUserId}/set-role`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ role: newRole })
+        });
+        if (res.ok) {
+            const data = await res.json();
+            showToast(data.message || `রোল সফলভাবে ${roleName} করা হয়েছে!`, 'success');
+            playSound('alert');
+            loadAdminUsers();
+            loadModeratorScoreboard();
+        } else {
+            const err = await res.json();
+            showToast(err.detail || 'রোল পরিবর্তন ব্যর্থ হয়েছে', 'error');
+        }
+    } catch (e) {
+        showToast('সার্ভার এরর', 'error');
     }
 }
 
@@ -1343,6 +1817,19 @@ function handleWsMessage(data) {
         logout(false);
         showToast('🔒 ' + (data.message || 'নিরাপত্তার স্বার্থে আপনার পাসওয়ার্ড আপডেট করা হয়েছে।'), 'info');
         alert('🔒 নিরাপত্তার স্বার্থে অ্যাডমিন আপনার পাসওয়ার্ড আপডেট করেছেন। অনুগ্রহ করে অ্যাডমিনের কাছ থেকে নতুন পাসওয়ার্ড নিয়ে পুনরায় লগইন করুন।');
+    } else if (data.type === 'ROLE_UPDATED') {
+        if (currentUser) {
+            currentUser.role = data.new_role;
+            localStorage.setItem('ff_user', JSON.stringify(currentUser));
+            renderLoggedInNav();
+            applyRolePermissionsUI();
+            if (data.new_role === 'moderator') {
+                showToast('🛡️ অভিনন্দন! আপনাকে মডারেটর পদে নিযুক্ত করা হয়েছে!', 'success');
+                playSound('alert');
+            } else {
+                showToast('🛡️ আপনার মডারেটর পদ পরিবর্তন করা হয়েছে।', 'info');
+            }
+        }
     }
 }
 
@@ -1502,6 +1989,16 @@ function switchTab(tabId) {
 
     const mBtn = document.getElementById('mNav-' + tabId.replace('tab-', ''));
     if (mBtn) mBtn.classList.add('active');
+
+    if (tabId === 'tab-admin') {
+        applyRolePermissionsUI();
+        if (currentUser && currentUser.role === 'admin') {
+            loadAdminOverview();
+            loadModeratorScoreboard();
+        } else if (currentUser && currentUser.role === 'moderator') {
+            loadMatches();
+        }
+    }
 
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }

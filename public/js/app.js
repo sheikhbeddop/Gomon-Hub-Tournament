@@ -427,6 +427,11 @@ function logout(manual = true) {
     renderLoggedOutNav();
     setAuthMode('login');
     openModal('authModal');
+    const saved = localStorage.getItem('saved_login_user');
+    const uInp = document.getElementById('loginUsername');
+    if (uInp && saved) {
+        uInp.value = saved;
+    }
     if (manual) showToast('লগআউট সফল হয়েছে', 'info');
 }
 
@@ -452,6 +457,11 @@ function setAuthMode(mode) {
     if (mode === 'login') {
         if (loginCard) loginCard.style.display = 'block';
         if (signupCard) signupCard.style.display = 'none';
+        const saved = localStorage.getItem('saved_login_user');
+        const uInp = document.getElementById('loginUsername');
+        if (uInp && !uInp.value && saved) {
+            uInp.value = saved;
+        }
     } else {
         if (loginCard) loginCard.style.display = 'none';
         if (signupCard) signupCard.style.display = 'flex';
@@ -551,6 +561,7 @@ async function handleLoginSubmit(e) {
             currentUser = data.user;
             localStorage.setItem('ff_token', token);
             localStorage.setItem('ff_user', JSON.stringify(currentUser));
+            localStorage.setItem('saved_login_user', u);
             document.body.classList.remove('not-authenticated');
             document.body.classList.add('authenticated');
             const mainApp = document.getElementById('mainAppWrapper');
@@ -825,6 +836,7 @@ async function handleRegisterSubmit(e) {
     currentUser = data.user;
     localStorage.setItem('ff_token', token);
     localStorage.setItem('ff_user', JSON.stringify(currentUser));
+    localStorage.setItem('saved_login_user', username);
     document.body.classList.remove('not-authenticated');
     document.body.classList.add('authenticated');
     const mainApp = document.getElementById('mainAppWrapper');
@@ -988,7 +1000,10 @@ function renderMatches() {
             <div class="match-card">
                 <div class="match-card-header">
                     <div>
-                        <span class="match-category">🔥 ${escapeHtml(m.match_type || 'Solo')}</span>
+                        <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 4px;">
+                            <span class="match-code-badge">#${escapeHtml(m.match_code || ('MATCH-' + m.id))}</span>
+                            <span class="match-category" style="margin-bottom: 0;">🔥 ${escapeHtml(m.match_type || 'Solo')}</span>
+                        </div>
                         <div class="match-title">${escapeHtml(m.title)}</div>
                         <div class="match-time-badge">⏰ ${escapeHtml(m.match_time || '')}</div>
                     </div>
@@ -1045,8 +1060,10 @@ function openJoinMatchModal(matchId, matchTitle, entryFee) {
     const mIdInput = document.getElementById('joinModalMatchId');
     if (mIdInput) mIdInput.value = matchId;
     
+    const m = (allMatches || []).find(x => x.id === matchId);
+    const codePrefix = (m && m.match_code) ? `[#${m.match_code}] ` : '';
     const titleEl = document.getElementById('joinModalMatchTitle');
-    if (titleEl) titleEl.innerText = matchTitle || 'Free Fire Match';
+    if (titleEl) titleEl.innerText = `${codePrefix}${matchTitle || 'Free Fire Match'}`;
 
     const feeEl = document.getElementById('joinModalMatchFee');
     if (feeEl) feeEl.innerText = `${entryFee} ডিজিট`;
@@ -1179,10 +1196,10 @@ async function openMatchInnerPortal(matchId) {
 
     // Player is joined: populate inner details and open modal
     const titleEl = document.getElementById('portalModalTitle');
-    if (titleEl) titleEl.innerText = `${m.title || 'ম্যাচ বিস্তারিত'}`;
+    if (titleEl) titleEl.innerText = `${m.match_code ? `[#${m.match_code}] ` : ''}${m.title || 'ম্যাচ বিস্তারিত'}`;
 
     const subEl = document.getElementById('portalModalSubtitle');
-    if (subEl) subEl.innerText = `ম্যাচ টাইপ: ${m.match_type || 'Solo'} • শিডিউল: ${m.match_time || 'শীঘ্রই'}`;
+    if (subEl) subEl.innerText = `ম্যাচ কোড: #${m.match_code || ('MATCH-' + m.id)} • টাইপ: ${m.match_type || 'Solo'} • শিডিউল: ${m.match_time || 'শীঘ্রই'}`;
 
     const slotEl = document.getElementById('portalModalSlot');
     if (slotEl) slotEl.innerText = `#${m.my_slot || 1} (Fixed)`;
@@ -1331,7 +1348,10 @@ function renderMyMatches() {
             <div class="match-card" style="border: 1px solid rgba(0, 245, 155, 0.35); box-shadow: 0 4px 20px rgba(0, 245, 155, 0.08);">
                 <div class="match-card-header">
                     <div>
-                        <span class="match-category" style="background: rgba(0, 245, 155, 0.15); color: #00f59b;">✅ অংশগ্রহণ নিশ্চিত</span>
+                        <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 4px;">
+                            <span class="match-code-badge">#${escapeHtml(m.match_code || ('MATCH-' + m.id))}</span>
+                            <span class="match-category" style="background: rgba(0, 245, 155, 0.15); color: #00f59b; margin-bottom: 0;">✅ অংশগ্রহণ নিশ্চিত</span>
+                        </div>
                         <div class="match-title">${escapeHtml(m.title)}</div>
                         <div class="match-time-badge">⏰ ${escapeHtml(m.match_time || '')}</div>
                     </div>
@@ -2278,8 +2298,11 @@ function renderAdminMatches() {
         return `
         <tr>
             <td>
-                <b>${escapeHtml(m.title)}</b>
-                ${isCompleted ? '<span class="badge-status approved" style="margin-left: 4px; font-size: 0.65rem;">সমাপ্ত</span>' : ''}
+                <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                    <span class="match-code-badge" style="font-size: 0.72rem; padding: 2px 6px;">#${escapeHtml(m.match_code || ('MATCH-' + m.id))}</span>
+                    <b>${escapeHtml(m.title)}</b>
+                    ${isCompleted ? '<span class="badge-status approved" style="margin-left: 4px; font-size: 0.65rem;">সমাপ্ত</span>' : ''}
+                </div>
             </td>
             <td>${m.match_type} (${m.map_name})</td>
             <td style="font-size: 0.8rem;">${m.match_time}</td>
@@ -3258,7 +3281,10 @@ async function loadCompletedResults(category, btnElem) {
         container.innerHTML = results.map(m => `
             <div class="results-card" style="background:#ffffff; border:1px solid #e2e8f0; border-radius:12px; padding:12px 14px; margin-bottom:12px; box-shadow:0 2px 8px rgba(0,0,0,0.03);">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                    <span class="filter-pill" style="background:#e0f2fe; color:#0369a1; border:none; padding:2px 8px; font-size:0.68rem; font-weight:700;">🔥 ${escapeHtml(m.match_type || 'Solo')}</span>
+                    <div style="display:flex; align-items:center; gap:6px;">
+                        <span class="match-code-badge" style="font-size:0.7rem; padding:1px 6px;">#${escapeHtml(m.match_code || ('MATCH-' + m.id))}</span>
+                        <span class="filter-pill" style="background:#e0f2fe; color:#0369a1; border:none; padding:2px 8px; font-size:0.68rem; font-weight:700;">🔥 ${escapeHtml(m.match_type || 'Solo')}</span>
+                    </div>
                     <span style="font-size:0.72rem; color:#64748b;">সমাপ্তি: ${(m.completed_at || m.match_time || '').split(' ')[0]}</span>
                 </div>
                 <h3 style="font-family:'Rajdhani',sans-serif; font-size:0.98rem; font-weight:800; color:#0f172a; margin:0 0 8px 0;">
@@ -3558,7 +3584,8 @@ function filterAdminResultMatches(category, btnElem) {
         select.innerHTML = '<option value="">-- যেকোনো একটি ম্যাচ সিলেক্ট করুন --</option>' + 
             filtered.map(m => {
                 const statusTxt = m.status === 'completed' ? '🏁 সমাপ্ত' : (m.status === 'reg_closed' ? '🔒 বন্ধ' : '🟢 চালু');
-                return `<option value="${m.id}">#${m.id} [${m.match_type}] ${escapeHtml(m.title)} (${statusTxt})</option>`;
+                const codeTag = m.match_code ? `[#${m.match_code}]` : `#${m.id}`;
+                return `<option value="${m.id}">${codeTag} [${m.match_type}] ${escapeHtml(m.title)} (${statusTxt})</option>`;
             }).join('');
     }
 
@@ -3591,7 +3618,8 @@ async function onAdminSelectResultMatch() {
         const participants = data.participants || [];
 
         // Show banner
-        document.getElementById('resMatchTitleText').innerText = `#${m.id} - ${m.title}`;
+        const codeBanner = m.match_code ? `[#${m.match_code}] ` : `#${m.id} - `;
+        document.getElementById('resMatchTitleText').innerText = `${codeBanner}${m.title}`;
         document.getElementById('resMatchTypeText').innerText = m.match_type;
         document.getElementById('resPerKillRate').innerText = m.per_kill || 0;
         document.getElementById('resPrizePool').innerText = m.prize_pool || 0;

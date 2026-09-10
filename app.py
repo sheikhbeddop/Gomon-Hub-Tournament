@@ -187,6 +187,8 @@ def init_db():
             match_id INTEGER NOT NULL,
             user_id INTEGER NOT NULL,
             slot_number INTEGER,
+            player_ign TEXT DEFAULT '',
+            player_uid TEXT DEFAULT '',
             joined_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (match_id) REFERENCES matches(id) ON DELETE CASCADE,
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -235,6 +237,22 @@ def init_db():
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
 
+        
+        CREATE TABLE IF NOT EXISTS match_results (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            match_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            rank_position INTEGER DEFAULT 0,
+            kills INTEGER DEFAULT 0,
+            kill_prize INTEGER DEFAULT 0,
+            rank_prize INTEGER DEFAULT 0,
+            total_prize INTEGER DEFAULT 0,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (match_id) REFERENCES matches(id) ON DELETE CASCADE,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+            UNIQUE(match_id, user_id)
+        );
+
         CREATE TABLE IF NOT EXISTS banned_records (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT COLLATE NOCASE,
@@ -246,6 +264,16 @@ def init_db():
             banned_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
         """)
+
+        # Migration: Ensure player_ign and player_uid columns exist in participations table
+        for col, ctype in [
+            ("player_ign", "TEXT DEFAULT ''"),
+            ("player_uid", "TEXT DEFAULT ''")
+        ]:
+            try:
+                conn.execute(f"ALTER TABLE participations ADD COLUMN {col} {ctype}")
+            except Exception:
+                pass
 
         # Migration: Ensure email and plain_password columns exist in users table
         try:
@@ -463,7 +491,7 @@ class RegisterRequest(BaseModel):
     phone: str
     email: str
     ff_ign: Optional[str] = ""
-    ff_uid: Optional[str] = ""
+    ff_uid: str
 
 class LoginRequest(BaseModel):
     username: str
@@ -478,8 +506,21 @@ class DepositRequest(BaseModel):
 class WithdrawRequest(BaseModel):
     amount: int
     bkash_number: str
+
+class PlayerResultItem(BaseModel):
+    user_id: int
+    rank_position: int = 0
+    kills: int = 0
+    rank_prize: int = 0
+
+class PublishMatchResultsRequest(BaseModel):
+    match_id: Optional[int] = None
+    results: List[PlayerResultItem]
+
 class JoinMatchRequest(BaseModel):
-    match_id: int
+    match_id: Optional[int] = None
+    player_ign: Optional[str] = None
+    player_uid: Optional[str] = None
 
 class AdminMatchCreate(BaseModel):
     title: str
@@ -505,12 +546,12 @@ class AdminMatchUpdate(BaseModel):
     status: Optional[str] = None
 
 class AdminAdjustDigits(BaseModel):
-    target_user_id: int
+    target_user_id: Optional[int] = None
     amount: int
-    reason: str
+    reason: Optional[str] = "Admin Adjustment"
 
 class AdminAdjustWinPoints(BaseModel):
-    target_user_id: int
+    target_user_id: Optional[int] = None
     amount: int
     reason: Optional[str] = "Admin Win Points Adjustment"
 
@@ -689,24 +730,30 @@ def register(data: RegisterRequest):
     email = data.email.strip().lower() if data.email else ""
     password = data.password
     ff_ign = (data.ff_ign.strip() if data.ff_ign else "") or username
-    ff_uid = (data.ff_uid.strip() if data.ff_uid else "") or "0"
+    ff_uid = (data.ff_uid.strip() if data.ff_uid else "")
 
-    # 1. Phone number validation
+    # 1. Free Fire UID validation (Strictly mandatory)
+    if not ff_uid:
+        raise HTTPException(status_code=400, detail="ফ্রি ফায়ার ইউআইডি (Free Fire UID) প্রদান করা আবশ্যক")
+    if not ff_uid.isdigit() or len(ff_uid) < 6 or len(ff_uid) > 15:
+        raise HTTPException(status_code=400, detail="সঠিক ফ্রি ফায়ার ইউআইডি দিন (৬ থেকে ১৫ ডিজিটের সংখ্যা হতে হবে)")
+
+    # 2. Phone number validation
     is_valid_phone, phone_err, phone = validate_phone_number(phone_raw)
     if not is_valid_phone:
         raise HTTPException(status_code=400, detail=phone_err)
 
-    # 2. Username validation
+    # 3. Username validation
     if len(username) < 3:
         raise HTTPException(status_code=400, detail="ইউজারনেম কমপক্ষে ৩ অক্ষরের হতে হবে")
 
-    # 3. Email validation (Strictly mandatory)
+    # 4. Email validation (Strictly mandatory)
     if not email:
         raise HTTPException(status_code=400, detail="ইমেইল অ্যাড্রেস আবশ্যক")
     if "@" not in email or "." not in email or len(email) < 5:
         raise HTTPException(status_code=400, detail="সঠিক ইমেইল অ্যাড্রেস প্রদান করুন")
 
-    # 4. Password validation (Min 8 chars, @ or #, strong password)
+    # 5. Password validation (Min 8 chars, @ or #, strong password)
     is_valid_pass, pass_err = validate_password_strength(password)
     if not is_valid_pass:
         raise HTTPException(status_code=400, detail=pass_err)
@@ -945,18 +992,23 @@ def list_matches(request: Request):
     ORDER BY m.status = 'upcoming' DESC, m.match_time ASC
     """).fetchall()
 
-    user_participations = set()
+    user_participations = {}
     if current_user_id:
-        p_rows = conn.execute("SELECT match_id FROM participations WHERE user_id = ?", (current_user_id,)).fetchall()
-        user_participations = {r["match_id"] for r in p_rows}
+        p_rows = conn.execute("SELECT match_id, slot_number, player_ign, player_uid FROM participations WHERE user_id = ?", (current_user_id,)).fetchall()
+        user_participations = {r["match_id"]: dict(r) for r in p_rows}
 
     conn.close()
     
     matches = []
     for r in rows:
         m = dict(r)
-        has_joined = (m["id"] in user_participations)
+        part_info = user_participations.get(m["id"])
+        has_joined = (part_info is not None)
         m["has_joined"] = has_joined
+        if has_joined:
+            m["my_slot"] = part_info.get("slot_number")
+            m["my_ign"] = part_info.get("player_ign")
+            m["my_uid"] = part_info.get("player_uid")
         
         # High Security: Only reveal Room ID and Password if the user joined or is admin!
         if not (has_joined or is_admin):
@@ -966,10 +1018,90 @@ def list_matches(request: Request):
 
     return matches
 
-@app.post("/api/matches/join")
-async def join_match(data: JoinMatchRequest, user: dict = Depends(get_current_user)):
+@app.get("/api/matches/my")
+def get_my_matches(user: dict = Depends(get_current_user)):
     user_id = user["id"]
-    match_id = data.match_id
+    conn = get_db()
+    rows = conn.execute("""
+    SELECT m.*,
+           (SELECT COUNT(*) FROM participations p2 WHERE p2.match_id = m.id) as joined_count,
+           p.slot_number as my_slot,
+           p.player_ign as my_ign,
+           p.player_uid as my_uid
+    FROM matches m
+    JOIN participations p ON p.match_id = m.id
+    WHERE p.user_id = ?
+    ORDER BY m.status = 'upcoming' DESC, m.match_time ASC
+    """, (user_id,)).fetchall()
+    conn.close()
+    
+    matches = []
+    for r in rows:
+        m = dict(r)
+        m["has_joined"] = True
+        matches.append(m)
+    return matches
+
+@app.get("/api/matches/{match_id}/participants")
+def get_match_participants_for_player(match_id: int, user: dict = Depends(get_current_user)):
+    conn = get_db()
+    try:
+        match = conn.execute("SELECT * FROM matches WHERE id = ?", (match_id,)).fetchone()
+        if not match:
+            raise HTTPException(status_code=404, detail="ম্যাচ পাওয়া যায়নি")
+
+        is_admin_or_mod = (user.get("role") in ["admin", "moderator"])
+        
+        # Security Rule: Only players who joined this specific match (or admin/mod) can see participants
+        user_joined = conn.execute("SELECT id FROM participations WHERE match_id = ? AND user_id = ?", (match_id, user["id"])).fetchone()
+        
+        if not (user_joined or is_admin_or_mod):
+            raise HTTPException(
+                status_code=403, 
+                detail="ম্যাচে জয়েন করার পর অংশগ্রহণকারী সকল প্লেয়ারের তালিকা (Slot, In-Game Name, UID) দেখা যাবে। আপনি এখনও এই ম্যাচে জয়েন করেননি।"
+            )
+
+        rows = conn.execute("""
+        SELECT p.slot_number,
+               COALESCE(NULLIF(p.player_ign, ''), u.ff_ign, u.username) as player_ign,
+               COALESCE(NULLIF(p.player_uid, ''), u.ff_uid) as player_uid,
+               p.joined_at,
+               (p.user_id = ?) as is_self
+        FROM participations p
+        JOIN users u ON u.id = p.user_id
+        WHERE p.match_id = ?
+        ORDER BY p.slot_number ASC
+        """, (user["id"], match_id)).fetchall()
+
+        return {
+            "match_id": match_id,
+            "match_title": match["title"],
+            "match_type": match["match_type"],
+            "total_slots": match["total_slots"],
+            "joined_count": len(rows),
+            "participants": [dict(r) for r in rows]
+        }
+    finally:
+        conn.close()
+
+@app.post("/api/matches/join")
+@app.post("/api/matches/{match_id}/join")
+async def join_match(data: Optional[JoinMatchRequest] = None, match_id: Optional[int] = None, user: dict = Depends(get_current_user)):
+    user_id = user["id"]
+    match_id = match_id or (data.match_id if data else None)
+    if not match_id:
+        raise HTTPException(status_code=400, detail="Match ID required")
+
+    req_ign = (data.player_ign.strip() if data and data.player_ign else "").strip()
+    req_uid = (data.player_uid.strip() if data and data.player_uid else "").strip()
+
+    player_ign = req_ign or user.get("ff_ign") or user.get("username")
+    player_uid = req_uid or user.get("ff_uid")
+
+    if not player_ign:
+        raise HTTPException(status_code=400, detail="ইন-গেম নাম (In-Game Name) দেওয়া আবশ্যক")
+    if not player_uid or not str(player_uid).isdigit() or len(str(player_uid)) < 6:
+        raise HTTPException(status_code=400, detail="সঠিক ফ্রি ফায়ার ইউআইডি (UID) দেওয়া আবশ্যক (কমপক্ষে ৬ ডিজিটের সংখ্যা)")
 
     conn = get_db()
     try:
@@ -978,7 +1110,12 @@ async def join_match(data: JoinMatchRequest, user: dict = Depends(get_current_us
             if not match:
                 raise HTTPException(status_code=404, detail="Match not found")
             if match["status"] != "upcoming":
-                raise HTTPException(status_code=400, detail="Registration is closed for this match")
+                if match["status"] == "reg_closed":
+                    raise HTTPException(status_code=400, detail="এই ম্যাচের রেজিস্ট্রেশন বন্ধ রয়েছে (Registration Closed)")
+                elif match["status"] == "completed":
+                    raise HTTPException(status_code=400, detail="এই টুর্নামেন্ট ম্যাচটি ইতোমধ্যে সমাপ্ত হয়েছে")
+                else:
+                    raise HTTPException(status_code=400, detail="Registration is closed for this match")
 
             already = conn.execute("SELECT id FROM participations WHERE match_id = ? AND user_id = ?", (match_id, user_id)).fetchone()
             if already:
@@ -998,16 +1135,17 @@ async def join_match(data: JoinMatchRequest, user: dict = Depends(get_current_us
             new_balance = user_fresh["digits_balance"] - match["entry_fee"]
             conn.execute("UPDATE users SET digits_balance = ? WHERE id = ?", (new_balance, user_id))
 
+            # Fixed and immutable sequential slot assignment (1, 2, 3...)
             slot_num = joined_count + 1
             conn.execute("""
-            INSERT INTO participations (match_id, user_id, slot_number)
-            VALUES (?, ?, ?)
-            """, (match_id, user_id, slot_num))
+            INSERT INTO participations (match_id, user_id, slot_number, player_ign, player_uid)
+            VALUES (?, ?, ?, ?, ?)
+            """, (match_id, user_id, slot_num, player_ign, str(player_uid)))
 
             conn.execute("""
             INSERT INTO audit_logs (admin_id, target_user_id, action, amount, reason)
             VALUES (NULL, ?, 'MATCH_ENTRY_FEE', ?, ?)
-            """, (user_id, -match["entry_fee"], f"Joined Match #{match_id}: {match['title']}"))
+            """, (user_id, -match["entry_fee"], f"Joined Match #{match_id} (Slot #{slot_num}): {match['title']}"))
 
     except HTTPException:
         conn.close()
@@ -1030,9 +1168,11 @@ async def join_match(data: JoinMatchRequest, user: dict = Depends(get_current_us
     conn.close()
     return {
         "success": True,
-        "message": f"সফলভাবে জয়েন হয়েছেন! আপনার স্লট নম্বর: {slot_num}",
+        "message": f"সফলভাবে জয়েন হয়েছেন! আপনার নির্ধারিত স্থায়ী স্লট নম্বর: #{slot_num}",
         "new_balance": new_balance,
         "slot_number": slot_num,
+        "player_ign": player_ign,
+        "player_uid": player_uid,
         "room_id": match["room_id"] if match["room_id"] else "খেলার ১০ মিনিট আগে রিলিজ হবে",
         "room_pass": match["room_pass"] if match["room_pass"] else "খেলার ১০ মিনিট আগে রিলিজ হবে"
     }
@@ -1143,17 +1283,83 @@ def get_leaderboard():
     return {"leaderboard": [dict(r) for r in rows]}
 
 @app.get("/api/matches/results")
-def get_matches_results():
+def get_matches_results(category: Optional[str] = None, request: Request = None):
+    user_id = None
+    is_admin = False
+    auth_header = request.headers.get("Authorization") if request else None
+    if auth_header and auth_header.startswith("Bearer "):
+        payload = verify_token(auth_header.split(" ")[1])
+        if payload:
+            user_id = payload.get("user_id")
+            if payload.get("role") in ["admin", "moderator"]:
+                is_admin = True
+    
     conn = get_db()
-    rows = conn.execute("""
-    SELECT id, title, match_type, map_name, match_time, entry_fee, prize_pool, per_kill, total_slots, status, completed_at
-    FROM matches
-    WHERE status = 'completed'
-    ORDER BY id DESC
-    LIMIT 30
-    """).fetchall()
+    cat_filter = ""
+    params = []
+    if category and category.lower() not in ['all', 'সব ম্যাচ', '']:
+        cat_filter = " AND LOWER(m.match_type) = LOWER(?) "
+        params.append(category)
+    
+    if is_admin:
+        sql = f"""
+        SELECT m.id, m.title, m.match_type, m.map_name, m.match_time, m.entry_fee, m.prize_pool, m.per_kill, m.total_slots, m.status, m.completed_at
+        FROM matches m
+        WHERE m.status = 'completed' {cat_filter}
+        ORDER BY m.completed_at DESC, m.id DESC
+        LIMIT 50
+        """
+        rows = conn.execute(sql, params).fetchall()
+        results = []
+        for r in rows:
+            m_dict = dict(r)
+            winners = conn.execute("""
+            SELECT mr.rank_position, mr.kills, mr.total_prize, u.username, u.ff_ign
+            FROM match_results mr
+            JOIN users u ON u.id = mr.user_id
+            WHERE mr.match_id = ? AND (mr.rank_position > 0 OR mr.kills > 0)
+            ORDER BY mr.rank_position ASC, mr.kills DESC
+            LIMIT 5
+            """, (m_dict["id"],)).fetchall()
+            m_dict["winners"] = [dict(w) for w in winners]
+            results.append(m_dict)
+        conn.close()
+        return {"results": results, "is_personal": False}
+    
+    if user_id:
+        sql = f"""
+        SELECT m.id, m.title, m.match_type, m.map_name, m.match_time, m.entry_fee, m.prize_pool, m.per_kill, m.total_slots, m.status, m.completed_at,
+               COALESCE(mr.rank_position, 0) as my_rank,
+               COALESCE(mr.kills, 0) as my_kills,
+               COALESCE(mr.kill_prize, 0) as my_kill_prize,
+               COALESCE(mr.rank_prize, 0) as my_rank_prize,
+               COALESCE(mr.total_prize, 0) as my_total_prize
+        FROM matches m
+        JOIN participations p ON p.match_id = m.id AND p.user_id = ?
+        LEFT JOIN match_results mr ON mr.match_id = m.id AND mr.user_id = ?
+        WHERE m.status = 'completed' {cat_filter}
+        ORDER BY m.completed_at DESC, m.id DESC
+        LIMIT 50
+        """
+        rows = conn.execute(sql, [user_id, user_id] + params).fetchall()
+        results = []
+        for r in rows:
+            m_dict = dict(r)
+            winners = conn.execute("""
+            SELECT mr.rank_position, mr.kills, mr.total_prize, u.username, u.ff_ign
+            FROM match_results mr
+            JOIN users u ON u.id = mr.user_id
+            WHERE mr.match_id = ? AND (mr.rank_position > 0 OR mr.kills > 0)
+            ORDER BY mr.rank_position ASC, mr.kills DESC
+            LIMIT 5
+            """, (m_dict["id"],)).fetchall()
+            m_dict["winners"] = [dict(w) for w in winners]
+            results.append(m_dict)
+        conn.close()
+        return {"results": results, "is_personal": True}
+    
     conn.close()
-    return {"results": [dict(r) for r in rows]}
+    return {"results": [], "is_personal": True, "not_logged_in": True}
 
 # -------------------------------------------------------------
 # Web Push Notifications Subscription
@@ -1241,10 +1447,14 @@ def admin_list_users(search: Optional[str] = None, admin: dict = Depends(verify_
     return result
 
 @app.post("/api/admin/users/adjust-digits")
-async def admin_adjust_digits(data: AdminAdjustDigits, admin: dict = Depends(verify_admin)):
+@app.post("/api/admin/users/{target_user_id}/adjust-digits")
+async def admin_adjust_digits(data: AdminAdjustDigits, target_user_id: Optional[int] = None, admin: dict = Depends(verify_admin)):
+    uid = target_user_id or data.target_user_id
+    if not uid:
+        raise HTTPException(status_code=400, detail="User ID required")
     conn = get_db()
     try:
-        user = conn.execute("SELECT * FROM users WHERE id = ?", (data.target_user_id,)).fetchone()
+        user = conn.execute("SELECT * FROM users WHERE id = ?", (uid,)).fetchone()
         if not user:
             raise HTTPException(status_code=404, detail="Target player not found")
 
@@ -1253,15 +1463,15 @@ async def admin_adjust_digits(data: AdminAdjustDigits, admin: dict = Depends(ver
             new_bal = 0
 
         with conn:
-            conn.execute("UPDATE users SET digits_balance = ? WHERE id = ?", (new_bal, data.target_user_id))
+            conn.execute("UPDATE users SET digits_balance = ? WHERE id = ?", (new_bal, uid))
             conn.execute("""
             INSERT INTO audit_logs (admin_id, target_user_id, action, amount, reason)
             VALUES (?, ?, 'ADMIN_ADJUST_DIGITS', ?, ?)
-            """, (admin["id"], data.target_user_id, data.amount, data.reason or "Admin Manual Adjustment"))
+            """, (admin["id"], uid, data.amount, data.reason or "Admin Manual Adjustment"))
     finally:
         conn.close()
 
-    await manager.send_to_user(data.target_user_id, {
+    await manager.send_to_user(uid, {
         "type": "BALANCE_UPDATED",
         "digits_balance": new_bal,
         "notice": f"অ্যাডমিন আপনার ওয়ালেটে {data.amount:+d} ডিজিট আপডেট করেছেন। কারণ: {data.reason}"
@@ -1272,6 +1482,8 @@ async def admin_adjust_digits(data: AdminAdjustDigits, admin: dict = Depends(ver
         "message": f"Updated balance for @{user['username']}. New balance: {new_bal} digits",
         "new_balance": new_bal
     }
+
+
 
 @app.post("/api/admin/users/adjust-win-points")
 async def admin_adjust_win_points(data: AdminAdjustWinPoints, admin: dict = Depends(verify_admin)):
@@ -1719,6 +1931,19 @@ async def admin_review_deposit(deposit_id: int, action: str, admin: dict = Depen
 
     return {"success": True, "status": new_status, "deposit_id": deposit_id}
 
+
+@app.get("/api/admin/matches")
+def admin_get_all_matches(admin: dict = Depends(verify_moderator_or_admin)):
+    conn = get_db()
+    rows = conn.execute("""
+    SELECT m.*,
+           (SELECT COUNT(*) FROM participations p WHERE p.match_id = m.id) as joined_count
+    FROM matches m
+    ORDER BY m.id DESC
+    """).fetchall()
+    conn.close()
+    return {"matches": [dict(r) for r in rows]}
+
 @app.post("/api/admin/matches")
 async def admin_create_match(data: AdminMatchCreate, admin: dict = Depends(verify_admin)):
     conn = get_db()
@@ -1805,6 +2030,127 @@ async def admin_update_match(match_id: int, data: AdminMatchUpdate, current_user
         })
 
     return {"success": True, "message": "Match updated successfully"}
+
+
+@app.get("/api/admin/matches/{match_id}/participants")
+def admin_get_match_participants(match_id: int, admin: dict = Depends(verify_moderator_or_admin)):
+    conn = get_db()
+    match = conn.execute("SELECT * FROM matches WHERE id = ?", (match_id,)).fetchone()
+    if not match:
+        conn.close()
+        raise HTTPException(status_code=404, detail="ম্যাচ পাওয়া যায়নি")
+    
+    rows = conn.execute("""
+    SELECT u.id as user_id, u.username, u.phone,
+           COALESCE(NULLIF(p.player_ign, ''), u.ff_ign, u.username) as ff_ign,
+           COALESCE(NULLIF(p.player_uid, ''), u.ff_uid) as ff_uid,
+           p.slot_number,
+           COALESCE(mr.rank_position, 0) as rank_position,
+           COALESCE(mr.kills, 0) as kills,
+           COALESCE(mr.rank_prize, 0) as rank_prize,
+           COALESCE(mr.kill_prize, 0) as kill_prize,
+           COALESCE(mr.total_prize, 0) as total_prize
+    FROM participations p
+    JOIN users u ON u.id = p.user_id
+    LEFT JOIN match_results mr ON mr.match_id = p.match_id AND mr.user_id = u.id
+    WHERE p.match_id = ?
+    ORDER BY p.slot_number ASC
+    """, (match_id,)).fetchall()
+    
+    conn.close()
+    return {
+        "match": dict(match),
+        "participants": [dict(r) for r in rows]
+    }
+
+@app.post("/api/admin/matches/{match_id}/publish-results")
+async def admin_publish_match_results(match_id: int, data: PublishMatchResultsRequest, admin: dict = Depends(verify_moderator_or_admin)):
+    conn = get_db()
+    match = conn.execute("SELECT * FROM matches WHERE id = ?", (match_id,)).fetchone()
+    if not match:
+        conn.close()
+        raise HTTPException(status_code=404, detail="ম্যাচ পাওয়া যায়নি")
+    
+    per_kill = match["per_kill"] or 0
+    
+    with conn:
+        for item in data.results:
+            uid = item.user_id
+            kills = max(0, item.kills)
+            rank_pos = max(0, item.rank_position)
+            rank_prz = max(0, item.rank_prize)
+            kill_prz = kills * per_kill
+            total_prz = kill_prz + rank_prz
+            
+            existing = conn.execute("SELECT total_prize FROM match_results WHERE match_id = ? AND user_id = ?", (match_id, uid)).fetchone()
+            prev_paid = existing["total_prize"] if existing else 0
+            diff = total_prz - prev_paid
+            
+            conn.execute("""
+            INSERT INTO match_results (match_id, user_id, rank_position, kills, kill_prize, rank_prize, total_prize)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(match_id, user_id) DO UPDATE SET
+                rank_position = excluded.rank_position,
+                kills = excluded.kills,
+                kill_prize = excluded.kill_prize,
+                rank_prize = excluded.rank_prize,
+                total_prize = excluded.total_prize
+            """, (match_id, uid, rank_pos, kills, kill_prz, rank_prz, total_prz))
+            
+            if diff != 0:
+                conn.execute("UPDATE users SET digits_balance = digits_balance + ?, win_points = win_points + ? WHERE id = ?", (diff, max(0, diff), uid))
+                conn.execute("""
+                INSERT INTO audit_logs (admin_id, target_user_id, action, amount, reason)
+                VALUES (?, ?, 'MATCH_PRIZE_PAYOUT', ?, ?)
+                """, (admin["id"], uid, diff, f"Match #{match_id} prize: {kills} kills (৳{kill_prz}) + Rank #{rank_pos} (৳{rank_prz})"))
+        
+        conn.execute("""
+        UPDATE matches SET status = 'completed', completed_at = CURRENT_TIMESTAMP, completed_by_id = ?, completed_by_name = ?
+        WHERE id = ?
+        """, (admin["id"], admin["username"], match_id))
+    
+    conn.close()
+    
+    await manager.broadcast({
+        "type": "MATCH_RESULTS_PUBLISHED",
+        "match_id": match_id,
+        "match_title": match["title"],
+        "match_type": match["match_type"]
+    })
+    
+    return {"success": True, "message": f"ম্যাচ #{match_id} এর ফলাফল সফলভাবে প্রকাশিত হয়েছে এবং খেলোয়াড়দের ব্যালেন্সে টাকা জমা হয়েছে!"}
+
+
+@app.put("/api/admin/matches/{match_id}/toggle-reg")
+async def admin_toggle_match_registration(match_id: int, admin: dict = Depends(verify_moderator_or_admin)):
+    conn = get_db()
+    match = conn.execute("SELECT * FROM matches WHERE id = ?", (match_id,)).fetchone()
+    if not match:
+        conn.close()
+        raise HTTPException(status_code=404, detail="ম্যাচ পাওয়া যায়নি")
+    
+    curr_status = match["status"]
+    if curr_status == "completed":
+        conn.close()
+        raise HTTPException(status_code=400, detail="সমাপ্ত ম্যাচের রেজিস্ট্রেশন পরিবর্তন করা যাবে না")
+    
+    new_status = "reg_closed" if curr_status == "upcoming" else "upcoming"
+    with conn:
+        conn.execute("UPDATE matches SET status = ? WHERE id = ?", (new_status, match_id))
+        conn.execute("""
+        INSERT INTO audit_logs (admin_id, target_user_id, action, amount, reason)
+        VALUES (?, ?, 'TOGGLE_REGISTRATION', 0, ?)
+        """, (admin["id"], match_id, f"Registration toggled to {new_status} for Match #{match_id}"))
+    conn.close()
+    
+    await manager.broadcast({
+        "type": "MATCH_STATUS_UPDATED",
+        "match_id": match_id,
+        "new_status": new_status
+    })
+    
+    msg = "রেজিস্ট্রেশন বন্ধ করা হয়েছে" if new_status == "reg_closed" else "রেজিস্ট্রেশন চালু করা হয়েছে"
+    return {"success": True, "new_status": new_status, "message": f"ম্যাচ #{match_id} এর {msg}!"}
 
 @app.delete("/api/admin/matches/{match_id}")
 def admin_delete_match(match_id: int, admin: dict = Depends(verify_admin)):

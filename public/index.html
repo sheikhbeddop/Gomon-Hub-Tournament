@@ -5,10 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GOMON HUB</title>
     <meta name="description" content="GOMON HUB - সুপার ফাস্ট টুর্নামেন্ট প্ল্যাটফর্ম।">
-    <link rel="icon" type="image/png" href="/static/img/icon.png?v=2.5.0">
+    <link rel="icon" type="image/png" href="/static/img/icon.png?v=2.6.0">
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#1e2538">
-    <link rel="stylesheet" href="/static/css/style.css?v=2.5.0">
+    <link rel="stylesheet" href="/static/css/style.css?v=2.6.1">
 
     <style id="gomon-hub-auth-critical-css">
         /* OVERRIDE ANY OLD/CACHED CSS TO GUARANTEE GOMON HUB MOCKUP ON MOBILE & DESKTOP */
@@ -967,6 +967,38 @@
         </div>
     </div>
 
+    <!-- MODAL 1B: FORGOT PASSWORD (SO SAD BABY) -->
+    <div class="modal-overlay" id="forgotPasswordModal" style="z-index: 1000000; align-items: center; justify-content: center;">
+        <div class="auth-card" style="text-align: center; max-width: 350px; padding: 34px 24px 26px; margin: auto;">
+            <div style="width: 58px; height: 58px; margin: 0 auto 16px; background: rgba(220, 38, 38, 0.08); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #dc2626;">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                </svg>
+            </div>
+            <h3 style="font-family: 'Rajdhani', sans-serif; font-size: 1.8rem; font-weight: 800; color: #1e2538; margin: 0 0 8px 0;">
+                So Sad Baby
+            </h3>
+            <p style="font-size: 0.92rem; color: #4b5563; margin: 0 0 16px 0; line-height: 1.5; font-weight: 500;">
+                পাসওয়ার্ড ভুলে গেছেন? এডমিন বা GOMON HUB এর সাথে যোগাযোগ করুন। আর কিচ্ছু লাগবে না!
+            </p>
+            
+            <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 12px; padding: 10px 14px; margin-bottom: 18px; color: #166534; font-size: 0.84rem; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                ২৪ ঘণ্টার যেকোনো সময় সাপোর্ট পাওয়া যাবে
+            </div>
+
+            <a href="https://wa.me/8801952851550?text=Hello%20GOMON%20HUB%20Admin%2C%20amar%20password%20recovery%20lagbe" target="_blank" style="display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; padding: 14px; background: #25D366; color: #ffffff; text-decoration: none; border-radius: 14px; font-weight: 700; font-size: 1rem; box-shadow: 0 6px 16px rgba(37, 211, 102, 0.35); margin-bottom: 12px; box-sizing: border-box;">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.711 2.598 2.664-.699c.971.53 1.77.813 2.796.814 3.184 0 5.77-2.587 5.77-5.767 0-3.18-2.586-5.767-5.77-5.767zm7.643 5.767c0 4.22-3.433 7.653-7.653 7.653-1.306 0-2.531-.334-3.606-.921l-4.415 1.157 1.178-4.305c-.694-1.127-1.077-2.45-1.077-3.884 0-4.22 3.433-7.653 7.653-7.653 4.22 0 7.653 3.433 7.653 7.653z"/></svg>
+                WhatsApp: 01952851550
+            </a>
+
+            <button type="button" onclick="closeModal('forgotPasswordModal')" style="width: 100%; padding: 12px; background: #f3f4f6; color: #4b5563; border: none; border-radius: 12px; font-weight: 600; cursor: pointer; font-size: 0.9rem;">
+                ঠিক আছে
+            </button>
+        </div>
+    </div>
+
     <!-- MODAL 2: ADMIN ADJUST DIGITS MODAL -->
     <div class="modal-overlay" id="adjustDigitsModal">
         <div class="modal-box">
@@ -1198,6 +1230,6 @@
     <!-- Toast Notification Container -->
     <div class="toast-container" id="toastContainer"></div>
 
-    <script src="/static/js/app.js?v=2.5.0"></script>
+    <script src="/static/js/app.js?v=2.6.1"></script>
 </body>
 </html>

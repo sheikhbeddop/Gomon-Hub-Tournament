@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Free Fire Pro Tournaments - সুপার ফাস্ট টুর্নামেন্ট প্ল্যাটফর্ম</title>
+    <meta name="description" content="ফ্রি ফায়ার কাস্টম টুর্নামেন্ট খেলুন, বিকাশ দিয়ে ডিজিট রিচার্জ করুন এবং প্রাইজ জিতুন।">
+    <link rel="icon" type="image/png" href="/static/img/icon.png">
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#00f59b">
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+
+    <!-- Top Navbar -->
+    <header class="navbar">
+        <div class="nav-container">
+            <div class="brand-logo" onclick="switchTab('tab-matches')">
+                <div class="brand-icon">
+                    <img src="/static/img/icon.png" alt="FF Logo" style="width: 26px; height: 26px; border-radius: 4px;">
+                </div>
+                <div>
+                    <span class="brand-title" id="siteTitleNav">FF TOURNAMENT</span>
+                    <span class="brand-tag">PRO</span>
+                </div>
+            </div>
+
+            <div class="nav-actions">
+                <!-- Push Notification Bell -->
+                <button class="notif-bell-btn" id="btnPushPermission" title="মোবাইল নোটিফিকেশন চালু করুন" onclick="requestPushPermission()">
+                    🔔
+                    <span class="notif-badge" id="notifBadge" style="display: none;"></span>
+                </button>
+
+                <!-- Digits Wallet Pill -->
+                <div class="wallet-pill" id="walletPill" onclick="switchTab('tab-recharge')" title="ক্লিক করে ডিজিট রিচার্জ করুন">
+                    <span class="digit-icon">🪙</span>
+                    <span class="digit-val" id="navDigitsBalance">0</span>
+                    <span class="digit-label">ডিজিট</span>
+                </div>
+
+                <!-- User Profile / Auth State -->
+                <div id="authNavContainer">
+                    <button class="btn btn-neon btn-sm" onclick="openModal('authModal')">🔑 লগইন / একাউন্ট</button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- PWA App Install Banner -->
+    <div id="pwaInstallBanner" style="display: none; background: linear-gradient(90deg, #00f59b, #00d2ff); color: #080b11; padding: 10px 20px; font-weight: 700; align-items: center; justify-content: space-between; gap: 10px; font-size: 0.9rem; box-shadow: 0 4px 15px rgba(0,245,155,0.3);">
+        <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 1.2rem;">📲</span>
+            <span>অ্যান্ড্রয়েড বা পিসিতে সরাসরি <b>ফ্রি ফায়ার টুর্নামেন্ট অ্যাপ</b> ইনস্টল করুন!</span>
+        </div>
+        <button class="btn btn-sm" style="background: #080b11; color: #00f59b; font-weight: 800; border-radius: 6px;" onclick="triggerPwaInstall()">
+            ইনস্টল করুন
+        </button>
+    </div>
+
+    <!-- Announcement Bar -->
+    <div class="announcement-bar">
+        <div class="announcement-content">
+            <span class="live-tag">⚡ লাইভ নোটিশ</span>
+            <span id="announcementText">স্বাগতম! সিডিউল থেকে আপনার পছন্দের ফ্রি ফায়ার ম্যাচে জয়েন করুন।</span>
+        </div>
+        <div id="connectionStatus" style="font-size: 0.75rem; color: var(--neon-green); display: flex; align-items: center; gap: 4px;">
+            <span style="display: inline-block; width: 6px; height: 6px; background: var(--neon-green); border-radius: 50%;"></span>
+            <span id="connStatusText">Connected</span>
+        </div>
+    </div>
+
+    <!-- Impersonation Alert Banner (Shown when admin is viewing as another user) -->
+    <div id="impersonationBanner" style="display: none; background: #ff2a5f; color: white; padding: 6px 20px; text-align: center; font-size: 0.85rem; font-weight: 700;">
+        ⚠️ আপনি বর্তমানে <span id="impersonatedUserText"></span> এর অ্যাকাউন্টে লগইন অবস্থায় আছেন। 
+        <button onclick="exitImpersonation()" style="background: white; color: #ff2a5f; border: none; padding: 2px 8px; border-radius: 4px; font-weight: 800; cursor: pointer; margin-left: 8px;">অ্যাডমিনে ফেরত যান</button>
+    </div>
+
+    <!-- Main Navigation Tabs -->
+    <nav class="tabs-nav">
+        <button class="tab-btn active" id="tabBtn-matches" onclick="switchTab('tab-matches')">
+            🎮 ম্যাচ সিডিউল (Lobby)
+        </button>
+        <button class="tab-btn" id="tabBtn-recharge" onclick="switchTab('tab-recharge')">
+            🪙 ডিজিট রিচার্জ (bKash)
+        </button>
+        <button class="tab-btn" id="tabBtn-mymatches" onclick="switchTab('tab-mymatches')">
+            🏆 আমার ম্যাচ ও রুম আইডি
+        </button>
+        <button class="tab-btn" id="tabBtn-admin" onclick="switchTab('tab-admin')" style="display: none;">
+            👑 অ্যাডমিন কন্ট্রোল <span class="tab-admin-badge">MASTER</span>
+        </button>
+    </nav>
+
+    <!-- Main Content Container -->
+    <main class="main-container">
+
+        <!-- TAB 1: MATCHES LOBBY -->
+        <section class="tab-content active" id="tab-matches">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 16px;">
+                <div>
+                    <h1 style="font-size: 1.5rem; font-weight: 800; font-family: 'Rajdhani', sans-serif;">🔥 ফ্রি ফায়ার আপকামিং ম্যাচ সিডিউল</h1>
+                    <p style="color: var(--text-secondary); font-size: 0.85rem;">স্লট শেষ হওয়ার আগেই এন্ট্রি ফি দিয়ে আপনার সিট নিশ্চিত করুন।</p>
+                </div>
+                <div style="display: flex; gap: 8px;">
+                    <button class="btn btn-outline btn-sm" onclick="filterMatches('all')">সব ম্যাচ</button>
+                    <button class="btn btn-outline btn-sm" onclick="filterMatches('Solo')">Solo</button>
+                    <button class="btn btn-outline btn-sm" onclick="filterMatches('Duo')">Duo</button>
+                    <button class="btn btn-outline btn-sm" onclick="filterMatches('Squad')">Squad</button>
+                </div>
+            </div>
+
+            <!-- Matches List Grid -->
+            <div class="matches-grid" id="matchesGrid">
+                <!-- Dynamically populated -->
+                <div style="grid-column: 1/-1; text-align: center; padding: 40px; color: var(--text-muted);">
+                    ম্যাচ লোড হচ্ছে...
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 2: DIGIT RECHARGE (bKASH) -->
+        <section class="tab-content" id="tab-recharge">
+            <div class="recharge-card">
+                <div style="text-align: center; margin-bottom: 20px;">
+                    <h2 style="font-size: 1.6rem; font-family: 'Rajdhani', sans-serif; font-weight: 800;">🪙 ওয়ালেটে ডিজিট রিচার্জ করুন</h2>
+                    <p style="color: var(--text-secondary); font-size: 0.9rem;">১ টাকা = ১ ডিজিট। নিচের বিকাশ নম্বরে টাকা পাঠিয়ে ট্রানজেকশন আইডি সাবমিট করুন।</p>
+                </div>
+
+                <!-- bKash Banner -->
+                <div class="bkash-banner">
+                    <div>
+                        <div style="font-size: 0.85rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.9;">
+                            bKash Personal Account
+                        </div>
+                        <div class="bkash-num-box">
+                            <span class="bkash-num" id="displayBkashNumber">01700000000</span>
+                            <button class="btn-copy" onclick="copyBkashNumber()">📋 কপি করুন</button>
+                        </div>
+                    </div>
+                    <div style="font-size: 0.8rem; background: rgba(0,0,0,0.25); padding: 6px 12px; border-radius: var(--radius-sm);">
+                        Send Money / ক্যাশ-ইন
+                    </div>
+                </div>
+
+                <!-- Instructions -->
+                <ol class="instructions-list">
+                    <li>উপরের নম্বরে বিকাশ থেকে <b>Send Money</b> করুন।</li>
+                    <li>টাকা পাঠানোর পর আপনি যে নম্বর থেকে পাঠিয়েছেন সেই নম্বর এবং <b>TrxID</b> নিচে লিখুন।</li>
+                    <li><b>"সাবমিট রিকোয়েস্ট"</b> বাটনে চাপ দিন। অ্যাডমিন চেক করে কয়েক মিনিটের মধ্যে আপনার ব্যালেন্সে ডিজিট যোগ করে দেবে।</li>
+                </ol>
+
+                <!-- Form -->
+                <form id="depositForm" onsubmit="handleDepositSubmit(event)">
+                    <div class="form-group">
+                        <label class="form-label">যে বিকাশ নম্বর থেকে টাকা পাঠিয়েছেন</label>
+                        <input type="text" class="form-input" id="depSenderPhone" placeholder="01XXXXXXXXX" required maxlength="15">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">টাকার পরিমাণ (কত ডিজিট চান?)</label>
+                        <input type="number" class="form-input" id="depAmount" placeholder="উদাহরণ: ৫০, ১০০, ২০০" min="10" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">bKash ট্রানজেকশন আইডি (TrxID)</label>
+                        <input type="text" class="form-input" id="depTrxId" placeholder="উদাহরণ: BGA829X14M" required style="text-transform: uppercase;">
+                    </div>
+                    <button type="submit" class="btn btn-neon" style="width: 100%; padding: 12px; margin-top: 8px;">
+                        🚀 ডিপোজিট রিকোয়েস্ট পাঠান
+                    </button>
+                </form>
+
+                <!-- Deposit History -->
+                <div style="margin-top: 36px;">
+                    <h3 style="font-size: 1.1rem; margin-bottom: 12px; font-weight: 700;">📜 আপনার ডিপোজিট হিস্টোরি</h3>
+                    <div class="table-wrapper">
+                        <table class="custom-table" id="depositHistoryTable">
+                            <thead>
+                                <tr>
+                                    <th>তারিখ</th>
+                                    <th>পরিমাণ</th>
+                                    <th>TrxID</th>
+                                    <th>স্ট্যাটাস</th>
+                                </tr>
+                            </thead>
+                            <tbody id="depositHistoryBody">
+                                <tr><td colspan="4" style="text-align: center; color: var(--text-muted);">লগইন করে হিস্টোরি দেখুন</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 3: MY MATCHES & ROOM CREDENTIALS -->
+        <section class="tab-content" id="tab-mymatches">
+            <div style="margin-bottom: 20px;">
+                <h2 style="font-size: 1.5rem; font-weight: 800; font-family: 'Rajdhani', sans-serif;">🏆 আমার টুর্নামেন্ট ও রুম পাসওয়ার্ড</h2>
+                <p style="color: var(--text-secondary); font-size: 0.85rem;">আপনি যেসব ম্যাচে অংশ নিয়েছেন, সেগুলোর Room ID এবং Password এখানে লাইভ দেখতে পাবেন।</p>
+            </div>
+            <div class="matches-grid" id="myMatchesGrid">
+                <!-- Populated dynamically -->
+            </div>
+        </section>
+
+        <!-- TAB 4: SUPER ADMIN MASTER CONTROL -->
+        <section class="tab-content" id="tab-admin">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
+                <div>
+                    <h2 style="font-size: 1.6rem; font-weight: 800; font-family: 'Rajdhani', sans-serif; color: var(--neon-green);">
+                        👑 SUPER-ADMIN MASTER CONTROL
+                    </h2>
+                    <p style="color: var(--text-secondary); font-size: 0.85rem;">ওয়েবসাইট, প্লেয়ার ডিজিট, ম্যাচ ও পেমেন্টের সম্পূর্ণ নিয়ন্ত্রণ কেন্দ্র।</p>
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <button class="btn btn-neon btn-sm" onclick="openModal('createMatchModal')">➕ নতুন ম্যাচ তৈরি</button>
+                    <button class="btn btn-crimson btn-sm" onclick="openModal('broadcastModal')">📢 ফোনে নোটিশ পাঠান</button>
+                </div>
+            </div>
+
+            <!-- Stats Overview Cards -->
+            <div class="admin-grid-stats" id="adminStatsGrid">
+                <div class="admin-stat-card">
+                    <div class="admin-stat-icon" style="background: rgba(0, 245, 155, 0.15); color: var(--neon-green);">👥</div>
+                    <div>
+                        <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase;">মোট প্লেয়ার</div>
+                        <div style="font-size: 1.5rem; font-weight: 800; font-family: 'Rajdhani';" id="adminStatTotalUsers">0</div>
+                    </div>
+                </div>
+                <div class="admin-stat-card">
+                    <div class="admin-stat-icon" style="background: rgba(255, 183, 3, 0.15); color: var(--neon-amber);">⏳</div>
+                    <div>
+                        <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase;">পেন্ডিং ডিপোজিট</div>
+                        <div style="font-size: 1.5rem; font-weight: 800; font-family: 'Rajdhani';" id="adminStatPendingDep">0</div>
+                    </div>
+                </div>
+                <div class="admin-stat-card">
+                    <div class="admin-stat-icon" style="background: rgba(0, 210, 255, 0.15); color: var(--neon-cyan);">🎮</div>
+                    <div>
+                        <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase;">মোট ম্যাচ</div>
+                        <div style="font-size: 1.5rem; font-weight: 800; font-family: 'Rajdhani';" id="adminStatTotalMatches">0</div>
+                    </div>
+                </div>
+                <div class="admin-stat-card">
+                    <div class="admin-stat-icon" style="background: rgba(255, 42, 95, 0.15); color: var(--neon-crimson);">🪙</div>
+                    <div>
+                        <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase;">সার্কুলেটিং ডিজিট</div>
+                        <div style="font-size: 1.5rem; font-weight: 800; font-family: 'Rajdhani';" id="adminStatCirculatingDigits">0</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SECTION A: PENDING bKASH DEPOSITS -->
+            <div class="admin-panel-card">
+                <div class="admin-card-header">
+                    <div class="admin-card-title">
+                        <span>⏳ পেন্ডিং bKash ডিপোজিট অনুমোদন</span>
+                    </div>
+                    <button class="btn btn-outline btn-sm" onclick="loadAdminOverview()">🔄 রিফ্রেশ</button>
+                </div>
+                <div class="table-wrapper">
+                    <table class="custom-table">
+                        <thead>
+                            <tr>
+                                <th>প্লেয়ার</th>
+                                <th>বিকাশ নম্বর</th>
+                                <th>টাকা / ডিজিট</th>
+                                <th>TrxID</th>
+                                <th>তারিখ</th>
+                                <th>অ্যাকশন</th>
+                            </tr>
+                        </thead>
+                        <tbody id="adminPendingDepositsBody">
+                            <tr><td colspan="6" style="text-align: center; color: var(--text-muted);">কোনো পেন্ডিং ডিপোজিট নেই</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- SECTION B: PLAYER MANAGEMENT & DIGITS MASTER OVERRIDE -->
+            <div class="admin-panel-card">
+                <div class="admin-card-header">
+                    <div class="admin-card-title">
+                        <span>👥 প্লেয়ার ম্যানেজমেন্ট ও সরাসরি ডিজিট যোগ/বিয়োগ</span>
+                    </div>
+                    <div style="display: flex; gap: 8px;">
+                        <input type="text" id="adminUserSearchInput" placeholder="ইউজারনেম বা আইডি খুঁজুন..." class="form-input" style="padding: 6px 12px; font-size: 0.85rem;" onkeyup="handleUserSearch(event)">
+                        <button class="btn btn-neon btn-sm" onclick="searchUsers()">সার্চ</button>
+                    </div>
+                </div>
+                <div class="table-wrapper">
+                    <table class="custom-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>ইউজারনেম</th>
+                                <th>FF IGN & UID</th>
+                                <th>ফোন নম্বর</th>
+                                <th>ডিজিট ব্যালেন্স</th>
+                                <th>স্ট্যাটাস</th>
+                                <th>মাস্টার অ্যাকশন</th>
+                            </tr>
+                        </thead>
+                        <tbody id="adminUsersTableBody">
+                            <tr><td colspan="7" style="text-align: center;">প্লেয়ার তালিকা লোড হচ্ছে...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- SECTION C: MATCH MANAGEMENT (Room ID & Pass) -->
+            <div class="admin-panel-card">
+                <div class="admin-card-header">
+                    <div class="admin-card-title">
+                        <span>🎯 টুর্নামেন্ট ম্যাচ কন্ট্রোল ও রুম পাসওয়ার্ড রিলিজ</span>
+                    </div>
+                </div>
+                <div class="table-wrapper">
+                    <table class="custom-table">
+                        <thead>
+                            <tr>
+                                <th>ম্যাচ টাইটেল</th>
+                                <th>টাইপ ও ম্যাপ</th>
+                                <th>সময়</th>
+                                <th>ফি / প্রাইজ</th>
+                                <th>স্লট</th>
+                                <th>Room ID / Pass</th>
+                                <th>অ্যাকশন</th>
+                            </tr>
+                        </thead>
+                        <tbody id="adminMatchesTableBody">
+                            <!-- Populated dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- SECTION D: SITE SETTINGS -->
+            <div class="admin-panel-card">
+                <div class="admin-card-header">
+                    <div class="admin-card-title">
+                        <span>⚙️ ওয়েবসাইট জেনারেল সেটিংস</span>
+                    </div>
+                </div>
+                <form id="adminSettingsForm" onsubmit="handleSettingsSubmit(event)">
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;">
+                        <div class="form-group">
+                            <label class="form-label">অ্যাডমিন বিকাশ নম্বর (প্লেয়াররা যেখানে টাকা পাঠাবে)</label>
+                            <input type="text" class="form-input" id="settingAdminBkash" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">ওয়েবসাইট টাইটেল</label>
+                            <input type="text" class="form-input" id="settingSiteTitle" required>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">লাইভ অ্যানাউন্সমেন্ট / নোটিশ বার্তা</label>
+                        <input type="text" class="form-input" id="settingNotice">
+                    </div>
+                    <button type="submit" class="btn btn-neon btn-sm">সেভ করুন</button>
+            <!-- SECTION E: APP VERSION & LIVE OTA UPDATE CONTROLS -->
+            <div class="admin-panel-card" style="border-color: rgba(0, 245, 155, 0.4);">
+                <div class="admin-card-header">
+                    <div class="admin-card-title">
+                        <span style="color: var(--neon-green);">🚀 অ্যাপ ভার্সন ও লাইভ অটো-আপডেট রিলিজ (OTA Update)</span>
+                    </div>
+                    <span class="badge-status approved" id="adminCurrentVersionBadge">v1.0.0</span>
+                </div>
+                <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 16px;">
+                    এখানে নতুন ভার্সন লিখে আপডেট পাঠালে যারা যারা আপনার অ্যাপ মোবাইলে ইনস্টল করেছে, সবার স্ক্রিনে সাথে সাথে "New Version Available" পপ-আপ করবে। তারা "Confirm" চাপলে অটোমেটিক নতুন ভার্সন ইনস্টল হয়ে যাবে এবং আগের ইউজারনেম/পাসওয়ার্ডেই সরাসরি লগইন থাকবে!
+                </p>
+                <form id="adminPushUpdateForm" onsubmit="handlePushUpdateSubmit(event)">
+                    <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 16px;">
+                        <div class="form-group">
+                            <label class="form-label">নতুন ভার্সন কোড (যেমন: v1.1.0, v1.2.0)</label>
+                            <input type="text" class="form-input" id="adminNewVersionInput" placeholder="v1.1.0" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">কী কী পরিবর্তন করা হয়েছে? (Update Changelog)</label>
+                            <input type="text" class="form-input" id="adminUpdateNotesInput" placeholder="যেমন: নতুন টুর্নামেন্ট ম্যাপ ও ফাস্টার সার্ভার আপডেট" required>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-neon btn-sm" style="padding: 10px 18px;">
+                        🚀 সবার অ্যাপে লাইভ আপডেট পাঠান
+                    </button>
+                </form>
+            </div>
+
+        </section>
+
+    </main>
+
+    <!-- MODAL 1: AUTH (LOGIN & REGISTER) -->
+    <div class="modal-overlay" id="authModal">
+        <div class="modal-box">
+            <div class="modal-header">
+                <h3 style="font-family: 'Rajdhani', sans-serif; font-size: 1.3rem; font-weight: 800;" id="authModalTitle">
+                    🎮 প্লেয়ার লগইন
+                </h3>
+                <button class="modal-close" onclick="closeModal('authModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- Toggle Tab -->
+                <div style="display: flex; gap: 8px; margin-bottom: 20px; background: rgba(0,0,0,0.3); padding: 4px; border-radius: var(--radius-sm);">
+                    <button type="button" class="btn btn-neon btn-sm" id="authToggleLogin" style="flex: 1;" onclick="setAuthMode('login')">লগইন</button>
+                    <button type="button" class="btn btn-outline btn-sm" id="authToggleRegister" style="flex: 1;" onclick="setAuthMode('register')">নতুন রেজিস্ট্রেশন</button>
+                </div>
+
+                <!-- LOGIN FORM -->
+                <form id="loginForm" onsubmit="handleLoginSubmit(event)">
+                    <div class="form-group">
+                        <label class="form-label">ইউজারনেম</label>
+                        <input type="text" class="form-input" id="loginUsername" required placeholder="আপনার ইউজারনেম">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">পাসওয়ার্ড</label>
+                        <input type="password" class="form-input" id="loginPassword" required placeholder="পাসওয়ার্ড দিন">
+                    </div>
+                    <button type="submit" class="btn btn-neon" style="width: 100%; padding: 12px; margin-top: 8px;">
+                        লগইন করুন
+                    </button>
+                </form>
+
+                <!-- REGISTER FORM -->
+                <form id="registerForm" style="display: none;" onsubmit="handleRegisterSubmit(event)">
+                    <div class="form-group">
+                        <label class="form-label">পছন্দের ইউজারনেম (Unique Username)</label>
+                        <input type="text" class="form-input" id="regUsername" required placeholder="যেমন: pro_gamer99">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">ফোন নম্বর (বিকাশ নম্বর)</label>
+                        <input type="text" class="form-input" id="regPhone" required placeholder="01XXXXXXXXX">
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                        <div class="form-group">
+                            <label class="form-label">Free Fire IGN (নাম)</label>
+                            <input type="text" class="form-input" id="regFfIgn" required placeholder="ইন-গেম নাম">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Free Fire UID (আইডি)</label>
+                            <input type="text" class="form-input" id="regFfUid" required placeholder="যেমন: 28491028">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">পাসওয়ার্ড (কমপক্ষে ৬ অক্ষর)</label>
+                        <input type="password" class="form-input" id="regPassword" required minlength="6">
+                    </div>
+                    <button type="submit" class="btn btn-neon" style="width: 100%; padding: 12px; margin-top: 8px;">
+                        একাউন্ট তৈরি করুন
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 2: ADMIN ADJUST DIGITS MODAL -->
+    <div class="modal-overlay" id="adjustDigitsModal">
+        <div class="modal-box">
+            <div class="modal-header">
+                <h3 style="font-family: 'Rajdhani', sans-serif; font-size: 1.3rem; font-weight: 800;">
+                    🪙 ডিজিট যোগ / বিয়োগ করুন
+                </h3>
+                <button class="modal-close" onclick="closeModal('adjustDigitsModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p style="font-size: 0.88rem; color: var(--text-secondary); margin-bottom: 16px;">
+                    টার্গেট প্লেয়ার: <b id="adjustTargetUsername" style="color: var(--neon-green);"></b> 
+                    (বর্তমান ব্যালেন্স: <span id="adjustCurrentBal" style="color: var(--neon-amber); font-weight: 800;"></span> ডিজিট)
+                </p>
+                <form id="adjustDigitsForm" onsubmit="handleAdjustDigitsSubmit(event)">
+                    <input type="hidden" id="adjustTargetUserId">
+                    <div class="form-group">
+                        <label class="form-label">ডিজিটের পরিমাণ (যোগ করতে ধনাত্মক সংখ্যা, কাটতে মাইনাস দিন)</label>
+                        <input type="number" class="form-input" id="adjustAmount" placeholder="যেমন: +100 বা -50" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">কারণ (Audit Note)</label>
+                        <input type="text" class="form-input" id="adjustReason" placeholder="যেমন: Booyah Prize Money / ম্যানুয়াল রিচার্জ" required>
+                    </div>
+                    <button type="submit" class="btn btn-neon" style="width: 100%; padding: 12px; margin-top: 8px;">
+                        কনফার্ম করুন
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 3: ADMIN CREATE MATCH -->
+    <div class="modal-overlay" id="createMatchModal">
+        <div class="modal-box" style="max-width: 550px;">
+            <div class="modal-header">
+                <h3 style="font-family: 'Rajdhani', sans-serif; font-size: 1.3rem; font-weight: 800;">
+                    ➕ নতুন টুর্নামেন্ট ম্যাচ শিডিউল
+                </h3>
+                <button class="modal-close" onclick="closeModal('createMatchModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="createMatchForm" onsubmit="handleCreateMatchSubmit(event)">
+                    <div class="form-group">
+                        <label class="form-label">ম্যাচের নাম / টাইটেল</label>
+                        <input type="text" class="form-input" id="matchTitle" placeholder="যেমন: Grand Championship #202" required>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div class="form-group">
+                            <label class="form-label">ম্যাচ টাইপ</label>
+                            <select class="form-select" id="matchType">
+                                <option value="Solo">Solo (১ জন)</option>
+                                <option value="Duo">Duo (২ জন)</option>
+                                <option value="Squad">Squad (৪ জন)</option>
+                                <option value="Clash Squad">Clash Squad (৪v৪)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">ম্যাপ</label>
+                            <select class="form-select" id="matchMap">
+                                <option value="Bermuda">Bermuda</option>
+                                <option value="Purgatory">Purgatory</option>
+                                <option value="Kalahari">Kalahari</option>
+                                <option value="Alpine">Alpine</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div class="form-group">
+                            <label class="form-label">ম্যাচ শুরুর সময় ও তারিখ</label>
+                            <input type="datetime-local" class="form-input" id="matchTime" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">মোট স্লট সংখ্যা</label>
+                            <input type="number" class="form-input" id="matchSlots" value="48" required>
+                        </div>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
+                        <div class="form-group">
+                            <label class="form-label">এন্ট্রি ফি (ডিজিট)</label>
+                            <input type="number" class="form-input" id="matchEntryFee" value="25" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">মোট প্রাইজ পুল</label>
+                            <input type="number" class="form-input" id="matchPrizePool" value="600" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">প্রতি কিল প্রাইজ</label>
+                            <input type="number" class="form-input" id="matchPerKill" value="15" required>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-neon" style="width: 100%; padding: 12px; margin-top: 10px;">
+                        ম্যাচ পাবলিশ করুন
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 4: ADMIN SET ROOM CREDENTIALS -->
+    <div class="modal-overlay" id="setRoomModal">
+        <div class="modal-box">
+            <div class="modal-header">
+                <h3 style="font-family: 'Rajdhani', sans-serif; font-size: 1.3rem; font-weight: 800;">
+                    🔑 রুম আইডি ও পাসওয়ার্ড রিলিজ
+                </h3>
+                <button class="modal-close" onclick="closeModal('setRoomModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 16px;">
+                    রুম আইডি সেভ করার সাথে সাথে যারা ম্যাচে জয়েন করেছে তাদের স্ক্রিনে এটি দৃশ্যমান হবে এবং নোটিফিকেশন যাবে।
+                </p>
+                <form id="setRoomForm" onsubmit="handleSetRoomSubmit(event)">
+                    <input type="hidden" id="setRoomMatchId">
+                    <div class="form-group">
+                        <label class="form-label">Custom Room ID</label>
+                        <input type="text" class="form-input" id="setRoomIdVal" placeholder="যেমন: 4892147" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Room Password</label>
+                        <input type="text" class="form-input" id="setRoomPassVal" placeholder="যেমন: 1234 বা 8899" required>
+                    </div>
+                    <button type="submit" class="btn btn-neon" style="width: 100%; padding: 12px; margin-top: 8px;">
+                        পাবলিশ করুন
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 5: BROADCAST PUSH NOTICE TO PHONES -->
+    <div class="modal-overlay" id="broadcastModal">
+        <div class="modal-box">
+            <div class="modal-header">
+                <h3 style="font-family: 'Rajdhani', sans-serif; font-size: 1.3rem; font-weight: 800; color: var(--neon-crimson);">
+                    📢 সবার ফোনে পুশ নোটিশ পাঠান
+                </h3>
+                <button class="modal-close" onclick="closeModal('broadcastModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 16px;">
+                    এই নোটিশটি এক ক্লিকেই ব্রাউজার এবং প্লেয়ারদের মোবাইল নোটিফিকেশন বারে সরাসরি পপ-আপ করবে।
+                </p>
+                <form id="broadcastForm" onsubmit="handleBroadcastSubmit(event)">
+                    <div class="form-group">
+                        <label class="form-label">নোটিশ টাইটেল</label>
+                        <input type="text" class="form-input" id="broadcastTitle" placeholder="যেমন: 🚨 রুম আইডি রিলিজ হয়েছে!" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">বার্তা / মেসেজ</label>
+                        <textarea class="form-input" id="broadcastMessage" rows="3" placeholder="মেসেজ লিখুন..." required style="resize: vertical;"></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-crimson" style="width: 100%; padding: 12px; margin-top: 8px;">
+                        🚀 ব্রডকাস্ট করুন
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 6: APP AUTO-UPDATE POPUP -->
+    <div class="modal-overlay" id="appUpdateModal">
+        <div class="modal-box" style="border: 2px solid var(--neon-green); box-shadow: 0 0 35px rgba(0, 245, 155, 0.4);">
+            <div class="modal-header" style="background: linear-gradient(90deg, rgba(0,245,155,0.15), transparent);">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span style="font-size: 1.5rem;">🎉</span>
+                    <h3 style="font-family: 'Rajdhani', sans-serif; font-size: 1.35rem; font-weight: 800; color: var(--neon-green);">
+                        নতুন ভার্সন আপডেট পাওয়া গেছে!
+                    </h3>
+                </div>
+            </div>
+            <div class="modal-body">
+                <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.04); padding: 10px 14px; border-radius: var(--radius-sm); margin-bottom: 14px;">
+                    <span style="font-size: 0.85rem; color: var(--text-secondary);">বর্তমান ভার্সন: <b id="updateCurrentVer" style="color: var(--text-muted);">v1.0.0</b></span>
+                    <span style="font-size: 0.95rem; font-weight: 800; color: var(--neon-green); background: rgba(0,245,155,0.15); padding: 2px 10px; border-radius: 99px;" id="updateNewVer">v1.1.0</span>
+                </div>
+
+                <div style="background: rgba(0,0,0,0.3); border: 1px dashed rgba(255,255,255,0.1); border-radius: var(--radius-sm); padding: 12px; margin-bottom: 16px;">
+                    <div style="font-size: 0.8rem; text-transform: uppercase; color: var(--neon-amber); font-weight: 700; margin-bottom: 4px;">
+                        ⚡ আপডেটে নতুন কী থাকছে:
+                    </div>
+                    <div id="updateChangelogText" style="font-size: 0.9rem; color: #f1f5f9; line-height: 1.5;">
+                        সুপার ফাস্ট স্পিড ও নতুন ফিচার যুক্ত করা হয়েছে।
+                    </div>
+                </div>
+
+                <div style="background: rgba(0,210,255,0.08); border-left: 3px solid var(--neon-cyan); padding: 8px 12px; border-radius: 4px; font-size: 0.82rem; color: #e2e8f0; margin-bottom: 20px;">
+                    🔒 <b>নো চিন্তা:</b> আপডেট করার পরও আপনার ইউজারনেম, ব্যালেন্স এবং পাসওয়ার্ড আগের মতোই সুরক্ষিত ও সরাসরি লগইন থাকবে।
+                </div>
+
+                <!-- Update Progress bar (hidden by default) -->
+                <div id="updateProgressWrapper" style="display: none; margin-bottom: 16px;">
+                    <div style="display: flex; justify-content: space-between; font-size: 0.8rem; margin-bottom: 6px; color: var(--neon-green);">
+                        <span id="updateProgressStatus">নতুন ফাইল ডাউনলোড হচ্ছে...</span>
+                        <span id="updatePercent">0%</span>
+                    </div>
+                    <div class="slot-bar-bg">
+                        <div class="slot-bar-fill" id="updateProgressFill" style="width: 0%;"></div>
+                    </div>
+                </div>
+
+                <button class="btn btn-neon" id="btnConfirmAppUpdate" style="width: 100%; padding: 14px; font-size: 1rem; font-weight: 800;" onclick="confirmAndInstallUpdate()">
+                    ⚡ কনফার্ম ও অটো-আপডেট ইনস্টল করুন
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification Container -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>

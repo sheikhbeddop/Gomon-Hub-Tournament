@@ -203,12 +203,28 @@ def init_db():
             auth TEXT NOT NULL,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
+
+        CREATE TABLE IF NOT EXISTS banned_records (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT COLLATE NOCASE,
+            phone TEXT,
+            email TEXT COLLATE NOCASE,
+            ff_uid TEXT,
+            reason TEXT,
+            banned_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
         """)
+
+        # Migration: Ensure email column exists in users table
+        try:
+            conn.execute("ALTER TABLE users ADD COLUMN email TEXT DEFAULT ''")
+        except Exception:
+            pass
 
         # Default Settings
         conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('admin_bkash', '01700000000 (Personal)')")
-        conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('notice', 'স্বাগতম! ফ্রি ফায়ার টুর্নামেন্টে অংশ নিতে bKash এ ডিপোজিট করে সিডিউল থেকে জয়েন করুন!')")
-        conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('site_title', 'Free Fire Pro Tournaments')")
+        conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('notice', 'স্বাগতম! GOMON টুর্নামেন্টে অংশ নিতে bKash এ ডিপোজিট করে সিডিউল থেকে জয়েন করুন!')")
+        conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('site_title', 'GOMON')")
 
         # Create Default Master Admin if not exists
         admin_row = conn.execute("SELECT id FROM users WHERE role = 'admin' LIMIT 1").fetchone()
@@ -219,16 +235,6 @@ def init_db():
             VALUES ('FF-ADMIN', 'admin', ?, '01700000000', 'SUPER_ADMIN', '100000000', 999999, 'admin', 'active')
             """, (admin_pass,))
             print("[INFO] Master Admin created: username='admin', password='admin12345'")
-
-        # Create a sample demo match if empty
-        match_count = conn.execute("SELECT COUNT(*) FROM matches").fetchone()[0]
-        if match_count == 0:
-            sample_time = datetime.now().strftime("%Y-%m-%d 21:00")
-            conn.execute("""
-            INSERT INTO matches (title, match_type, map_name, match_time, entry_fee, prize_pool, per_kill, total_slots, status)
-            VALUES ('Grand Battle Royale #101', 'Solo', 'Bermuda', ?, 25, 600, 15, 48, 'upcoming')
-            """, (sample_time,))
-            print("[INFO] Sample match created.")
 
     conn.close()
 
@@ -337,6 +343,7 @@ class RegisterRequest(BaseModel):
     username: str
     password: str
     phone: str
+    email: str
     ff_ign: str
     ff_uid: str
 
@@ -396,7 +403,7 @@ class PushSubscribeRequest(BaseModel):
 # -------------------------------------------------------------
 # Public & Auth Endpoints
 # -------------------------------------------------------------
-CURRENT_CODE_VERSION = "v2.1.0"
+CURRENT_CODE_VERSION = "v2.2.0"
 
 @app.get("/api/info")
 def get_public_info():
@@ -405,14 +412,14 @@ def get_public_info():
     conn.close()
     settings = {r["key"]: r["value"] for r in settings_rows}
     current_ver = settings.get("app_version")
-    if not current_ver or current_ver == "v1.0.0":
+    if not current_ver or current_ver in ["v1.0.0", "v1.1.0", "v2.1.0"]:
         current_ver = CURRENT_CODE_VERSION
     return {
-        "site_title": settings.get("site_title", "Free Fire Tournaments"),
+        "site_title": settings.get("site_title", "GOMON"),
         "admin_bkash": settings.get("admin_bkash", "01700000000"),
         "notice": settings.get("notice", ""),
         "app_version": current_ver,
-        "app_update_notes": settings.get("app_update_notes", "রিচার্জ অপশন সবার প্রথমে আনা হয়েছে ও মোবাইল ইন্টারফেস আপডেট করা হয়েছে।"),
+        "app_update_notes": settings.get("app_update_notes", "GOMON প্ল্যাটফর্ম আপডেট ও সিকিউরিটি বৃদ্ধি।"),
         "vapid_public_key": VAPID_KEYS["public_key"]
     }
 
@@ -423,34 +430,69 @@ def get_app_version():
     notes_row = conn.execute("SELECT value FROM settings WHERE key = 'app_update_notes'").fetchone()
     conn.close()
     return {
-        "version": v_row["value"] if v_row else "v1.0.0",
+        "version": v_row["value"] if v_row else CURRENT_CODE_VERSION,
         "notes": notes_row["value"] if notes_row else "স্থিতিশীল ভার্সন"
     }
 
 @app.post("/api/auth/register")
 def register(data: RegisterRequest):
     username = data.username.strip()
+    phone = data.phone.strip()
+    email = data.email.strip().lower()
+
     if len(username) < 3:
         raise HTTPException(status_code=400, detail="Username must be at least 3 characters")
     if len(data.password) < 6:
         raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+    if not phone:
+        raise HTTPException(status_code=400, detail="ফোন নম্বর আবশ্যক")
+    if not email or "@" not in email:
+        raise HTTPException(status_code=400, detail="সঠিক ইমেইল অ্যাড্রেস প্রদান করুন")
     if not data.ff_uid.strip() or not data.ff_ign.strip():
-        raise HTTPException(status_code=400, detail="Free Fire In-Game Name and UID are required")
+        raise HTTPException(status_code=400, detail="Free Fire In-Game Name এবং UID আবশ্যক")
 
     conn = get_db()
-    existing = conn.execute("SELECT id FROM users WHERE username = ?", (username,)).fetchone()
+
+    # 1. Check Permanent Blacklist (banned_records)
+    banned = conn.execute("""
+    SELECT * FROM banned_records 
+    WHERE username = ? COLLATE NOCASE OR phone = ? OR (email != '' AND email = ? COLLATE NOCASE)
+    """, (username, phone, email)).fetchone()
+
+    if banned:
+        conn.close()
+        if banned["username"] and banned["username"].lower() == username.lower():
+            raise HTTPException(status_code=403, detail=f"🚨 ইউজারনেম '{username}' স্থায়ীভাবে ব্যান করা হয়েছে (BANNED)! এই নামে আর কোনোদিন অ্যাকাউন্ট তৈরি করা যাবে না।")
+        if banned["phone"] == phone:
+            raise HTTPException(status_code=403, detail=f"🚨 ফোন নম্বর '{phone}' স্থায়ীভাবে ব্যান করা হয়েছে (BANNED)! এই নম্বর দিয়ে আর কোনোদিন অ্যাকাউন্ট তৈরি করা যাবে না।")
+        if banned["email"] and banned["email"].lower() == email.lower():
+            raise HTTPException(status_code=403, detail=f"🚨 ইমেইল '{email}' স্থায়ীভাবে ব্যান করা হয়েছে (BANNED)! এই ইমেইল দিয়ে আর কোনোদিন অ্যাকাউন্ট তৈরি করা যাবে না।")
+
+    # 2. Check Existing Users in users table
+    existing = conn.execute("""
+    SELECT * FROM users 
+    WHERE username = ? COLLATE NOCASE OR phone = ? OR (email != '' AND email = ? COLLATE NOCASE)
+    """, (username, phone, email)).fetchone()
+
     if existing:
         conn.close()
-        raise HTTPException(status_code=400, detail="Username is already taken. Please choose another.")
+        if existing["status"] == "banned":
+            raise HTTPException(status_code=403, detail="🚨 এই ক্রেডেনশিয়ালসের অ্যাকাউন্টটি স্থায়ীভাবে ব্যান করা হয়েছে (BANNED)! নতুন অ্যাকাউন্ট তৈরি করা সম্পূর্ণ নিষিদ্ধ।")
+        if existing["username"].lower() == username.lower():
+            raise HTTPException(status_code=400, detail="এই ইউজারনেমটি ইতিমধ্যে নেওয়া হয়েছে। অন্য নাম দিন।")
+        if existing["phone"] == phone:
+            raise HTTPException(status_code=400, detail="এই ফোন নম্বর দিয়ে ইতিমধ্যে অ্যাকাউন্ট রয়েছে।")
+        if existing["email"] and existing["email"].lower() == email.lower():
+            raise HTTPException(status_code=400, detail="এই ইমেইল দিয়ে ইতিমধ্যে অ্যাকাউন্ট রয়েছে।")
 
-    rand_id = f"FF-{secrets.randbelow(90000) + 10000}"
+    rand_id = f"GOMON-{secrets.randbelow(90000) + 10000}"
     pass_hash = hash_password(data.password)
 
     with conn:
         cursor = conn.execute("""
-        INSERT INTO users (player_id, username, password_hash, phone, ff_ign, ff_uid, digits_balance, role, status)
-        VALUES (?, ?, ?, ?, ?, ?, 0, 'player', 'active')
-        """, (rand_id, username, pass_hash, data.phone.strip(), data.ff_ign.strip(), data.ff_uid.strip()))
+        INSERT INTO users (player_id, username, password_hash, phone, email, ff_ign, ff_uid, digits_balance, role, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 0, 'player', 'active')
+        """, (rand_id, username, pass_hash, phone, email, data.ff_ign.strip(), data.ff_uid.strip()))
         user_id = cursor.lastrowid
 
     token = generate_token(user_id, username, "player")
@@ -466,7 +508,8 @@ def register(data: RegisterRequest):
             "role": "player",
             "ff_ign": data.ff_ign.strip(),
             "ff_uid": data.ff_uid.strip(),
-            "phone": data.phone.strip()
+            "phone": phone,
+            "email": email
         }
     }
 
@@ -777,10 +820,10 @@ async def admin_adjust_digits(data: AdminAdjustDigits, admin: dict = Depends(ver
     }
 
 @app.post("/api/admin/users/{target_user_id}/toggle-status")
-def admin_toggle_status(target_user_id: int, admin: dict = Depends(verify_admin)):
+async def admin_toggle_status(target_user_id: int, admin: dict = Depends(verify_admin)):
     conn = get_db()
     with conn:
-        user = conn.execute("SELECT status, username, role FROM users WHERE id = ?", (target_user_id,)).fetchone()
+        user = conn.execute("SELECT * FROM users WHERE id = ?", (target_user_id,)).fetchone()
         if not user:
             conn.close()
             raise HTTPException(status_code=404, detail="User not found")
@@ -791,12 +834,68 @@ def admin_toggle_status(target_user_id: int, admin: dict = Depends(verify_admin)
         new_status = "banned" if user["status"] == "active" else "active"
         conn.execute("UPDATE users SET status = ? WHERE id = ?", (new_status, target_user_id))
         
+        user_keys = user.keys()
+        user_phone = user["phone"] if "phone" in user_keys else ""
+        user_email = user["email"] if "email" in user_keys else ""
+        user_ff_uid = user["ff_uid"] if "ff_uid" in user_keys else ""
+
+        if new_status == "banned":
+            # Add to permanent blacklist so these credentials can NEVER re-register
+            conn.execute("""
+            INSERT INTO banned_records (username, phone, email, ff_uid, reason)
+            VALUES (?, ?, ?, ?, 'Banned by Super Admin')
+            """, (user["username"], user_phone, user_email, user_ff_uid))
+        else:
+            conn.execute("DELETE FROM banned_records WHERE username = ? COLLATE NOCASE", (user["username"],))
+
         conn.execute("""
         INSERT INTO audit_logs (admin_id, target_user_id, action, amount, reason)
         VALUES (?, ?, 'TOGGLE_STATUS', 0, ?)
         """, (admin["id"], target_user_id, f"Changed status to {new_status}"))
 
     conn.close()
+
+    # If banned, trigger real-time Red Alert Broadcast to ALL users & devices
+    if new_status == "banned":
+        banned_msg = f"Player '{user['username']}' Have Banned"
+
+        # 1. Real-time WebSocket Red Alert Broadcast
+        await manager.broadcast({
+            "type": "USER_BANNED_ALERT",
+            "username": user["username"],
+            "message": banned_msg
+        })
+
+        # 2. Kick the banned user immediately
+        await manager.send_to_user(target_user_id, {
+            "type": "ACCOUNT_BANNED_KICK",
+            "message": "আপনার অ্যাকাউন্টটি GOMON প্ল্যাটফর্ম থেকে ব্যান করা হয়েছে।"
+        })
+
+        # 3. Native Mobile Push Notification
+        conn = get_db()
+        subs = conn.execute("SELECT * FROM push_subscriptions").fetchall()
+        conn.close()
+
+        push_payload = json.dumps({
+            "title": "🚨 PLAYER BANNED ALERT",
+            "body": f"Player '{user['username']}' Have Banned",
+            "icon": "/static/img/icon.png",
+            "url": "/"
+        })
+
+        for sub in subs:
+            try:
+                pywebpush.webpush(
+                    subscription_info={"endpoint": sub["endpoint"], "keys": {"p256dh": sub["p256dh"], "auth": sub["auth"]}},
+                    data=push_payload,
+                    vapid_private_key=VAPID_KEYS["private_key"],
+                    vapid_claims={"sub": "mailto:admin@tournaments.local"},
+                    timeout=4
+                )
+            except Exception:
+                pass
+
     return {"success": True, "new_status": new_status, "username": user["username"]}
 
 @app.post("/api/admin/users/{target_user_id}/impersonate")

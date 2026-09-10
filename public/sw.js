@@ -1,4 +1,4 @@
-// Service Worker for Free Fire Tournament Push Notifications
+// Service Worker for GOMON HUB TOURNAMENT Push Notifications
 
 self.addEventListener('install', (event) => {
     self.skipWaiting();
@@ -26,10 +26,10 @@ self.addEventListener('fetch', (event) => {
 
 self.addEventListener('push', (event) => {
     let data = {
-        title: 'Free Fire Tournament Alert!',
+        title: 'GOMON HUB TOURNAMENT Alert!',
         body: 'Room ID and Password are now available!',
-        icon: '/static/img/icon.png',
-        badge: '/static/img/icon.png',
+        icon: '/static/img/icon.png?v=2.6.4',
+        badge: '/static/img/icon.png?v=2.6.4',
         url: '/'
     };
 

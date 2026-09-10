@@ -1,24 +1,24 @@
 {
-  "id": "/ff-tournament-app",
-  "name": "GOMON HUB",
-  "short_name": "GOMON HUB",
-  "description": "GOMON HUB Tournament Platform",
+  "id": "/gomon-hub-tournament-v4",
+  "name": "GOMON HUB TOURNAMENT",
+  "short_name": "GOMON HUB TOURNAMENT",
+  "description": "GOMON HUB TOURNAMENT Esports Platform",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#080b11",
-  "theme_color": "#00f59b",
+  "theme_color": "#080b11",
   "categories": ["games", "sports"],
   "icons": [
     {
-      "src": "/static/img/icon.png",
+      "src": "/static/img/icon.png?v=2.6.4",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "/static/img/icon.png",
+      "src": "/static/img/icon.png?v=2.6.4",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"

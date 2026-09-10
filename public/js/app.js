@@ -18,17 +18,29 @@ let pendingUpdateVersion = null;
 let pendingUpdateNotes = '';
 
 // Audio Feedback (Synthesized via Web Audio API - zero external asset lag)
-const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+let audioCtx = null;
+function getAudioContext() {
+    if (!audioCtx && (window.AudioContext || window.webkitAudioContext)) {
+        try {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        } catch (e) {
+            console.warn('AudioContext init error:', e);
+        }
+    }
+    return audioCtx;
+}
 
 function playSound(type) {
     try {
-        if (audioCtx.state === 'suspended') {
-            audioCtx.resume();
+        const ctx = getAudioContext();
+        if (!ctx) return;
+        if (ctx.state === 'suspended') {
+            ctx.resume().catch(() => {});
         }
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
         osc.connect(gain);
-        gain.connect(audioCtx.destination);
+        gain.connect(ctx.destination);
 
         const now = audioCtx.currentTime;
         if (type === 'coin') {
@@ -116,17 +128,14 @@ function doDismissSplashScreen() {
 // -------------------------------------------------------------
 // Initialization on Page Load
 // -------------------------------------------------------------
-document.addEventListener('DOMContentLoaded', async () => {
-    // Safety fallback: splash screen will dismiss automatically after 2.5s
-    setTimeout(doDismissSplashScreen, 2500);
+async function startApp() {
+    setTimeout(doDismissSplashScreen, 800);
 
-    // Clear login errors as soon as user types
     const uInp = document.getElementById('loginUsername');
     const pInp = document.getElementById('loginPassword');
     if (uInp) uInp.addEventListener('input', clearLoginError);
     if (pInp) pInp.addEventListener('input', clearLoginError);
 
-    // Clear signup errors as soon as user types
     const rU = document.getElementById('regUsername');
     const rP = document.getElementById('regPhone');
     const rE = document.getElementById('regEmail');
@@ -136,15 +145,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (rE) rE.addEventListener('input', clearSignupError);
     if (rPass) rPass.addEventListener('input', clearSignupError);
 
-    // Check for admin impersonation banner
     if (sessionStorage.getItem('admin_backup_token')) {
-        document.getElementById('impersonationBanner').style.display = 'block';
+        const impBanner = document.getElementById('impersonationBanner');
+        if (impBanner) impBanner.style.display = 'block';
     }
 
     await loadPublicInfo();
     await initAuth();
     initServiceWorker();
-});
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', startApp);
+} else {
+    startApp();
+}
 
 // -------------------------------------------------------------
 // Public Site Settings
@@ -201,12 +216,12 @@ async function initAuth() {
     const cachedUserStr = localStorage.getItem('ff_user');
 
     if (!token) {
-        // Unauthenticated: Strictly hide inner app & force full-screen login
         document.body.classList.add('not-authenticated');
         document.body.classList.remove('authenticated');
         const mainApp = document.getElementById('mainAppWrapper');
         if (mainApp) mainApp.style.display = 'none';
         renderLoggedOutNav();
+        setAuthMode('login');
         openModal('authModal');
         dismissSplashScreen();
         return;
@@ -267,55 +282,84 @@ async function initAuth() {
     }
 }
 
-function renderLoggedInNav() {
-    document.getElementById('navDigitsBalance').innerText = currentUser.digits_balance || 0;
-    
-    const container = document.getElementById('authNavContainer');
-    const isAdmin = (currentUser.role === 'admin');
-    const isMod = (currentUser.role === 'moderator');
-    const hasAdminPanel = isAdmin || isMod;
+// -------------------------------------------------------------
+// Global UI & Network Helper Functions
+// -------------------------------------------------------------
+function updateBalanceUI(balance) {
+    const balNum = (balance != null ? balance : (currentUser ? currentUser.digits_balance : 0)) || 0;
+    if (currentUser) {
+        currentUser.digits_balance = balNum;
+    }
+    const navBal = document.getElementById('navDigitsBalance');
+    if (navBal) navBal.innerText = balNum;
 
-    container.innerHTML = `
-        <div style="display: flex; align-items: center; gap: 8px;">
-            <div style="font-size: 0.82rem; text-align: right; line-height: 1.2;">
-                <div style="font-weight: 700; color: var(--neon-green);">${currentUser.username}</div>
-                <div style="font-size: 0.72rem; color: var(--text-muted); font-family: monospace;">${currentUser.player_id}</div>
-            </div>
-            ${isAdmin ? `<button class="btn btn-crimson btn-sm" onclick="switchTab('tab-admin')">👑 ADMIN</button>` : ''}
-            ${isMod ? `<button class="btn btn-neon btn-sm" onclick="switchTab('tab-admin')" style="color: var(--neon-cyan); border-color: var(--neon-cyan);">🛡️ MOD</button>` : ''}
-            <button class="btn btn-outline btn-sm" onclick="logout(true)" title="লগআউট">লগআউট</button>
-        </div>
-    `;
+    const headerBal = document.getElementById('profHeaderBalance');
+    if (headerBal) headerBal.innerText = 'BDT ' + balNum;
+
+    const profBal = document.getElementById('profDigitsBalance');
+    if (profBal) profBal.innerText = balNum;
+
+    const withdrawBal = document.getElementById('withdrawUserBalance');
+    if (withdrawBal) withdrawBal.innerText = 'BDT ' + balNum;
+
+    const modalBal = document.getElementById('walletModalUserBalance');
+    if (modalBal) modalBal.innerText = 'BDT ' + balNum + ' ডিজিট';
+}
+
+function fetchMatches() {
+    if (typeof loadMatches === 'function') {
+        return loadMatches();
+    }
+}
+
+async function fetchWithAuth(url, options = {}) {
+    options.headers = options.headers || {};
+    if (token) {
+        options.headers['Authorization'] = `Bearer ${token}`;
+    }
+    if (options.body && typeof options.body === 'string' && !options.headers['Content-Type']) {
+        options.headers['Content-Type'] = 'application/json';
+    }
+    return fetch(url, options);
+}
+
+function renderLoggedInNav() {
+    updateBalanceUI(currentUser.digits_balance || 0);
+
+    // Keep top navbar completely clean as requested by user: no buttons or icons beside GOMON HUB TOURNAMENT
+    const container = document.getElementById('authNavContainer');
+    if (container) {
+        container.innerHTML = '';
+        container.style.display = 'none';
+    }
 
     const adminTabBtn = document.getElementById('tabBtn-admin');
     const tabBtnText = document.getElementById('tabBtn-admin-text');
     const tabBtnBadge = document.getElementById('tabBtn-admin-badge');
     const mAdmin = document.getElementById('mNav-admin');
-    const mAdminIcon = document.getElementById('mNav-admin-icon');
-    const mAdminLabel = document.getElementById('mNav-admin-label');
+
+    const isAdmin = (currentUser.role === 'admin');
+    const isMod = (currentUser.role === 'moderator');
+    const hasAdminPanel = isAdmin || isMod;
 
     if (hasAdminPanel) {
         if (adminTabBtn) adminTabBtn.style.display = 'inline-flex';
         if (mAdmin) mAdmin.style.display = 'flex';
 
         if (isMod) {
-            if (tabBtnText) tabBtnText.innerText = '🛡️ মডারেটর কন্ট্রোল';
+            if (tabBtnText) tabBtnText.innerText = '🛡️ মডারেটর';
             if (tabBtnBadge) {
                 tabBtnBadge.innerText = 'MOD';
                 tabBtnBadge.style.background = 'var(--neon-cyan)';
                 tabBtnBadge.style.color = '#000';
             }
-            if (mAdminIcon) mAdminIcon.innerText = '🛡️';
-            if (mAdminLabel) mAdminLabel.innerText = 'মডারেটর';
         } else {
-            if (tabBtnText) tabBtnText.innerText = '👑 অ্যাডমিন কন্ট্রোল';
+            if (tabBtnText) tabBtnText.innerText = '👑 Admin';
             if (tabBtnBadge) {
                 tabBtnBadge.innerText = 'MASTER';
                 tabBtnBadge.style.background = '';
                 tabBtnBadge.style.color = '';
             }
-            if (mAdminIcon) mAdminIcon.innerText = '👑';
-            if (mAdminLabel) mAdminLabel.innerText = 'অ্যাডমিন';
         }
     } else {
         if (adminTabBtn) adminTabBtn.style.display = 'none';
@@ -324,8 +368,9 @@ function renderLoggedInNav() {
 
     applyRolePermissionsUI();
 
-    if (sessionStorage.getItem('admin_backup_token')) {
-        document.getElementById('impersonatedUserText').innerText = `@${currentUser.username} (${currentUser.player_id})`;
+    const impText = document.getElementById('impersonatedUserText');
+    if (sessionStorage.getItem('admin_backup_token') && impText) {
+        impText.innerText = `@${currentUser.username} (${currentUser.player_id})`;
     }
 }
 
@@ -340,7 +385,7 @@ function applyRolePermissionsUI() {
 
     if (isMod) {
         if (titleEl) titleEl.innerHTML = '🛡️ MODERATOR CONTROL PANEL';
-        if (subEl) subEl.innerText = 'ম্যাচ শিডিউল অনুযায়ী রুম আইডি ও পাসওয়ার্ড আপডেট এবং ম্যাচ সমাপ্তি নিয়ন্ত্রণ কেন্দ্র।';
+        if (subEl) subEl.innerText = 'ম্যাচ শিডিউল, রুম কোড ও ফলাফল আপডেট কন্ট্রোল';
         if (topActionBtns) topActionBtns.style.display = 'none';
 
         document.querySelectorAll('.admin-only-card, .admin-only-nav').forEach(el => {
@@ -348,7 +393,7 @@ function applyRolePermissionsUI() {
         });
     } else if (isAdmin) {
         if (titleEl) titleEl.innerHTML = '👑 SUPER-ADMIN MASTER CONTROL';
-        if (subEl) subEl.innerText = 'ওয়েবসাইট, প্লেয়ার ডিজিট, ম্যাচ ও পেমেন্টের সম্পূর্ণ নিয়ন্ত্রণ কেন্দ্র।';
+        if (subEl) subEl.innerText = 'ওয়েবসাইট, প্লেয়ার ও টুর্নামেন্ট ওভারভিউ ও ম্যানেজমেন্ট কন্ট্রোল';
         if (topActionBtns) topActionBtns.style.display = 'flex';
 
         document.querySelectorAll('.admin-only-card, .admin-only-nav').forEach(el => {
@@ -359,16 +404,17 @@ function applyRolePermissionsUI() {
 
 function renderLoggedOutNav() {
     currentUser = null;
-    document.getElementById('navDigitsBalance').innerText = '0';
-    document.getElementById('tabBtn-admin').style.display = 'none';
+    updateBalanceUI(0);
+    const adminBtn = document.getElementById('tabBtn-admin');
+    if (adminBtn) adminBtn.style.display = 'none';
     const mAdmin = document.getElementById('mNav-admin');
     if (mAdmin) mAdmin.style.display = 'none';
     const container = document.getElementById('authNavContainer');
-    container.innerHTML = `
-        <button class="btn btn-neon btn-sm" onclick="openModal('authModal')">🔑 লগইন / সাইন আপ</button>
-    `;
+    if (container) {
+        container.innerHTML = '';
+        container.style.display = 'none';
+    }
 }
-
 function logout(manual = true) {
     localStorage.removeItem('ff_token');
     localStorage.removeItem('ff_user');
@@ -379,6 +425,7 @@ function logout(manual = true) {
     const mainApp = document.getElementById('mainAppWrapper');
     if (mainApp) mainApp.style.display = 'none';
     renderLoggedOutNav();
+    setAuthMode('login');
     openModal('authModal');
     if (manual) showToast('লগআউট সফল হয়েছে', 'info');
 }
@@ -512,20 +559,24 @@ async function handleLoginSubmit(e) {
             dismissSplashScreen();
             showToast(`স্বাগতম, ${currentUser.username}! লগইন সফল।`, 'success');
             playSound('success');
-            renderLoggedInNav();
-            renderUserProfile();
-            loadMatches();
-            loadWalletHistory();
-            initWebSocket();
+
+            // Safe isolated post-login initialization
+            try { renderLoggedInNav(); } catch(e) { console.error('Error in renderLoggedInNav:', e); }
+            try { renderUserProfile(); } catch(e) { console.error('Error in renderUserProfile:', e); }
+            try { loadMatches(); } catch(e) { console.error('Error in loadMatches:', e); }
+            try { loadWalletHistory(); } catch(e) { console.error('Error in loadWalletHistory:', e); }
+            try { initWebSocket(); } catch(e) { console.error('Error in initWebSocket:', e); }
             if (currentUser.role === 'admin') {
-                document.getElementById('tabBtn-admin').style.display = 'inline-flex';
-                loadAdminOverview();
+                const adminBtn = document.getElementById('tabBtn-admin');
+                if (adminBtn) adminBtn.style.display = 'inline-flex';
+                try { loadAdminOverview(); } catch(e) { console.error('Error in loadAdminOverview:', e); }
             }
         } else {
             const errMsg = data.detail || 'ভুল ইউজারনেম বা পাসওয়ার্ড! অনুগ্রহ করে আবার চেষ্টা করুন।';
             showLoginError(errMsg);
         }
     } catch (err) {
+        console.error('Login network error:', err);
         showLoginError('সার্ভারে যোগাযোগ করা যায়নি! অনুগ্রহ করে সার্ভার চালু আছে কিনা চেক করুন।');
     } finally {
         if (submitBtn) {
@@ -704,8 +755,9 @@ async function handleRegisterSubmit(e) {
         submitBtn.innerText = 'অ্যাকাউন্ট তৈরি হচ্ছে...';
     }
 
+    let res;
     try {
-        const res = await fetch('/api/auth/register', {
+        res = await fetch('/api/auth/register', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -717,26 +769,34 @@ async function handleRegisterSubmit(e) {
                 ff_uid: phone
             })
         });
-        const data = await res.json();
-        if (res.ok) {
-            token = data.token;
-            currentUser = data.user;
-            localStorage.setItem('ff_token', token);
-            localStorage.setItem('ff_user', JSON.stringify(currentUser));
-            document.body.classList.remove('not-authenticated');
-            document.body.classList.add('authenticated');
-            const mainApp = document.getElementById('mainAppWrapper');
-            if (mainApp) mainApp.style.display = 'block';
-            closeModal('authModal');
-            dismissSplashScreen();
-            showToast(`একাউন্ট তৈরি সফল! আপনার প্লেয়ার আইডি: ${currentUser.player_id}`, 'success');
-            playSound('success');
-            renderLoggedInNav();
-            loadMatches();
-            loadWalletHistory();
-            initWebSocket();
+    } catch (networkErr) {
+        // ONLY triggers if the server is genuinely offline / port unreachable
+        console.error('Signup network error (server is offline):', networkErr);
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerText = originalBtnText;
+        }
+        showSignupError('সার্ভারে যোগাযোগ করা যায়নি! অনুগ্রহ করে সার্ভার চালু আছে কিনা চেক করুন।');
+        return;
+    }
+
+    let data = {};
+    try {
+        data = await res.json();
+    } catch (parseErr) {
+        data = {};
+    }
+
+    if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.innerText = originalBtnText;
+    }
+
+    if (!res.ok) {
+        if (res.status >= 500) {
+            showSignupError('সার্ভারে সাময়িক সমস্যা হচ্ছে (HTTP ' + res.status + ')। কিছুক্ষণ পর চেষ্টা করুন।');
         } else {
-            const errMsg = data.detail || 'রেজিস্ট্রেশন ব্যর্থ হয়েছে';
+            const errMsg = (data && data.detail) || 'রেজিস্ট্রেশন ব্যর্থ হয়েছে';
             let targetId = null;
             if (errMsg.includes('ফোন')) targetId = 'regPhone';
             else if (errMsg.includes('ইউজারনেম')) targetId = 'regUsername';
@@ -744,14 +804,29 @@ async function handleRegisterSubmit(e) {
             else if (errMsg.includes('ইমেইল')) targetId = 'regEmail';
             showSignupError(errMsg, targetId);
         }
-    } catch (err) {
-        showSignupError('সার্ভারে যোগাযোগ করা যায়নি! অনুগ্রহ করে সার্ভার চালু আছে কিনা চেক করুন।');
-    } finally {
-        if (submitBtn) {
-            submitBtn.disabled = false;
-            submitBtn.innerText = originalBtnText;
-        }
+        return;
     }
+
+    // Registration successful - proceed into the app!
+    token = data.token;
+    currentUser = data.user;
+    localStorage.setItem('ff_token', token);
+    localStorage.setItem('ff_user', JSON.stringify(currentUser));
+    document.body.classList.remove('not-authenticated');
+    document.body.classList.add('authenticated');
+    const mainApp = document.getElementById('mainAppWrapper');
+    if (mainApp) mainApp.style.display = 'block';
+    closeModal('authModal');
+    dismissSplashScreen();
+    showToast(`একাউন্ট তৈরি সফল! আপনার প্লেয়ার আইডি: ${currentUser.player_id}`, 'success');
+    playSound('success');
+
+    // Safe background UI updates
+    try { renderLoggedInNav(); } catch(e) { console.error('Error in renderLoggedInNav:', e); }
+    try { renderUserProfile(); } catch(e) { console.error('Error in renderUserProfile:', e); }
+    try { loadMatches(); } catch(e) { console.error('Error in loadMatches:', e); }
+    try { loadWalletHistory(); } catch(e) { console.error('Error in loadWalletHistory:', e); }
+    try { initWebSocket(); } catch(e) { console.error('Error in initWebSocket:', e); }
 }
 
 // -------------------------------------------------------------
@@ -806,7 +881,7 @@ function renderMatches() {
         } else if (isFull) {
             btnHtml = `<button class="btn btn-outline" style="width: 100%; opacity: 0.6; cursor: not-allowed;" disabled>🔒 রুমের সব স্লট পূর্ণ</button>`;
         } else {
-            btnHtml = `<button class="btn btn-neon" style="width: 100%;" onclick="joinMatch(${m.id}, ${m.entry_fee})">🎮 জয়েন করুন (${m.entry_fee} ডিজিট)</button>`;
+            btnHtml = `<button class="btn btn-neon" style="width: 100%; padding: 8px 12px; font-size: 0.84rem; font-weight: 800; border-radius: 8px;" onclick="joinMatch(${m.id}, ${m.entry_fee})">🎮 জয়েন করুন (${m.entry_fee} ডিজিট)</button>`;
         }
 
         return `
@@ -882,8 +957,11 @@ function renderMyMatches() {
     const myMatches = allMatches.filter(m => m.has_joined);
     if (myMatches.length === 0) {
         grid.innerHTML = `
-            <div style="grid-column: 1/-1; text-align: center; padding: 40px; color: var(--text-muted);">
-                আপনি এখনো কোনো ম্যাচে জয়েন করেননি। <a href="javascript:switchTab('tab-matches')" style="color: var(--neon-green);">ম্যাচ শিডিউল দেখুন</a>।
+            <div style="grid-column: 1/-1; text-align: center; padding: 24px 16px; background: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; margin: 10px 0; box-shadow: 0 2px 8px rgba(0,0,0,0.03);">
+                <span style="font-size: 1.8rem;">🎮</span>
+                <div style="font-family: 'Rajdhani', sans-serif; font-size: 0.95rem; font-weight: 800; color: #1e293b; margin: 6px 0 3px;">আপনি এখনো কোনো ম্যাচে জয়েন করেননি</div>
+                <div style="font-size: 0.75rem; color: #64748b; margin-bottom: 10px;">শিডিউল থেকে আপনার পছন্দের ম্যাচে জয়েন করুন।</div>
+                <button class="btn btn-neon btn-sm" onclick="switchTab('tab-matches')" style="padding: 5px 14px; font-size: 0.78rem; font-weight: 700; border-radius: 6px;">ম্যাচ শিডিউল দেখুন</button>
             </div>
         `;
         return;
@@ -955,7 +1033,7 @@ async function joinMatch(matchId, entryFee) {
             playSound('success');
             showToast(data.message, 'success');
             currentUser.digits_balance = data.new_balance;
-            document.getElementById('navDigitsBalance').innerText = data.new_balance;
+            updateBalanceUI(data.new_balance);
             await loadMatches();
             switchTab('tab-mymatches');
         } else {
@@ -2206,7 +2284,7 @@ function handleWsMessage(data) {
     if (data.type === 'BALANCE_UPDATED') {
         if (currentUser) {
             currentUser.digits_balance = data.digits_balance;
-            document.getElementById('navDigitsBalance').innerText = data.digits_balance;
+            updateBalanceUI(data.digits_balance);
             renderUserProfile();
             playSound('coin');
             if (data.notice) {
@@ -2492,8 +2570,8 @@ function switchProfileCategory(category) {
 }
 
 function renderUserProfile() {
-    const notAuthCard = document.getElementById('profileNotAuthCard');
-    const authContent = document.getElementById('profileAuthContent');
+    const notAuthCard = document.getElementById('notAuthProfileCard') || document.getElementById('profileNotAuthCard');
+    const authContent = document.getElementById('authProfileContainer') || document.getElementById('profileAuthContent');
 
     if (!currentUser) {
         if (notAuthCard) notAuthCard.style.display = 'block';
@@ -2504,6 +2582,30 @@ function renderUserProfile() {
     if (notAuthCard) notAuthCard.style.display = 'none';
     if (authContent) authContent.style.display = 'block';
 
+    // 1. Reference Screenshot Header Card stats
+    const headerUser = document.getElementById('profHeaderUsername');
+    if (headerUser) headerUser.innerText = currentUser.username || 'player';
+
+    const headerMatches = document.getElementById('profHeaderMatches');
+    if (headerMatches) headerMatches.innerText = currentUser.matches_joined != null ? currentUser.matches_joined : 0;
+
+    const headerBalance = document.getElementById('profHeaderBalance');
+    if (headerBalance) headerBalance.innerText = 'BDT ' + (currentUser.digits_balance != null ? currentUser.digits_balance : 0);
+
+    const headerWon = document.getElementById('profHeaderWon');
+    if (headerWon) headerWon.innerText = (currentUser.win_points != null ? currentUser.win_points : (currentUser.matches_won || 0));
+
+    // 2. Admin Menu Row visibility in profile
+    const adminRow = document.getElementById('profAdminMenuRow');
+    if (adminRow) {
+        if (currentUser.role === 'admin' || currentUser.role === 'moderator') {
+            adminRow.style.display = 'flex';
+        } else {
+            adminRow.style.display = 'none';
+        }
+    }
+
+    // 3. Detailed Profile Modal & Legacy element references
     const elUser = document.getElementById('profUsername');
     if (elUser) elUser.innerText = currentUser.username || 'প্লেয়ার';
 
@@ -2511,10 +2613,10 @@ function renderUserProfile() {
     if (elPid) elPid.innerText = currentUser.player_id || 'ID N/A';
 
     const elPhone = document.getElementById('profPhone');
-    if (elPhone) elPhone.innerText = currentUser.phone || 'দেওয়া হয়নি';
+    if (elPhone) elPhone.innerText = currentUser.phone || 'দেওয়া হয়নি';
 
     const elEmail = document.getElementById('profEmail');
-    if (elEmail) elEmail.innerText = currentUser.email || 'দেওয়া হয়নি';
+    if (elEmail) elEmail.innerText = currentUser.email || 'দেওয়া হয়নি';
 
     const elBal = document.getElementById('profDigitsBalance');
     if (elBal) elBal.innerText = currentUser.digits_balance != null ? currentUser.digits_balance : 0;
@@ -2542,7 +2644,12 @@ function renderUserProfile() {
 
     const elCreated = document.getElementById('profCreatedAt');
     if (elCreated) elCreated.innerText = currentUser.created_at ? currentUser.created_at.split(' ')[0] : 'সম্প্রতি';
+
+    // 4. Withdraw Modal balance display
+    const withdrawBal = document.getElementById('withdrawUserBalance');
+    if (withdrawBal) withdrawBal.innerText = 'BDT ' + (currentUser.digits_balance != null ? currentUser.digits_balance : 0);
 }
+
 
 function copyProfilePlayerId() {
     if (currentUser && currentUser.player_id) {
@@ -2555,9 +2662,10 @@ function copyProfilePlayerId() {
 // Tab Switching & Modal Helpers
 // -------------------------------------------------------------
 function switchTab(tabId) {
-    if (tabId === 'tab-recharge') {
-        tabId = 'tab-profile';
-        setTimeout(() => switchProfileCategory('deposit'), 50);
+    if (tabId === 'tab-recharge' || tabId === 'tab-shop') {
+        switchTab('tab-profile');
+        openWalletModal();
+        return;
     }
 
     document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
@@ -2567,14 +2675,23 @@ function switchTab(tabId) {
     const targetTab = document.getElementById(tabId);
     if (targetTab) targetTab.classList.add('active');
 
-    const btn = document.getElementById('tabBtn-' + tabId.replace('tab-', ''));
+    const cleanName = tabId.replace('tab-', '');
+    const btn = document.getElementById('tabBtn-' + cleanName);
     if (btn) btn.classList.add('active');
 
-    const mBtn = document.getElementById('mNav-' + tabId.replace('tab-', ''));
+    const mBtn = document.getElementById('mNav-' + cleanName);
     if (mBtn) mBtn.classList.add('active');
 
     if (tabId === 'tab-profile') {
         renderUserProfile();
+    } else if (tabId === 'tab-shop') {
+        loadWalletHistory();
+    } else if (tabId === 'tab-results') {
+        loadCompletedResults();
+    } else if (tabId === 'tab-matches') {
+        fetchMatches();
+    } else if (tabId === 'tab-mymatches') {
+        renderMyMatches();
     } else if (tabId === 'tab-admin') {
         applyRolePermissionsUI();
         if (currentUser && currentUser.role === 'moderator') {
@@ -2587,6 +2704,224 @@ function switchTab(tabId) {
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
+// -------------------------------------------------------------
+// Interactive Modals for User Reference Profile
+// -------------------------------------------------------------
+function openWalletModal() {
+    if (!currentUser) {
+        showToast('ডিপোজিট করতে আগে লগইন করুন', 'info');
+        openModal('authModal');
+        return;
+    }
+    const modalBal = document.getElementById('walletModalUserBalance');
+    if (modalBal) modalBal.innerText = 'BDT ' + (currentUser.digits_balance || 0) + ' ডিজিট';
+    openModal('walletModal');
+    loadWalletHistory();
+}
+
+function openWithdrawModal() {
+    if (!currentUser) {
+        openModal('authModal');
+        return;
+    }
+    const balEl = document.getElementById('withdrawUserBalance');
+    if (balEl) balEl.innerText = 'BDT ' + (currentUser.digits_balance || 0);
+    const phoneInp = document.getElementById('withdrawPhone');
+    if (phoneInp && !phoneInp.value && currentUser.phone) {
+        phoneInp.value = currentUser.phone;
+    }
+    openModal('withdrawModal');
+    loadWithdrawHistory();
+}
+
+async function submitWithdrawForm(e) {
+    if (e) e.preventDefault();
+    if (!currentUser) {
+        openModal('authModal');
+        return;
+    }
+
+    const phone = document.getElementById('withdrawPhone').value.trim();
+    const amount = parseInt(document.getElementById('withdrawAmount').value, 10);
+
+    if (!phone || phone.length < 11) {
+        showToast('সঠিক ১১ ডিজিটের বিকাশ নাম্বার প্রদান করুন', 'error');
+        return;
+    }
+    if (!amount || amount <= 0) {
+        showToast('উইথড্র করার পরিমাণ নির্ধারণ করুন', 'error');
+        return;
+    }
+    if (amount > (currentUser.digits_balance || 0)) {
+        showToast(`অপর্যাপ্ত ব্যালেন্স! আপনার ব্যালেন্স BDT ${currentUser.digits_balance || 0} ডিজিট`, 'error');
+        return;
+    }
+
+    try {
+        const res = await fetchWithAuth('/api/wallet/withdraw', {
+            method: 'POST',
+            body: JSON.stringify({ amount, bkash_number: phone })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'উইথড্র রিকোয়েস্ট ব্যর্থ হয়েছে');
+
+        showToast(data.message || 'উইথড্র রিকোয়েস্ট সফলভাবে জমা হয়েছে!', 'success');
+        document.getElementById('withdrawForm').reset();
+        
+        // Refresh balance
+        if (data.new_balance != null) {
+            currentUser.digits_balance = data.new_balance;
+            updateBalanceUI(data.new_balance);
+            renderUserProfile();
+        }
+        loadWithdrawHistory();
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
+async function loadWithdrawHistory() {
+    const body = document.getElementById('withdrawHistoryBody');
+    if (!body) return;
+
+    try {
+        const res = await fetchWithAuth('/api/wallet/withdraw/history');
+        if (!res.ok) return;
+        const data = await res.json();
+        const list = data.withdrawals || [];
+
+        if (list.length === 0) {
+            body.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#94a3b8; padding:16px;">কোনো উইথড্র হিস্টোরি পাওয়া যায়নি</td></tr>';
+            return;
+        }
+
+        body.innerHTML = list.map(w => {
+            const statusClass = w.status === 'approved' ? 'approved' : (w.status === 'rejected' ? 'rejected' : 'pending');
+            const statusText = w.status === 'approved' ? 'অনুমোদিত' : (w.status === 'rejected' ? 'বাতিল' : 'পেন্ডিং');
+            return `
+                <tr>
+                    <td><b>BDT ${w.amount}</b></td>
+                    <td>${w.bkash_number}</td>
+                    <td><span class="badge-status ${statusClass}">${statusText}</span></td>
+                    <td style="font-size:0.75rem; color:#64748b;">${(w.created_at || '').split(' ')[0]}</td>
+                </tr>
+            `;
+        }).join('');
+    } catch (err) {
+        console.error('Error loading withdraw history:', err);
+    }
+}
+
+function openMyProfileModal() {
+    if (!currentUser) {
+        openModal('authModal');
+        return;
+    }
+    renderUserProfile();
+    openModal('myProfileDetailsModal');
+}
+
+function openRulesModal() {
+    openModal('allRulesModal');
+}
+
+async function openTopPlayersModal() {
+    openModal('topPlayersModal');
+    const body = document.getElementById('leaderboardBody');
+    if (!body) return;
+    body.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:20px; color:#64748b;">লোড হচ্ছে...</td></tr>';
+
+    try {
+        const res = await fetch('/api/leaderboard');
+        const data = await res.json();
+        const list = data.leaderboard || [];
+
+        if (list.length === 0) {
+            body.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:20px; color:#94a3b8;">কোনো রেকর্ড পাওয়া যায়নি</td></tr>';
+            return;
+        }
+
+        body.innerHTML = list.map((p, idx) => {
+            let rankBadge = `${idx + 1}`;
+            if (idx === 0) rankBadge = '🥇';
+            else if (idx === 1) rankBadge = '🥈';
+            else if (idx === 2) rankBadge = '🥉';
+
+            return `
+                <tr style="${idx < 3 ? 'background: rgba(245, 158, 11, 0.05); font-weight:700;' : ''}">
+                    <td style="font-size: 1.1rem; text-align: center;">${rankBadge}</td>
+                    <td><b>${escapeHtml(p.username)}</b> <span style="font-size:0.75rem; color:#64748b;">(${p.player_id})</span></td>
+                    <td style="color: #2563eb; font-weight: 800;">${p.win_points || 0}</td>
+                    <td style="color: #16a34a; font-weight: 700;">${p.matches_won || 0}</td>
+                </tr>
+            `;
+        }).join('');
+    } catch (err) {
+        body.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#ef4444;">লোড করা সম্ভব হয়নি</td></tr>';
+    }
+}
+
+function openDevProfileModal() {
+    openModal('devProfileModal');
+}
+
+function openSupportModal() {
+    openModal('supportModal');
+}
+
+async function loadCompletedResults() {
+    const container = document.getElementById('completedMatchesList');
+    if (!container) return;
+
+    container.innerHTML = '<div style="text-align:center; padding:30px; color:#64748b;">ম্যাচ ফলাফল লোড হচ্ছে...</div>';
+
+    try {
+        const res = await fetch('/api/matches/results');
+        const data = await res.json();
+        const results = data.results || [];
+
+        if (results.length === 0) {
+            container.innerHTML = `
+                <div style="text-align:center; padding:24px 16px; background:#ffffff; border-radius:12px; border:1px solid #e2e8f0; margin:10px 0; box-shadow:0 2px 8px rgba(0,0,0,0.03);">
+                    <span style="font-size:1.8rem;">🏆</span>
+                    <h4 style="font-family:'Rajdhani',sans-serif; font-size:0.95rem; font-weight:800; margin:6px 0 2px; color:#1e293b;">কোনো সমাপ্ত ম্যাচ নেই</h4>
+                    <p style="color:#64748b; font-size:0.75rem; margin:0; line-height:1.35;">বর্তমান টুর্নামেন্টগুলো শেষ হলে এখানে সরাসরি ফলাফল প্রদর্শিত হবে।</p>
+                </div>
+            `;
+            return;
+        }
+
+        container.innerHTML = results.map(m => `
+            <div class="results-card">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                    <span class="badge badge-solo">${escapeHtml(m.match_type || 'Solo')}</span>
+                    <span style="font-size:0.8rem; color:#64748b;">সমাপ্তি: ${(m.completed_at || m.match_time || '').split(' ')[0]}</span>
+                </div>
+                <h3 style="font-family:'Rajdhani',sans-serif; font-size:1.15rem; font-weight:800; color:#0f172a; margin-bottom:8px;">
+                    ${escapeHtml(m.title)}
+                </h3>
+                <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; background:#f8fafc; padding:10px; border-radius:8px; text-align:center;">
+                    <div>
+                        <span style="font-size:0.75rem; color:#64748b;">ম্যাপ</span>
+                        <div style="font-weight:700; color:#1e293b;">${escapeHtml(m.map_name || 'Bermuda')}</div>
+                    </div>
+                    <div>
+                        <span style="font-size:0.75rem; color:#64748b;">প্রাইজ পুল</span>
+                        <div style="font-weight:800; color:#16a34a;">৳${m.prize_pool}</div>
+                    </div>
+                    <div>
+                        <span style="font-size:0.75rem; color:#64748b;">প্রতি কিল</span>
+                        <div style="font-weight:800; color:#2563eb;">৳${m.per_kill}</div>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+    } catch (err) {
+        container.innerHTML = '<div style="text-align:center; color:#ef4444; padding:20px;">ফলাফল লোড করা সম্ভব হয়নি</div>';
+    }
+}
+
+
 function openModal(id) {
     const modal = document.getElementById(id);
     if (modal) modal.classList.add('show');
@@ -2594,7 +2929,7 @@ function openModal(id) {
 
 function closeModal(id) {
     if (id === 'authModal' && !currentUser) {
-        return; // Locked: Cannot close without logging in
+        return; // Locked: Cannot close login modal without logging in
     }
     const modal = document.getElementById(id);
     if (modal) modal.classList.remove('show');

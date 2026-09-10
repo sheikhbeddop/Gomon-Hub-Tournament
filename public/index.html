@@ -599,7 +599,7 @@
             🏆 আমার ম্যাচ ও রুম আইডি
         </button>
         <button class="tab-btn" id="tabBtn-admin" onclick="switchTab('tab-admin')" style="display: none;">
-            👑 অ্যাডমিন কন্ট্রোল <span class="tab-admin-badge">MASTER</span>
+            <span id="tabBtn-admin-text">👑 অ্যাডমিন কন্ট্রোল</span> <span class="tab-admin-badge" id="tabBtn-admin-badge">MASTER</span>
         </button>
     </nav>
 
@@ -729,19 +729,19 @@
         <section class="tab-content" id="tab-admin">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
                 <div>
-                    <h2 style="font-size: 1.6rem; font-weight: 800; font-family: 'Rajdhani', sans-serif; color: var(--neon-green);">
+                    <h2 id="adminPanelTitle" style="font-size: 1.6rem; font-weight: 800; font-family: 'Rajdhani', sans-serif; color: var(--neon-green);">
                         👑 SUPER-ADMIN MASTER CONTROL
                     </h2>
-                    <p style="color: var(--text-secondary); font-size: 0.85rem;">ওয়েবসাইট, প্লেয়ার ডিজিট, ম্যাচ ও পেমেন্টের সম্পূর্ণ নিয়ন্ত্রণ কেন্দ্র।</p>
+                    <p id="adminPanelSubtitle" style="color: var(--text-secondary); font-size: 0.85rem;">ওয়েবসাইট, প্লেয়ার ডিজিট, ম্যাচ ও পেমেন্টের সম্পূর্ণ নিয়ন্ত্রণ কেন্দ্র।</p>
                 </div>
-                <div style="display: flex; gap: 10px;">
+                <div id="adminMasterActionBtns" class="admin-only-card" style="display: flex; gap: 10px;">
                     <button class="btn btn-neon btn-sm" onclick="openModal('createMatchModal')">➕ নতুন ম্যাচ তৈরি</button>
                     <button class="btn btn-crimson btn-sm" onclick="openModal('broadcastModal')">📢 ফোনে নোটিশ পাঠান</button>
                 </div>
             </div>
 
             <!-- Stats Overview Cards -->
-            <div class="admin-grid-stats" id="adminStatsGrid">
+            <div class="admin-grid-stats admin-only-card" id="adminStatsGrid">
                 <div class="admin-stat-card">
                     <div class="admin-stat-icon" style="background: rgba(0, 245, 155, 0.15); color: var(--neon-green);">👥</div>
                     <div>
@@ -773,7 +773,7 @@
             </div>
 
             <!-- SECTION A: PENDING bKASH DEPOSITS -->
-            <div class="admin-panel-card">
+            <div class="admin-panel-card admin-only-card">
                 <div class="admin-card-header">
                     <div class="admin-card-title">
                         <span>⏳ পেন্ডিং bKash ডিপোজিট অনুমোদন</span>
@@ -800,7 +800,7 @@
             </div>
 
             <!-- SECTION B: PLAYER MANAGEMENT & DIGITS MASTER OVERRIDE -->
-            <div class="admin-panel-card">
+            <div class="admin-panel-card admin-only-card">
                 <div class="admin-card-header">
                     <div class="admin-card-title">
                         <span>👥 প্লেয়ার ম্যানেজমেন্ট ও সরাসরি ডিজিট যোগ/বিয়োগ</span>
@@ -848,6 +848,7 @@
                                 <th>ফি / প্রাইজ</th>
                                 <th>স্লট</th>
                                 <th>Room ID / Pass</th>
+                                <th>রুম আপডেটকারী</th>
                                 <th>অ্যাকশন</th>
                             </tr>
                         </thead>
@@ -859,7 +860,7 @@
             </div>
 
             <!-- SECTION D: SITE SETTINGS -->
-            <div class="admin-panel-card">
+            <div class="admin-panel-card admin-only-card">
                 <div class="admin-card-header">
                     <div class="admin-card-title">
                         <span>⚙️ ওয়েবসাইট জেনারেল সেটিংস</span>
@@ -885,7 +886,7 @@
             </div>
 
             <!-- SECTION E: APP VERSION & LIVE OTA UPDATE CONTROLS -->
-            <div class="admin-panel-card" style="border-color: rgba(0, 245, 155, 0.4);">
+            <div class="admin-panel-card admin-only-card" style="border-color: rgba(0, 245, 155, 0.4);">
                 <div class="admin-card-header">
                     <div class="admin-card-title">
                         <span style="color: var(--neon-green);">🚀 অ্যাপ ভার্সন ও লাইভ অটো-আপডেট রিলিজ (OTA Update)</span>
@@ -912,6 +913,50 @@
                 </form>
             </div>
 
+            <!-- SECTION F: MODERATOR MANAGEMENT & SCOREBOARD (MASTER ADMIN ONLY) -->
+            <div class="admin-panel-card admin-only-card" style="border-color: rgba(0, 210, 255, 0.4);">
+                <div class="admin-card-header">
+                    <div class="admin-card-title">
+                        <span style="color: var(--neon-cyan);">🛡️ মডারেটর ম্যানেজমেন্ট ও পারফরম্যান্স রিপোর্ট</span>
+                    </div>
+                    <button class="btn btn-outline btn-sm" onclick="loadModeratorScoreboard()">🔄 রিফ্রেশ স্কোরবোর্ড</button>
+                </div>
+                <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 16px;">
+                    মডারেটররা শুধুমাত্র শিডিউল অনুযায়ী রুম আইডি ও পাসওয়ার্ড আপডেট করতে পারে এবং ম্যাচ সমাপ্ত করতে পারে। তারা প্লেয়ারদের পাসওয়ার্ড, ব্যালেন্স পরিবর্তন বা bKash ডিপোজিটে প্রবেশ করতে পারে না। এখানে তাদের অ্যাক্টিভিটি রিপোর্ট দেখুন।
+                </p>
+
+                <!-- Quick Promote Input -->
+                <div style="background: rgba(255, 255, 255, 0.03); border: 1px dashed rgba(0, 210, 255, 0.3); border-radius: 10px; padding: 12px 16px; margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+                    <div style="font-size: 0.9rem; font-weight: 600; color: var(--text-primary);">
+                        ➕ নতুন মডারেটর নিয়োগ করুন:
+                    </div>
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                        <input type="number" id="promoteModUserIdInput" placeholder="প্লেয়ার User ID" class="form-input" style="width: 150px; padding: 6px 12px; font-size: 0.85rem;">
+                        <button class="btn btn-neon btn-sm" onclick="promoteModeratorFromInput()">🛡️ মডারেটর হিসেবে প্রমোট করুন</button>
+                    </div>
+                </div>
+
+                <!-- Moderator Scoreboard Table -->
+                <div class="table-wrapper">
+                    <table class="custom-table">
+                        <thead>
+                            <tr>
+                                <th>মডারেটর আইডি</th>
+                                <th>নাম ও ইউজারনেম</th>
+                                <th>ফোন নম্বর</th>
+                                <th>রুম পাসওয়ার্ড রিলিজ</th>
+                                <th>ম্যাচ সমাপ্ত সম্পন্ন</th>
+                                <th>সাম্প্রতিক অ্যাকশন</th>
+                                <th>মাস্টার অ্যাকশন</th>
+                            </tr>
+                        </thead>
+                        <tbody id="adminModeratorsTableBody">
+                            <tr><td colspan="7" style="text-align: center; color: var(--text-muted);">মডারেটর তালিকা লোড হচ্ছে...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
         </section>
 
     </main>
@@ -931,8 +976,8 @@
                 <span class="m-label">রুম আইডি</span>
             </button>
             <button class="mobile-nav-item" id="mNav-admin" onclick="switchTab('tab-admin')" style="display: none;">
-                <span class="m-icon">👑</span>
-                <span class="m-label">অ্যাডমিন</span>
+                <span class="m-icon" id="mNav-admin-icon">👑</span>
+                <span class="m-label" id="mNav-admin-label">অ্যাডমিন</span>
             </button>
         </nav>
 
@@ -958,11 +1003,13 @@
 
             <!-- LOGIN FORM -->
             <form id="loginForm" class="auth-form" onsubmit="handleLoginSubmit(event)">
+                <div id="loginErrorAlert" class="auth-error-alert" style="display: none;"></div>
+
                 <div class="auth-input-group">
                     <span class="auth-input-icon">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
                     </span>
-                    <input type="text" class="auth-input" id="loginUsername" required placeholder="Username" autocomplete="username">
+                    <input type="text" class="auth-input" id="loginUsername" required placeholder="Username / Phone / Player ID" autocomplete="username">
                 </div>
 
                 <div class="auth-input-group">
@@ -1006,20 +1053,21 @@
                 <h3 class="signup-form-title">Sign Up</h3>
 
                 <form id="registerForm" onsubmit="handleRegisterSubmit(event)">
+                    <div id="signupErrorAlert" class="auth-error-alert" style="display: none;"></div>
                     <div class="signup-field">
                         <input type="text" class="signup-input" id="regUsername" required placeholder="UserName" autocomplete="username">
                     </div>
 
                     <div class="signup-field">
-                        <input type="email" class="signup-input" id="regEmail" required placeholder="Email Address" autocomplete="email">
+                        <input type="email" class="signup-input" id="regEmail" required placeholder="Email Address (আবশ্যক)" autocomplete="email">
                     </div>
 
                     <div class="signup-field">
-                        <input type="tel" class="signup-input" id="regPhone" required placeholder="Mobile Number" autocomplete="tel">
+                        <input type="tel" class="signup-input" id="regPhone" required placeholder="Mobile Number (01XXXXXXXXX)" autocomplete="tel" maxlength="11">
                     </div>
 
                     <div class="signup-field">
-                        <input type="password" class="signup-input" id="regPassword" required minlength="6" placeholder="Password" autocomplete="new-password">
+                        <input type="password" class="signup-input" id="regPassword" required minlength="8" placeholder="Password (কমপক্ষে ৮ অক্ষর, @ বা # এবং সংখ্যা)" autocomplete="new-password">
                     </div>
 
                     <div class="signup-terms">

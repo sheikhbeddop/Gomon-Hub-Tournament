@@ -154,6 +154,9 @@ async function loadPublicInfo() {
 async function initAuth() {
     if (!token) {
         renderLoggedOutNav();
+        setTimeout(() => {
+            if (!token) openModal('authModal');
+        }, 300);
         return;
     }
 
@@ -216,7 +219,7 @@ function renderLoggedOutNav() {
     if (mAdmin) mAdmin.style.display = 'none';
     const container = document.getElementById('authNavContainer');
     container.innerHTML = `
-        <button class="btn btn-neon btn-sm" onclick="openModal('authModal')">🔑 লগইন / রেজিস্ট্রেশন</button>
+        <button class="btn btn-neon btn-sm" onclick="openModal('authModal')">🔑 লগইন / সাইন আপ</button>
     `;
 }
 
@@ -240,28 +243,35 @@ function exitImpersonation() {
 }
 
 // -------------------------------------------------------------
-// Auth Modal Handlers
+// Auth Modal Handlers (Mockup Interface)
 // -------------------------------------------------------------
 function setAuthMode(mode) {
-    const logBtn = document.getElementById('authToggleLogin');
-    const regBtn = document.getElementById('authToggleRegister');
-    const logForm = document.getElementById('loginForm');
-    const regForm = document.getElementById('registerForm');
-    const title = document.getElementById('authModalTitle');
+    const loginCard = document.getElementById('authLoginCard');
+    const signupCard = document.getElementById('authSignupCard');
 
     if (mode === 'login') {
-        logBtn.className = 'btn btn-neon btn-sm';
-        regBtn.className = 'btn btn-outline btn-sm';
-        logForm.style.display = 'block';
-        regForm.style.display = 'none';
-        title.innerText = '🎮 প্লেয়ার লগইন';
+        if (loginCard) loginCard.style.display = 'block';
+        if (signupCard) signupCard.style.display = 'none';
     } else {
-        logBtn.className = 'btn btn-outline btn-sm';
-        regBtn.className = 'btn btn-neon btn-sm';
-        logForm.style.display = 'none';
-        regForm.style.display = 'block';
-        title.innerText = '✨ নতুন প্লেয়ার রেজিস্ট্রেশন';
+        if (loginCard) loginCard.style.display = 'none';
+        if (signupCard) signupCard.style.display = 'flex';
     }
+}
+
+function togglePasswordVisibility(inputId, el) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+    if (input.type === 'password') {
+        input.type = 'text';
+        el.innerHTML = `<svg class="eye-svg" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>`;
+    } else {
+        input.type = 'password';
+        el.innerHTML = `<svg class="eye-svg" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>`;
+    }
+}
+
+function handleForgotPassword() {
+    alert(`পাসওয়ার্ড ভুলে গেলে বা কোনো সমস্যার জন্য এডমিন সাপোর্টে যোগাযোগ করুন:\n\nbKash / Helpline: ${adminBkashNumber}\nAdmin ID: GOMON HUB Support`);
 }
 
 async function handleLoginSubmit(e) {
@@ -301,16 +311,28 @@ async function handleLoginSubmit(e) {
 async function handleRegisterSubmit(e) {
     e.preventDefault();
     const username = document.getElementById('regUsername').value.trim();
+    const email = document.getElementById('regEmail').value.trim();
     const phone = document.getElementById('regPhone').value.trim();
-    const ff_ign = document.getElementById('regFfIgn').value.trim();
-    const ff_uid = document.getElementById('regFfUid').value.trim();
     const password = document.getElementById('regPassword').value;
+    const terms = document.getElementById('regTermsCheckbox');
+
+    if (terms && !terms.checked) {
+        showToast('You must agree to the Terms and Conditions and Privacy Policy', 'error');
+        return;
+    }
 
     try {
         const res = await fetch('/api/auth/register', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, phone, ff_ign, ff_uid, password })
+            body: JSON.stringify({
+                username,
+                phone,
+                email,
+                password,
+                ff_ign: username,
+                ff_uid: phone
+            })
         });
         const data = await res.json();
         if (res.ok) {
@@ -1100,7 +1122,54 @@ function handleWsMessage(data) {
         playSound('alert');
         latestServerVersion = data.version;
         promptAppUpdate(data.version, data.notes);
+    } else if (data.type === 'USER_BANNED_ALERT') {
+        playSound('alert');
+        showBanAlertToast(data.username);
+    } else if (data.type === 'ACCOUNT_BANNED_KICK') {
+        logout(false);
+        showToast('🚨 ' + data.message, 'error');
+        alert('🚨 আপনার অ্যাকাউন্টটি GOMON HUB প্ল্যাটফর্ম থেকে ব্যান করা হয়েছে!');
     }
+}
+
+// -------------------------------------------------------------
+// Live Red Ban Alert Broadcast Banner
+// -------------------------------------------------------------
+function showBanAlertToast(username) {
+    const container = document.getElementById('toastContainer');
+    if (!container) return;
+
+    const toast = document.createElement('div');
+    toast.className = 'toast error';
+    toast.style.background = 'linear-gradient(135deg, #ff0033, #800010)';
+    toast.style.border = '2px solid #ff2a5f';
+    toast.style.boxShadow = '0 0 35px rgba(255, 42, 95, 0.95)';
+    toast.style.color = '#ffffff';
+    toast.style.padding = '14px 20px';
+    toast.style.borderRadius = '10px';
+    toast.style.minWidth = '300px';
+
+    toast.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 12px;">
+            <span style="font-size: 1.8rem; filter: drop-shadow(0 0 8px #fff);">🚨</span>
+            <div>
+                <div style="font-size: 1.1rem; font-weight: 900; color: #fff; letter-spacing: 0.5px; text-shadow: 0 0 10px rgba(0,0,0,0.8);">
+                    Player '<span style="color: #ffff00; text-decoration: underline;">${escapeHtml(username)}</span>' Have Banned
+                </div>
+                <div style="font-size: 0.78rem; color: #ffe6ea; margin-top: 3px; font-weight: 700;">
+                    ⛔ GOMON HUB প্ল্যাটফর্মের নিয়ম ভঙ্গের দায়ে ব্যান করা হয়েছে।
+                </div>
+            </div>
+        </div>
+    `;
+    container.appendChild(toast);
+
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(-20px)';
+        toast.style.transition = 'all 0.5s ease';
+        setTimeout(() => toast.remove(), 500);
+    }, 8000);
 }
 
 async function forceSyncAll() {

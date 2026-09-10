@@ -403,7 +403,7 @@ class PushSubscribeRequest(BaseModel):
 # -------------------------------------------------------------
 # Public & Auth Endpoints
 # -------------------------------------------------------------
-CURRENT_CODE_VERSION = "v2.5.0"
+CURRENT_CODE_VERSION = "v2.6.1"
 
 @app.get("/api/info")
 def get_public_info():
@@ -412,7 +412,7 @@ def get_public_info():
     conn.close()
     settings = {r["key"]: r["value"] for r in settings_rows}
     current_ver = settings.get("app_version")
-    if not current_ver or current_ver in ["v1.0.0", "v1.1.0", "v2.1.0", "v2.2.0", "v2.3.0", "v2.4.0"]:
+    if not current_ver or current_ver in ["v1.0.0", "v1.1.0", "v2.1.0", "v2.2.0", "v2.3.0", "v2.4.0", "v2.5.0"]:
         current_ver = CURRENT_CODE_VERSION
     return {
         "site_title": settings.get("site_title", "GOMON HUB"),

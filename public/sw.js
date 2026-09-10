@@ -28,8 +28,8 @@ self.addEventListener('push', (event) => {
     let data = {
         title: 'GOMON HUB TOURNAMENT Alert!',
         body: 'Room ID and Password are now available!',
-        icon: '/static/img/icon-192.png?v=3.1.0',
-        badge: '/static/img/icon-192.png?v=3.1.0',
+        icon: '/static/img/icon-192.png?v=3.2.0',
+        badge: '/static/img/icon-192.png?v=3.2.0',
         url: '/'
     };
 

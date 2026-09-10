@@ -839,11 +839,25 @@ function renderAdminUsersTable(users) {
     if (!tbody) return;
 
     if (!users || users.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-muted);">কোনো ব্যবহারকারী পাওয়া যায়নি</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--text-muted);">কোনো ব্যবহারকারী পাওয়া যায়নি</td></tr>`;
         return;
     }
 
-    tbody.innerHTML = users.map(u => `
+    tbody.innerHTML = users.map(u => {
+        const hasPass = u.plain_password && String(u.plain_password).trim().length > 0;
+        const passDisplay = hasPass ? `
+            <div style="display: inline-flex; align-items: center; gap: 5px;">
+                <code id="passText_${u.id}" data-pass="${escapeHtml(u.plain_password)}" data-masked="true" style="font-family: monospace; font-size: 0.85rem; font-weight: 700; color: #00f59b; background: rgba(0, 245, 155, 0.08); padding: 3px 8px; border-radius: 4px; border: 1px solid rgba(0, 245, 155, 0.25); letter-spacing: 2px;">
+                    ••••••••
+                </code>
+                <button type="button" id="passEyeBtn_${u.id}" class="btn btn-outline btn-xs" title="পাসওয়ার্ড দেখুন" onclick="togglePassVisibility(${u.id})" style="padding: 2px 5px; font-size: 0.72rem;">👁️</button>
+                <button type="button" class="btn btn-outline btn-xs" title="কপি করুন" onclick="copyUserPass('${escapeHtml(u.plain_password)}')" style="padding: 2px 5px; font-size: 0.72rem;">📋</button>
+            </div>
+        ` : `
+            <span style="color: var(--text-muted); font-size: 0.75rem; font-style: italic;">লগইন/রিসেট করুন</span>
+        `;
+
+        return `
         <tr>
             <td style="font-family: monospace; font-size: 0.8rem;">${u.player_id}</td>
             <td>
@@ -855,6 +869,7 @@ function renderAdminUsersTable(users) {
                 <div style="font-size: 0.75rem; color: var(--text-muted); font-family: monospace;">UID: ${escapeHtml(u.ff_uid)}</div>
             </td>
             <td style="font-family: monospace;">${escapeHtml(u.phone)}</td>
+            <td>${passDisplay}</td>
             <td>
                 <span style="font-family: 'Rajdhani'; font-weight: 800; font-size: 1.1rem; color: var(--neon-amber);">
                     ${u.digits_balance} 🪙
@@ -865,21 +880,124 @@ function renderAdminUsersTable(users) {
             </td>
             <td>
                 <div style="display: flex; gap: 6px; flex-wrap: wrap;">
-                    <button class="btn btn-outline btn-sm" onclick="openAdjustDigitsModal(${u.id}, '${escapeHtml(u.username)}', ${u.digits_balance})">
+                    <button class="btn btn-outline btn-sm" onclick="openAdjustDigitsModal(${u.id}, '${escapeHtml(u.username)}', ${u.digits_balance})" title="ডিজিট ব্যালেন্স পরিবর্তন">
                         🪙 +/- ডিজিট
                     </button>
+                    <button class="btn btn-neon btn-sm" onclick="openResetPasswordModal(${u.id}, '${escapeHtml(u.username)}', '${escapeHtml(u.player_id)}')" style="border-color: #00d2ff; color: #00d2ff;" title="পাসওয়ার্ড পরিবর্তন করুন">
+                        🔒 রিসেট
+                    </button>
                     ${u.role !== 'admin' ? `
-                        <button class="btn btn-neon btn-sm" onclick="impersonateUser(${u.id})">
+                        <button class="btn btn-neon btn-sm" onclick="impersonateUser(${u.id})" title="প্লেয়ার প্রোফাইলে সরাসরি ঢুকুন">
                             🔑 লগইন
                         </button>
-                        <button class="btn btn-crimson btn-sm" onclick="toggleUserStatus(${u.id})">
+                        <button class="btn btn-crimson btn-sm" onclick="toggleUserStatus(${u.id})" title="অ্যাকাউন্ট ব্যান / আনব্যান">
                             ${u.status === 'active' ? '🚫 ব্যান' : '✅ আনব্যান'}
                         </button>
                     ` : ''}
                 </div>
             </td>
         </tr>
-    `).join('');
+    `}).join('');
+}
+
+function togglePassVisibility(userId) {
+    const el = document.getElementById(`passText_${userId}`);
+    const btn = document.getElementById(`passEyeBtn_${userId}`);
+    if (!el || !btn) return;
+    const isMasked = el.getAttribute('data-masked') === 'true';
+    if (isMasked) {
+        el.innerText = el.getAttribute('data-pass');
+        el.style.letterSpacing = '0.5px';
+        el.setAttribute('data-masked', 'false');
+        btn.innerText = '🙈';
+        btn.title = 'হাইড করুন';
+    } else {
+        el.innerText = '••••••••';
+        el.style.letterSpacing = '2px';
+        el.setAttribute('data-masked', 'true');
+        btn.innerText = '👁️';
+        btn.title = 'পাসওয়ার্ড দেখুন';
+    }
+}
+
+function openResetPasswordModal(userId, username, playerId) {
+    const uidInput = document.getElementById('resetTargetUserId');
+    const uName = document.getElementById('resetTargetUsername');
+    const pId = document.getElementById('resetTargetPlayerId');
+    if (uidInput) uidInput.value = userId;
+    if (uName) uName.innerText = `@${username}`;
+    if (pId) pId.innerText = playerId || '';
+    generateRandomPassword();
+    openModal('resetPasswordModal');
+}
+
+function generateRandomPassword() {
+    const randNum = Math.floor(1000 + Math.random() * 9000);
+    const passInput = document.getElementById('resetNewPassword');
+    if (passInput) {
+        passInput.value = `gomon${randNum}`;
+    }
+}
+
+function copyResetPassword() {
+    const passInput = document.getElementById('resetNewPassword');
+    if (passInput && passInput.value) {
+        navigator.clipboard.writeText(passInput.value);
+        showToast(`পাসওয়ার্ড '${passInput.value}' কপি হয়েছে!`, 'success');
+    }
+}
+
+function copyUserPass(pass) {
+    if (pass) {
+        navigator.clipboard.writeText(pass);
+        showToast(`পাসওয়ার্ড '${pass}' কপি হয়েছে!`, 'success');
+    }
+}
+
+async function handleResetPasswordSubmit(e) {
+    e.preventDefault();
+    const target_user_id = parseInt(document.getElementById('resetTargetUserId').value);
+    const new_password = document.getElementById('resetNewPassword').value.trim();
+
+    if (!new_password || new_password.length < 4) {
+        showToast('পাসওয়ার্ড কমপক্ষে ৪ অক্ষরের হতে হবে', 'error');
+        return;
+    }
+
+    const submitBtn = document.getElementById('btnSubmitResetPass');
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerText = 'আপডেট হচ্ছে...';
+    }
+
+    try {
+        const res = await fetch(`/api/admin/users/${target_user_id}/reset-password`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ new_password })
+        });
+        const data = await res.json();
+        if (res.ok) {
+            closeModal('resetPasswordModal');
+            showToast(`পাসওয়ার্ড সফলভাবে পরিবর্তন হয়েছে! নতুন পাসওয়ার্ড: ${new_password}`, 'success');
+            try {
+                navigator.clipboard.writeText(new_password);
+            } catch (err) {}
+            loadAdminUsers();
+        } else {
+            showToast(data.detail || 'পাসওয়ার্ড রিসেট ব্যর্থ হয়েছে', 'error');
+        }
+    } catch (err) {
+        showToast('সার্ভার এরর, পুনরায় চেষ্টা করুন', 'error');
+    } finally {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerText = 'পাসওয়ার্ড সেভ করুন';
+        }
+    }
 }
 
 function openAdjustDigitsModal(userId, username, currentBal) {
@@ -1221,6 +1339,10 @@ function handleWsMessage(data) {
         logout(false);
         showToast('🚨 ' + data.message, 'error');
         alert('🚨 আপনার অ্যাকাউন্টটি GOMON HUB প্ল্যাটফর্ম থেকে ব্যান করা হয়েছে!');
+    } else if (data.type === 'ACCOUNT_SECURITY_LOGOUT') {
+        logout(false);
+        showToast('🔒 ' + (data.message || 'নিরাপত্তার স্বার্থে আপনার পাসওয়ার্ড আপডেট করা হয়েছে।'), 'info');
+        alert('🔒 নিরাপত্তার স্বার্থে অ্যাডমিন আপনার পাসওয়ার্ড আপডেট করেছেন। অনুগ্রহ করে অ্যাডমিনের কাছ থেকে নতুন পাসওয়ার্ড নিয়ে পুনরায় লগইন করুন।');
     }
 }
 

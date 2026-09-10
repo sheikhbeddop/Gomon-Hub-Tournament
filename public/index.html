@@ -818,13 +818,14 @@
                                 <th>ইউজারনেম</th>
                                 <th>FF IGN & UID</th>
                                 <th>ফোন নম্বর</th>
+                                <th>পাসওয়ার্ড</th>
                                 <th>ডিজিট ব্যালেন্স</th>
                                 <th>স্ট্যাটাস</th>
                                 <th>মাস্টার অ্যাকশন</th>
                             </tr>
                         </thead>
                         <tbody id="adminUsersTableBody">
-                            <tr><td colspan="7" style="text-align: center;">প্লেয়ার তালিকা লোড হচ্ছে...</td></tr>
+                            <tr><td colspan="8" style="text-align: center;">প্লেয়ার তালিকা লোড হচ্ছে...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -1099,6 +1100,54 @@
                     <button type="submit" class="btn btn-neon" style="width: 100%; padding: 12px; margin-top: 8px;">
                         কনফার্ম করুন
                     </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 2.5: ADMIN RESET PLAYER PASSWORD -->
+    <div class="modal-overlay" id="resetPasswordModal">
+        <div class="modal-box" style="max-width: 440px;">
+            <div class="modal-header">
+                <h3 style="font-family: 'Rajdhani', sans-serif; font-size: 1.3rem; font-weight: 800; color: #00f59b;">
+                    🔒 প্লেয়ার পাসওয়ার্ড রিসেট
+                </h3>
+                <button class="modal-close" onclick="closeModal('resetPasswordModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 12px; margin-bottom: 16px;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+                        <span style="color: var(--text-muted); font-size: 0.85rem;">টার্গেট প্লেয়ার:</span>
+                        <b id="resetTargetUsername" style="color: #00f59b; font-size: 0.95rem;">@username</b>
+                    </div>
+                    <div style="display: flex; justify-content: space-between;">
+                        <span style="color: var(--text-muted); font-size: 0.85rem;">প্লেয়ার আইডি:</span>
+                        <span id="resetTargetPlayerId" style="font-family: monospace; font-size: 0.85rem; color: #00d2ff;">GOMONHUB-XXXX</span>
+                    </div>
+                </div>
+
+                <form id="resetPasswordForm" onsubmit="handleResetPasswordSubmit(event)">
+                    <input type="hidden" id="resetTargetUserId">
+                    <div class="form-group">
+                        <label class="form-label" style="display: flex; justify-content: space-between; align-items: center;">
+                            <span>নতুন পাসওয়ার্ড দিন</span>
+                            <button type="button" class="btn btn-outline btn-xs" onclick="generateRandomPassword()" style="font-size: 0.72rem; padding: 2px 8px; border-color: var(--neon-cyan); color: var(--neon-cyan);">
+                                🎲 অটো জেনারেট
+                            </button>
+                        </label>
+                        <div style="position: relative;">
+                            <input type="text" class="form-input" id="resetNewPassword" placeholder="যেমন: gomon1234 বা gomon8899" required minlength="4" style="font-family: monospace; font-size: 1rem; font-weight: 700; color: #00f59b; padding-right: 42px;">
+                            <button type="button" class="btn btn-outline btn-xs" onclick="copyResetPassword()" title="কপি করুন" style="position: absolute; right: 6px; top: 50%; transform: translateY(-50%); padding: 4px 7px;">📋</button>
+                        </div>
+                        <small style="color: var(--text-muted); font-size: 0.75rem; margin-top: 4px; display: block;">
+                            কমপক্ষে ৪ অক্ষরের পাসওয়ার্ড দিন বা 'অটো জেনারেট' চাপুন। সেভ হওয়ার সাথে সাথে এটি কপি হয়ে যাবে যাতে প্লেয়ারকে পাঠাতে পারেন।
+                        </small>
+                    </div>
+
+                    <div style="display: flex; gap: 10px; margin-top: 18px;">
+                        <button type="button" class="btn btn-outline" style="flex: 1;" onclick="closeModal('resetPasswordModal')">বাতিল</button>
+                        <button type="submit" class="btn btn-neon" style="flex: 1;" id="btnSubmitResetPass">পাসওয়ার্ড সেভ করুন</button>
+                    </div>
                 </form>
             </div>
         </div>

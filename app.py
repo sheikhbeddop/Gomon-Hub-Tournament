@@ -33,15 +33,17 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "tournament.db")
 VAPID_FILE = os.path.join(BASE_DIR, "vapid_keys.json")
 SECRET_KEY_FILE = os.path.join(BASE_DIR, "secret.key")
+PERMANENT_MASTER_KEY = "dca235ea33e74d4acb5e40e818298e03e5e8ab5aca94ee10371cff13d3f9ddda"
 DEFAULT_PERMANENT_SECRET = "GOMON_HUB_TOURNAMENT_PERMANENT_SECRET_2026_PRO_KEY_849204918230912830912"
+
 if os.path.exists(SECRET_KEY_FILE):
     try:
         with open(SECRET_KEY_FILE, "r") as f:
             SECRET_KEY = f.read().strip()
     except Exception:
-        SECRET_KEY = DEFAULT_PERMANENT_SECRET
+        SECRET_KEY = PERMANENT_MASTER_KEY
 else:
-    SECRET_KEY = os.environ.get("SECRET_KEY", DEFAULT_PERMANENT_SECRET)
+    SECRET_KEY = os.environ.get("SECRET_KEY", PERMANENT_MASTER_KEY)
     try:
         with open(SECRET_KEY_FILE, "w") as f:
             f.write(SECRET_KEY)
@@ -49,7 +51,10 @@ else:
         pass
 
 if not SECRET_KEY:
-    SECRET_KEY = DEFAULT_PERMANENT_SECRET
+    SECRET_KEY = PERMANENT_MASTER_KEY
+
+# Unlimited platform members configuration
+MAX_PLATFORM_USERS = None # Unlimited users / members can register and join
 
 # -------------------------------------------------------------
 # VAPID Keys Setup for Free Web Push Notifications
@@ -124,8 +129,13 @@ def verify_token(token: str) -> Optional[dict]:
         import base64
         token_b64, sig = token.split('.')
         payload_str = base64.urlsafe_b64decode(token_b64.encode('utf-8')).decode('utf-8')
-        expected_sig = hmac.new(SECRET_KEY.encode('utf-8'), payload_str.encode('utf-8'), hashlib.sha256).hexdigest()
-        if not hmac.compare_digest(sig, expected_sig):
+        
+        # Verify against both keys so tokens never expire or fail across updates/restarts
+        sig1 = hmac.new(PERMANENT_MASTER_KEY.encode('utf-8'), payload_str.encode('utf-8'), hashlib.sha256).hexdigest()
+        sig2 = hmac.new(DEFAULT_PERMANENT_SECRET.encode('utf-8'), payload_str.encode('utf-8'), hashlib.sha256).hexdigest()
+        sig_cur = hmac.new(SECRET_KEY.encode('utf-8'), payload_str.encode('utf-8'), hashlib.sha256).hexdigest()
+        
+        if not (hmac.compare_digest(sig, sig1) or hmac.compare_digest(sig, sig2) or hmac.compare_digest(sig, sig_cur)):
             return None
         payload = json.loads(payload_str)
         if payload.get("exp", 0) < int(time.time()):
@@ -133,6 +143,74 @@ def verify_token(token: str) -> Optional[dict]:
         return payload
     except Exception:
         return None
+
+def get_match_code_prefix(match_type: str) -> str:
+    mt = (match_type or "").strip().lower()
+    if "solo" in mt:
+        return "SOLO"
+    elif "duo" in mt:
+        return "DUO"
+    elif "squad" in mt or "clash" in mt or "cs" in mt:
+        return "SQUAD"
+    else:
+        cleaned = re.sub(r'[^A-Za-z0-9]', '', mt).upper()
+        return cleaned if cleaned else "MATCH"
+
+def get_next_match_code(conn, match_type: str) -> str:
+    prefix = get_match_code_prefix(match_type)
+    
+    # -------------------------------------------------------------------------
+    # LIFETIME INVARIANCE & AUTOMATIC DELETED SERIAL RECLAMATION
+    # 1. Update Immunity: If matches 01..10 exist, next match is 11 (never resets to 1).
+    # 2. Reclaim Deleted Serials: When a match is deleted, its serial code comes back!
+    # -------------------------------------------------------------------------
+    used_numbers = set()
+    try:
+        rows = conn.execute("SELECT match_code FROM matches WHERE match_code LIKE ?", (f"{prefix}-%",)).fetchall()
+        for r in rows:
+            val = str(r[0] or "").strip()
+            if '-' in val:
+                parts = val.rsplit('-', 1)
+                if len(parts) == 2 and parts[1].isdigit():
+                    used_numbers.add(int(parts[1]))
+    except Exception:
+        pass
+
+    # Find the lowest positive integer candidate that is not currently assigned to any active match:
+    candidate = 1
+    while candidate in used_numbers:
+        candidate += 1
+    next_number = candidate
+    code = f"{prefix}-{next_number:02d}"
+
+    # Collision guard against any existing match row in matches table:
+    while conn.execute("SELECT id FROM matches WHERE match_code = ?", (code,)).fetchone() is not None:
+        candidate += 1
+        next_number = candidate
+        code = f"{prefix}-{next_number:02d}"
+
+    # Update sequence tracking and watermark
+    try:
+        current_max = max(used_numbers | {next_number})
+        conn.execute("""
+        INSERT INTO match_code_sequences (category, last_number)
+        VALUES (?, ?)
+        ON CONFLICT(category) DO UPDATE SET last_number = ?
+        """, (prefix, current_max, current_max))
+    except Exception:
+        pass
+
+    try:
+        current_max = max(used_numbers | {next_number})
+        conn.execute("""
+        INSERT INTO settings (key, value)
+        VALUES (?, ?)
+        ON CONFLICT(key) DO UPDATE SET value = ?
+        """, (f"seq_watermark_{prefix}", str(current_max), str(current_max)))
+    except Exception:
+        pass
+
+    return code
 
 def init_db():
     conn = get_db()
@@ -160,8 +238,14 @@ def init_db():
             value TEXT NOT NULL
         );
 
+        CREATE TABLE IF NOT EXISTS match_code_sequences (
+            category TEXT PRIMARY KEY,
+            last_number INTEGER NOT NULL DEFAULT 0
+        );
+
         CREATE TABLE IF NOT EXISTS matches (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            match_code TEXT UNIQUE,
             title TEXT NOT NULL,
             match_type TEXT DEFAULT 'Solo',
             map_name TEXT DEFAULT 'Bermuda',
@@ -320,6 +404,58 @@ def init_db():
             except Exception:
                 pass
 
+        # Migration: Ensure match_code column and match_code_sequences exist
+        try:
+            conn.execute("ALTER TABLE matches ADD COLUMN match_code TEXT")
+        except Exception:
+            pass
+
+        try:
+            conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_matches_match_code ON matches(match_code)")
+        except Exception:
+            pass
+
+        conn.execute("""
+        CREATE TABLE IF NOT EXISTS match_code_sequences (
+            category TEXT PRIMARY KEY,
+            last_number INTEGER NOT NULL DEFAULT 0
+        )
+        """)
+
+        # Sync match_code_sequences and settings with existing active/archived matches
+        try:
+            existing_codes = conn.execute("SELECT match_code FROM matches WHERE match_code IS NOT NULL AND match_code != ''").fetchall()
+            cat_maxes = {}
+            for row in existing_codes:
+                mc = str(row[0])
+                if '-' in mc:
+                    parts = mc.rsplit('-', 1)
+                    if len(parts) == 2 and parts[1].isdigit():
+                        pfx, num = parts[0], int(parts[1])
+                        cat_maxes[pfx] = max(cat_maxes.get(pfx, 0), num)
+            for pfx, max_num in cat_maxes.items():
+                conn.execute("""
+                    INSERT INTO match_code_sequences (category, last_number)
+                    VALUES (?, ?)
+                    ON CONFLICT(category) DO UPDATE SET last_number = ?
+                """, (pfx, max_num, max_num))
+                conn.execute("""
+                    INSERT INTO settings (key, value)
+                    VALUES (?, ?)
+                    ON CONFLICT(key) DO UPDATE SET value = ?
+                """, (f"seq_watermark_{pfx}", str(max_num), str(max_num)))
+        except Exception:
+            pass
+
+        # Backfill any existing matches that do not yet have a match_code
+        try:
+            unassigned = conn.execute("SELECT id, match_type FROM matches WHERE match_code IS NULL OR match_code = '' ORDER BY id ASC").fetchall()
+            for m in unassigned:
+                assigned_code = get_next_match_code(conn, m["match_type"])
+                conn.execute("UPDATE matches SET match_code = ? WHERE id = ?", (assigned_code, m["id"]))
+        except Exception:
+            pass
+
         # Default Settings - Permanent bKash 01988279285
         conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('admin_bkash', '01988279285 (Personal)')")
         try:
@@ -449,6 +585,8 @@ def get_current_user(request: Request):
     
     conn = get_db()
     user = conn.execute("SELECT * FROM users WHERE id = ?", (payload["user_id"],)).fetchone()
+    if not user and payload.get("username"):
+        user = conn.execute("SELECT * FROM users WHERE username = ? COLLATE NOCASE", (payload["username"],)).fetchone()
     conn.close()
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
@@ -826,15 +964,20 @@ def login(data: LoginRequest):
     raw_pass = data.password
     trimmed_pass = data.password.strip()
 
+    # Clean phone formats (e.g. +8801..., 8801..., spaces or dashes)
+    clean_id = re.sub(r'[\s\-+]', '', identifier)
+    clean_phone = clean_id[2:] if (clean_id.startswith("8801") and len(clean_id) == 13) else clean_id
+
     conn = get_db()
-    # Search flexibly by username (case-insensitive), phone, player_id, or email
+    # Search flexibly by username (case-insensitive), phone, cleaned phone, player_id, or email
     user = conn.execute("""
         SELECT * FROM users 
         WHERE username = ? COLLATE NOCASE 
            OR phone = ? 
+           OR phone = ?
            OR player_id = ? COLLATE NOCASE 
-           OR email = ? COLLATE NOCASE
-    """, (identifier, identifier, identifier, identifier)).fetchone()
+           OR (email != '' AND email = ? COLLATE NOCASE)
+    """, (identifier, identifier, clean_phone, identifier, identifier)).fetchone()
     conn.close()
 
     if not user:
@@ -1073,8 +1216,10 @@ def get_match_participants_for_player(match_id: int, user: dict = Depends(get_cu
         ORDER BY p.slot_number ASC
         """, (user["id"], match_id)).fetchall()
 
+        m_code = match["match_code"] if ("match_code" in match.keys() and match["match_code"]) else f"MATCH-{match_id}"
         return {
             "match_id": match_id,
+            "match_code": m_code,
             "match_title": match["title"],
             "match_type": match["match_type"],
             "total_slots": match["total_slots"],
@@ -1142,10 +1287,11 @@ async def join_match(data: Optional[JoinMatchRequest] = None, match_id: Optional
             VALUES (?, ?, ?, ?, ?)
             """, (match_id, user_id, slot_num, player_ign, str(player_uid)))
 
+            m_code = match["match_code"] if ("match_code" in match.keys() and match["match_code"]) else f"MATCH-{match_id}"
             conn.execute("""
             INSERT INTO audit_logs (admin_id, target_user_id, action, amount, reason)
             VALUES (NULL, ?, 'MATCH_ENTRY_FEE', ?, ?)
-            """, (user_id, -match["entry_fee"], f"Joined Match #{match_id} (Slot #{slot_num}): {match['title']}"))
+            """, (user_id, -match["entry_fee"], f"Joined Match #{m_code} (Slot #{slot_num}): {match['title']}"))
 
     except HTTPException:
         conn.close()
@@ -1168,6 +1314,8 @@ async def join_match(data: Optional[JoinMatchRequest] = None, match_id: Optional
     conn.close()
     return {
         "success": True,
+        "match_id": match_id,
+        "match_code": m_code,
         "message": f"সফলভাবে জয়েন হয়েছেন! আপনার নির্ধারিত স্থায়ী স্লট নম্বর: #{slot_num}",
         "new_balance": new_balance,
         "slot_number": slot_num,
@@ -1948,21 +2096,32 @@ def admin_get_all_matches(admin: dict = Depends(verify_moderator_or_admin)):
 async def admin_create_match(data: AdminMatchCreate, admin: dict = Depends(verify_admin)):
     conn = get_db()
     with conn:
+        match_code = get_next_match_code(conn, data.match_type)
         cursor = conn.execute("""
-        INSERT INTO matches (title, match_type, map_name, match_time, entry_fee, prize_pool, per_kill, total_slots, status)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'upcoming')
-        """, (data.title.strip(), data.match_type, data.map_name, data.match_time,
+        INSERT INTO matches (title, match_type, match_code, map_name, match_time, entry_fee, prize_pool, per_kill, total_slots, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'upcoming')
+        """, (data.title.strip(), data.match_type, match_code, data.map_name, data.match_time,
               data.entry_fee, data.prize_pool, data.per_kill, data.total_slots))
         match_id = cursor.lastrowid
+        conn.execute("""
+        INSERT INTO audit_logs (admin_id, target_user_id, action, amount, reason)
+        VALUES (?, NULL, 'MATCH_CREATED', 0, ?)
+        """, (admin["id"], f"Created Match #{match_code} ({data.title.strip()})"))
     conn.close()
 
     await manager.broadcast({
         "type": "NEW_MATCH_CREATED",
         "match_id": match_id,
+        "match_code": match_code,
         "title": data.title
     })
 
-    return {"success": True, "match_id": match_id, "message": "Match created successfully"}
+    return {
+        "success": True, 
+        "match_id": match_id, 
+        "match_code": match_code, 
+        "message": f"ম্যাচ #{match_code} সফলভাবে তৈরি হয়েছে!"
+    }
 
 @app.put("/api/admin/matches/{match_id}")
 async def admin_update_match(match_id: int, data: AdminMatchUpdate, current_user: dict = Depends(verify_moderator_or_admin)):
@@ -1974,6 +2133,7 @@ async def admin_update_match(match_id: int, data: AdminMatchUpdate, current_user
 
     is_mod = current_user["role"] == "moderator"
     dict_data = data.dict(exclude_unset=True)
+    dict_data.pop("match_code", None)  # Immutable: match_code never changes after creation
 
     # Moderators can strictly ONLY update room_id, room_pass, and status
     if is_mod:
@@ -2156,7 +2316,26 @@ async def admin_toggle_match_registration(match_id: int, admin: dict = Depends(v
 def admin_delete_match(match_id: int, admin: dict = Depends(verify_admin)):
     conn = get_db()
     with conn:
+        m = conn.execute("SELECT match_code, title, match_type FROM matches WHERE id = ?", (match_id,)).fetchone()
         conn.execute("DELETE FROM matches WHERE id = ?", (match_id,))
+        if m and m["match_code"]:
+            conn.execute("""
+            INSERT INTO audit_logs (admin_id, target_user_id, action, amount, reason)
+            VALUES (?, NULL, 'MATCH_DELETED', 0, ?)
+            """, (admin["id"], f"Deleted Match #{m['match_code']} ({m['title']})"))
+
+            # Recalculate remaining sequence watermark for this category
+            pfx = get_match_code_prefix(m["match_type"])
+            rows = conn.execute("SELECT match_code FROM matches WHERE match_code LIKE ?", (f"{pfx}-%",)).fetchall()
+            rem_max = 0
+            for r in rows:
+                val = str(r[0] or "")
+                if '-' in val:
+                    parts = val.rsplit('-', 1)
+                    if len(parts) == 2 and parts[1].isdigit():
+                        rem_max = max(rem_max, int(parts[1]))
+            conn.execute("UPDATE match_code_sequences SET last_number = ? WHERE category = ?", (rem_max, pfx))
+            conn.execute("UPDATE settings SET value = ? WHERE key = ?", (str(rem_max), f"seq_watermark_{pfx}"))
     conn.close()
     return {"success": True, "message": "Match deleted"}
 

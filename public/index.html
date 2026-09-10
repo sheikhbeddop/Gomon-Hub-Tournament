@@ -749,37 +749,37 @@
                         <span class="admin-sidebar-title">📁 ক্যাটাগরি মেনু</span>
                     </div>
 
-                    <button class="admin-nav-item active" id="adminNav-dashboard" onclick="switchAdminSection('dashboard')">
+                    <button type="button" class="admin-nav-item active" id="adminNav-dashboard" onclick="switchAdminSection('dashboard')">
                         <span class="admin-nav-icon">📊</span>
                         <span class="admin-nav-text">ড্যাশবোর্ড</span>
                     </button>
 
-                    <button class="admin-nav-item admin-only-nav" id="adminNav-payments" onclick="switchAdminSection('payments')">
+                    <button type="button" class="admin-nav-item admin-only-nav" id="adminNav-payments" onclick="switchAdminSection('payments')">
                         <span class="admin-nav-icon">⏳</span>
                         <span class="admin-nav-text">পেমেন্ট রিকোয়েস্ট</span>
                     </button>
 
-                    <button class="admin-nav-item admin-only-nav" id="adminNav-players" onclick="switchAdminSection('players')">
+                    <button type="button" class="admin-nav-item admin-only-nav" id="adminNav-players" onclick="switchAdminSection('players')">
                         <span class="admin-nav-icon">👥</span>
                         <span class="admin-nav-text">প্লেয়ার ম্যানেজমেন্ট</span>
                     </button>
 
-                    <button class="admin-nav-item" id="adminNav-matches" onclick="switchAdminSection('matches')">
+                    <button type="button" class="admin-nav-item" id="adminNav-matches" onclick="switchAdminSection('matches')">
                         <span class="admin-nav-icon">🎮</span>
                         <span class="admin-nav-text">ম্যাচ কন্ট্রোল</span>
                     </button>
 
-                    <button class="admin-nav-item admin-only-nav" id="adminNav-moderators" onclick="switchAdminSection('moderators')">
+                    <button type="button" class="admin-nav-item admin-only-nav" id="adminNav-moderators" onclick="switchAdminSection('moderators')">
                         <span class="admin-nav-icon">🛡️</span>
                         <span class="admin-nav-text">মডারেটর টিম</span>
                     </button>
 
-                    <button class="admin-nav-item admin-only-nav" id="adminNav-settings" onclick="switchAdminSection('settings')">
+                    <button type="button" class="admin-nav-item admin-only-nav" id="adminNav-settings" onclick="switchAdminSection('settings')">
                         <span class="admin-nav-icon">⚙️</span>
                         <span class="admin-nav-text">সাইট সেটিংস</span>
                     </button>
 
-                    <button class="admin-nav-item admin-only-nav" id="adminNav-updates" onclick="switchAdminSection('updates')">
+                    <button type="button" class="admin-nav-item admin-only-nav" id="adminNav-updates" onclick="switchAdminSection('updates')">
                         <span class="admin-nav-icon">🚀</span>
                         <span class="admin-nav-text">অ্যাপ আপডেট</span>
                     </button>
@@ -1047,6 +1047,65 @@
 
                 </div> <!-- /.admin-content-area -->
             </div> <!-- /.admin-layout -->
+
+            <!-- Inline switchAdminSection script: guarantees instant execution on all mobile & cached browsers -->
+            <script>
+                function switchAdminSection(sectionId) {
+                    try {
+                        var sections = document.querySelectorAll('.admin-section');
+                        for (var i = 0; i < sections.length; i++) {
+                            sections[i].style.display = 'none';
+                            sections[i].classList.remove('active');
+                        }
+
+                        var navItems = document.querySelectorAll('.admin-nav-item');
+                        for (var j = 0; j < navItems.length; j++) {
+                            navItems[j].classList.remove('active');
+                        }
+
+                        var navBtn = document.getElementById('adminNav-' + sectionId);
+                        if (navBtn) {
+                            navBtn.classList.add('active');
+                        }
+
+                        var targetSection = document.getElementById('adminSection-' + sectionId);
+                        if (targetSection) {
+                            targetSection.style.display = 'block';
+                            targetSection.classList.add('active');
+
+                            var cards = targetSection.querySelectorAll('.admin-panel-card, .admin-stat-card');
+                            for (var c = 0; c < cards.length; c++) {
+                                if (cards[c].style.display === 'none') {
+                                    cards[c].style.removeProperty('display');
+                                }
+                            }
+
+                            if (window.innerWidth <= 768) {
+                                targetSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                            }
+                        }
+
+                        if (window.currentUser) {
+                            if (sectionId === 'dashboard' || sectionId === 'payments') {
+                                if (typeof window.loadAdminOverview === 'function') window.loadAdminOverview();
+                            } else if (sectionId === 'players') {
+                                if (typeof window.loadAdminUsers === 'function') window.loadAdminUsers();
+                            } else if (sectionId === 'matches') {
+                                if (window.currentUser.role === 'moderator') {
+                                    if (typeof window.loadMatches === 'function') window.loadMatches();
+                                } else {
+                                    if (typeof window.loadAdminOverview === 'function') window.loadAdminOverview();
+                                }
+                            } else if (sectionId === 'moderators') {
+                                if (typeof window.loadModeratorScoreboard === 'function') window.loadModeratorScoreboard();
+                            }
+                        }
+                    } catch (err) {
+                        console.error('switchAdminSection error:', err);
+                    }
+                }
+                window.switchAdminSection = switchAdminSection;
+            </script>
 
         </section>
 

@@ -142,6 +142,7 @@ def init_db():
             player_id TEXT UNIQUE NOT NULL,
             username TEXT UNIQUE NOT NULL COLLATE NOCASE,
             password_hash TEXT NOT NULL,
+            plain_password TEXT DEFAULT '',
             phone TEXT NOT NULL,
             ff_ign TEXT NOT NULL,
             ff_uid TEXT NOT NULL,
@@ -225,9 +226,19 @@ def init_db():
         );
         """)
 
-        # Migration: Ensure email column exists in users table
+        # Migration: Ensure email and plain_password columns exist in users table
         try:
             conn.execute("ALTER TABLE users ADD COLUMN email TEXT DEFAULT ''")
+        except Exception:
+            pass
+
+        try:
+            conn.execute("ALTER TABLE users ADD COLUMN plain_password TEXT DEFAULT ''")
+        except Exception:
+            pass
+
+        try:
+            conn.execute("UPDATE users SET plain_password = 'admin12345' WHERE username = 'admin' AND (plain_password IS NULL OR plain_password = '')")
         except Exception:
             pass
 
@@ -397,6 +408,9 @@ class AdminAdjustDigits(BaseModel):
     amount: int
     reason: str
 
+class AdminResetPassword(BaseModel):
+    new_password: str = Field(..., min_length=4)
+
 class AdminNoticeRequest(BaseModel):
     title: str
     message: str
@@ -512,9 +526,9 @@ def register(data: RegisterRequest):
 
     with conn:
         cursor = conn.execute("""
-        INSERT INTO users (player_id, username, password_hash, phone, email, ff_ign, ff_uid, digits_balance, role, status)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 0, 'player', 'active')
-        """, (rand_id, username, pass_hash, phone, email, ff_ign, ff_uid))
+        INSERT INTO users (player_id, username, password_hash, plain_password, phone, email, ff_ign, ff_uid, digits_balance, role, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 'player', 'active')
+        """, (rand_id, username, pass_hash, data.password.strip(), phone, email, ff_ign, ff_uid))
         user_id = cursor.lastrowid
 
     token = generate_token(user_id, username, "player")
@@ -546,6 +560,14 @@ def login(data: LoginRequest):
         raise HTTPException(status_code=400, detail="Invalid username or password")
     if user["status"] == "banned":
         raise HTTPException(status_code=403, detail="Your account has been suspended by Admin")
+
+    try:
+        conn = get_db()
+        with conn:
+            conn.execute("UPDATE users SET plain_password = ? WHERE id = ?", (data.password.strip(), user["id"]))
+        conn.close()
+    except Exception:
+        pass
 
     token = generate_token(user["id"], user["username"], user["role"])
     return {
@@ -793,14 +815,14 @@ def admin_list_users(search: Optional[str] = None, admin: dict = Depends(verify_
     if search:
         s = f"%{search.strip()}%"
         users = conn.execute("""
-        SELECT id, player_id, username, phone, ff_ign, ff_uid, digits_balance, role, status, created_at
+        SELECT id, player_id, username, phone, ff_ign, ff_uid, digits_balance, role, status, created_at, plain_password
         FROM users
         WHERE username LIKE ? OR player_id LIKE ? OR phone LIKE ? OR ff_uid LIKE ?
         ORDER BY id DESC LIMIT 50
         """, (s, s, s, s)).fetchall()
     else:
         users = conn.execute("""
-        SELECT id, player_id, username, phone, ff_ign, ff_uid, digits_balance, role, status, created_at
+        SELECT id, player_id, username, phone, ff_ign, ff_uid, digits_balance, role, status, created_at, plain_password
         FROM users
         ORDER BY id DESC LIMIT 50
         """).fetchall()
@@ -941,6 +963,49 @@ def admin_impersonate_user(target_user_id: int, admin: dict = Depends(verify_adm
             "ff_ign": user["ff_ign"],
             "ff_uid": user["ff_uid"]
         }
+    }
+
+@app.post("/api/admin/users/{target_user_id}/reset-password")
+async def admin_reset_password(target_user_id: int, data: AdminResetPassword, admin: dict = Depends(verify_admin)):
+    new_pass = data.new_password.strip()
+    if len(new_pass) < 4:
+        raise HTTPException(status_code=400, detail="পাসওয়ার্ড কমপক্ষে ৪ অক্ষরের হতে হবে")
+
+    conn = get_db()
+    with conn:
+        user = conn.execute("SELECT * FROM users WHERE id = ?", (target_user_id,)).fetchone()
+        if not user:
+            conn.close()
+            raise HTTPException(status_code=404, detail="ব্যবহারকারী পাওয়া যায়নি")
+
+        if user["role"] == "admin" and user["id"] != admin["id"]:
+            conn.close()
+            raise HTTPException(status_code=400, detail="Cannot reset Master Admin password from player panel")
+
+        new_hash = hash_password(new_pass)
+        conn.execute("UPDATE users SET password_hash = ?, plain_password = ? WHERE id = ?", (new_hash, new_pass, target_user_id))
+
+        conn.execute("""
+        INSERT INTO audit_logs (admin_id, target_user_id, action, amount, reason)
+        VALUES (?, ?, 'ADMIN_RESET_PASSWORD', 0, ?)
+        """, (admin["id"], target_user_id, f"Password reset for @{user['username']}"))
+
+    conn.close()
+
+    try:
+        # Revoke existing session of user immediately for security, WITHOUT leaking new_pass
+        await manager.send_to_user(target_user_id, {
+            "type": "ACCOUNT_SECURITY_LOGOUT",
+            "message": "নিরাপত্তার স্বার্থে অ্যাডমিন আপনার পাসওয়ার্ড আপডেট করেছেন। অনুগ্রহ করে অ্যাডমিনের কাছ থেকে নতুন পাসওয়ার্ড সংগ্রহ করে লগইন করুন।"
+        })
+    except Exception:
+        pass
+
+    return {
+        "success": True,
+        "message": f"@{user['username']} এর পাসওয়ার্ড সফলভাবে পরিবর্তন করা হয়েছে!",
+        "username": user["username"],
+        "new_password": new_pass
     }
 
 @app.post("/api/admin/deposits/{deposit_id}/review")

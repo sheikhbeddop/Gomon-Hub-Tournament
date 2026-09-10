@@ -813,11 +813,45 @@ body {
     position: fixed;
     bottom: 24px;
     right: 24px;
-    z-index: 2000;
+    z-index: 10000000 !important;
     display: flex;
     flex-direction: column;
     gap: 10px;
     pointer-events: none;
+}
+
+/* In-form Auth Error Alert */
+.auth-error-alert {
+    background: #fff0f2 !important;
+    color: #d32f2f !important;
+    border: 1px solid #ffcdd2 !important;
+    border-radius: 14px !important;
+    padding: 10px 14px !important;
+    font-size: 0.85rem !important;
+    font-weight: 600 !important;
+    margin-bottom: 15px !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    line-height: 1.35 !important;
+    box-shadow: 0 4px 14px rgba(211, 47, 47, 0.15) !important;
+}
+
+.auth-error-alert.shake {
+    animation: authShake 0.4s ease !important;
+}
+
+@keyframes authShake {
+    0%, 100% { transform: translateX(0); }
+    20%, 60% { transform: translateX(-8px); }
+    40%, 80% { transform: translateX(8px); }
+}
+
+.auth-input.input-error,
+.signup-input.input-error {
+    border-color: #d32f2f !important;
+    background: #fff5f5 !important;
+    box-shadow: 0 0 0 3px rgba(211, 47, 47, 0.2) !important;
 }
 .toast {
     pointer-events: auto;

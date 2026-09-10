@@ -342,7 +342,7 @@ function applyRolePermissionsUI() {
         if (subEl) subEl.innerText = 'ম্যাচ শিডিউল অনুযায়ী রুম আইডি ও পাসওয়ার্ড আপডেট এবং ম্যাচ সমাপ্তি নিয়ন্ত্রণ কেন্দ্র।';
         if (topActionBtns) topActionBtns.style.display = 'none';
 
-        document.querySelectorAll('.admin-only-card').forEach(el => {
+        document.querySelectorAll('.admin-only-card, .admin-only-nav').forEach(el => {
             el.style.setProperty('display', 'none', 'important');
         });
     } else if (isAdmin) {
@@ -350,7 +350,7 @@ function applyRolePermissionsUI() {
         if (subEl) subEl.innerText = 'ওয়েবসাইট, প্লেয়ার ডিজিট, ম্যাচ ও পেমেন্টের সম্পূর্ণ নিয়ন্ত্রণ কেন্দ্র।';
         if (topActionBtns) topActionBtns.style.display = 'flex';
 
-        document.querySelectorAll('.admin-only-card').forEach(el => {
+        document.querySelectorAll('.admin-only-card, .admin-only-nav').forEach(el => {
             el.style.removeProperty('display');
         });
     }
@@ -1974,6 +1974,48 @@ function urlBase64ToUint8Array(base64String) {
 }
 
 // -------------------------------------------------------------
+// Admin Section Category Switching
+// -------------------------------------------------------------
+function switchAdminSection(sectionId) {
+    // Hide all admin sections
+    document.querySelectorAll('.admin-section').forEach(el => {
+        el.style.display = 'none';
+        el.classList.remove('active');
+    });
+
+    // Remove active state from all sidebar category buttons
+    document.querySelectorAll('.admin-nav-item').forEach(el => el.classList.remove('active'));
+
+    // Activate the targeted category button
+    const navBtn = document.getElementById('adminNav-' + sectionId);
+    if (navBtn) navBtn.classList.add('active');
+
+    // Display the targeted category section
+    const targetSection = document.getElementById('adminSection-' + sectionId);
+    if (targetSection) {
+        targetSection.style.display = 'block';
+        targetSection.classList.add('active');
+    }
+
+    // Dynamic data loading for the opened section
+    if (sectionId === 'dashboard') {
+        if (currentUser && currentUser.role === 'admin') loadAdminOverview();
+    } else if (sectionId === 'payments') {
+        if (currentUser && currentUser.role === 'admin') loadAdminOverview();
+    } else if (sectionId === 'players') {
+        if (currentUser && currentUser.role === 'admin') loadAdminUsers();
+    } else if (sectionId === 'matches') {
+        if (currentUser && currentUser.role === 'moderator') {
+            loadMatches();
+        } else {
+            loadAdminOverview();
+        }
+    } else if (sectionId === 'moderators') {
+        if (currentUser && currentUser.role === 'admin') loadModeratorScoreboard();
+    }
+}
+
+// -------------------------------------------------------------
 // Tab Switching & Modal Helpers
 // -------------------------------------------------------------
 function switchTab(tabId) {
@@ -1992,11 +2034,10 @@ function switchTab(tabId) {
 
     if (tabId === 'tab-admin') {
         applyRolePermissionsUI();
-        if (currentUser && currentUser.role === 'admin') {
-            loadAdminOverview();
-            loadModeratorScoreboard();
-        } else if (currentUser && currentUser.role === 'moderator') {
-            loadMatches();
+        if (currentUser && currentUser.role === 'moderator') {
+            switchAdminSection('matches');
+        } else {
+            switchAdminSection('dashboard');
         }
     }
 

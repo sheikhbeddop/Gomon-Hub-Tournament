@@ -85,10 +85,41 @@ function showToast(message, type = 'info') {
     }, 4500);
 }
 
+let splashMinTimePassed = false;
+let splashDismissRequested = false;
+
+setTimeout(() => {
+    splashMinTimePassed = true;
+    if (splashDismissRequested) {
+        doDismissSplashScreen();
+    }
+}, 850);
+
+function dismissSplashScreen() {
+    splashDismissRequested = true;
+    if (splashMinTimePassed) {
+        doDismissSplashScreen();
+    }
+}
+
+function doDismissSplashScreen() {
+    const splash = document.getElementById('appSplashScreen');
+    if (splash && splash.style.display !== 'none') {
+        splash.style.opacity = '0';
+        splash.style.pointerEvents = 'none';
+        setTimeout(() => {
+            splash.style.display = 'none';
+        }, 400);
+    }
+}
+
 // -------------------------------------------------------------
 // Initialization on Page Load
 // -------------------------------------------------------------
 document.addEventListener('DOMContentLoaded', async () => {
+    // Safety fallback: splash screen will dismiss automatically after 2.5s
+    setTimeout(doDismissSplashScreen, 2500);
+
     // Check for admin impersonation banner
     if (sessionStorage.getItem('admin_backup_token')) {
         document.getElementById('impersonationBanner').style.display = 'block';
@@ -96,8 +127,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     await loadPublicInfo();
     await initAuth();
-    await loadMatches();
-    initWebSocket();
     initServiceWorker();
 });
 
@@ -152,12 +181,37 @@ async function loadPublicInfo() {
 // Authentication & Profile
 // -------------------------------------------------------------
 async function initAuth() {
+    token = localStorage.getItem('ff_token');
+    const cachedUserStr = localStorage.getItem('ff_user');
+
     if (!token) {
+        // Unauthenticated: Strictly hide inner app & force full-screen login
+        document.body.classList.add('not-authenticated');
+        document.body.classList.remove('authenticated');
+        const mainApp = document.getElementById('mainAppWrapper');
+        if (mainApp) mainApp.style.display = 'none';
         renderLoggedOutNav();
-        setTimeout(() => {
-            if (!token) openModal('authModal');
-        }, 300);
+        openModal('authModal');
+        dismissSplashScreen();
         return;
+    }
+
+    // Has token: restore cached user immediately (instant zero-lag UI)
+    if (cachedUserStr) {
+        try {
+            currentUser = JSON.parse(cachedUserStr);
+            document.body.classList.remove('not-authenticated');
+            document.body.classList.add('authenticated');
+            const mainApp = document.getElementById('mainAppWrapper');
+            if (mainApp) mainApp.style.display = 'block';
+            closeModal('authModal');
+            renderLoggedInNav();
+            dismissSplashScreen();
+            loadMatches();
+            initWebSocket();
+        } catch (e) {
+            console.error('Error parsing cached user:', e);
+        }
     }
 
     try {
@@ -166,18 +220,32 @@ async function initAuth() {
         });
         if (res.ok) {
             currentUser = await res.json();
+            localStorage.setItem('ff_user', JSON.stringify(currentUser));
+            document.body.classList.remove('not-authenticated');
+            document.body.classList.add('authenticated');
+            const mainApp = document.getElementById('mainAppWrapper');
+            if (mainApp) mainApp.style.display = 'block';
+            closeModal('authModal');
             renderLoggedInNav();
             loadWalletHistory();
+            loadMatches();
+            initWebSocket();
             if (currentUser.role === 'admin') {
-                document.getElementById('tabBtn-admin').style.display = 'inline-flex';
+                const adminTabBtn = document.getElementById('tabBtn-admin');
+                if (adminTabBtn) adminTabBtn.style.display = 'inline-flex';
                 loadAdminOverview();
             }
-        } else {
-            // Token expired or invalid
+        } else if (res.status === 403) {
+            const data = await res.json();
+            alert(data.detail || "🚨 আপনার অ্যাকাউন্টটি ব্যান করা হয়েছে!");
+            logout(false);
+        } else if (res.status === 401) {
             logout(false);
         }
     } catch (e) {
-        console.error('Auth verification failed', e);
+        console.warn('Network issue during auth check. Keeping cached login session intact.', e);
+    } finally {
+        dismissSplashScreen();
     }
 }
 
@@ -225,11 +293,16 @@ function renderLoggedOutNav() {
 
 function logout(manual = true) {
     localStorage.removeItem('ff_token');
+    localStorage.removeItem('ff_user');
     token = null;
     currentUser = null;
+    document.body.classList.remove('authenticated');
+    document.body.classList.add('not-authenticated');
+    const mainApp = document.getElementById('mainAppWrapper');
+    if (mainApp) mainApp.style.display = 'none';
     renderLoggedOutNav();
+    openModal('authModal');
     if (manual) showToast('লগআউট সফল হয়েছে', 'info');
-    loadMatches();
 }
 
 function exitImpersonation() {
@@ -293,14 +366,21 @@ async function handleLoginSubmit(e) {
         const data = await res.json();
         if (res.ok) {
             token = data.token;
-            localStorage.setItem('ff_token', token);
             currentUser = data.user;
+            localStorage.setItem('ff_token', token);
+            localStorage.setItem('ff_user', JSON.stringify(currentUser));
+            document.body.classList.remove('not-authenticated');
+            document.body.classList.add('authenticated');
+            const mainApp = document.getElementById('mainAppWrapper');
+            if (mainApp) mainApp.style.display = 'block';
             closeModal('authModal');
+            dismissSplashScreen();
             showToast(`স্বাগতম, ${currentUser.username}! লগইন সফল।`, 'success');
             playSound('success');
             renderLoggedInNav();
             loadMatches();
             loadWalletHistory();
+            initWebSocket();
             if (currentUser.role === 'admin') {
                 document.getElementById('tabBtn-admin').style.display = 'inline-flex';
                 loadAdminOverview();
@@ -342,14 +422,21 @@ async function handleRegisterSubmit(e) {
         const data = await res.json();
         if (res.ok) {
             token = data.token;
-            localStorage.setItem('ff_token', token);
             currentUser = data.user;
+            localStorage.setItem('ff_token', token);
+            localStorage.setItem('ff_user', JSON.stringify(currentUser));
+            document.body.classList.remove('not-authenticated');
+            document.body.classList.add('authenticated');
+            const mainApp = document.getElementById('mainAppWrapper');
+            if (mainApp) mainApp.style.display = 'block';
             closeModal('authModal');
+            dismissSplashScreen();
             showToast(`একাউন্ট তৈরি সফল! আপনার প্লেয়ার আইডি: ${currentUser.player_id}`, 'success');
             playSound('success');
             renderLoggedInNav();
             loadMatches();
             loadWalletHistory();
+            initWebSocket();
         } else {
             showToast(data.detail || 'রেজিস্ট্রেশন ব্যর্থ হয়েছে', 'error');
         }
@@ -1303,12 +1390,18 @@ function openModal(id) {
 }
 
 function closeModal(id) {
+    if (id === 'authModal' && !currentUser) {
+        return; // Locked: Cannot close without logging in
+    }
     const modal = document.getElementById(id);
     if (modal) modal.classList.remove('show');
 }
 
 window.onclick = (e) => {
     if (e.target.classList.contains('modal-overlay')) {
+        if (e.target.id === 'authModal' && !currentUser) {
+            return; // Locked: Cannot dismiss by clicking outside
+        }
         e.target.classList.remove('show');
     }
 };

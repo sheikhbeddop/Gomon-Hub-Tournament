@@ -5,7 +5,7 @@
 
 let currentUser = null;
 let token = localStorage.getItem('ff_token') || null;
-let adminBkashNumber = '01700000000';
+let adminBkashNumber = '01988279285';
 let vapidPublicKey = null;
 let ws = null;
 let allMatches = [];
@@ -153,7 +153,7 @@ async function loadPublicInfo() {
     try {
         const res = await fetch('/api/info?_t=' + Date.now());
         const data = await res.json();
-        adminBkashNumber = data.admin_bkash || '01700000000';
+        adminBkashNumber = data.admin_bkash || '01988279285';
         vapidPublicKey = data.vapid_public_key;
 
         const elBkash = document.getElementById('displayBkashNumber');
@@ -244,6 +244,7 @@ async function initAuth() {
             if (mainApp) mainApp.style.display = 'block';
             closeModal('authModal');
             renderLoggedInNav();
+            renderUserProfile();
             applyRolePermissionsUI();
             loadWalletHistory();
             loadMatches();
@@ -512,6 +513,7 @@ async function handleLoginSubmit(e) {
             showToast(`স্বাগতম, ${currentUser.username}! লগইন সফল।`, 'success');
             playSound('success');
             renderLoggedInNav();
+            renderUserProfile();
             loadMatches();
             loadWalletHistory();
             initWebSocket();
@@ -1114,6 +1116,9 @@ async function reviewDeposit(depId, action) {
 }
 
 // Admin Users Management & Direct Digits Add/Remove
+let adminUsersCache = [];
+let currentActionUser = null;
+
 async function loadAdminUsers(search = '') {
     if (!currentUser || currentUser.role !== 'admin') return;
     try {
@@ -1123,6 +1128,7 @@ async function loadAdminUsers(search = '') {
         });
         if (res.ok) {
             const users = await res.json();
+            adminUsersCache = users;
             renderAdminUsersTable(users);
         }
     } catch (e) {
@@ -1157,18 +1163,25 @@ function renderAdminUsersTable(users) {
                 <code id="passText_${u.id}" data-pass="${escapeHtml(u.plain_password)}" data-masked="true" style="font-family: monospace; font-size: 0.85rem; font-weight: 700; color: #00f59b; background: rgba(0, 245, 155, 0.08); padding: 3px 8px; border-radius: 4px; border: 1px solid rgba(0, 245, 155, 0.25); letter-spacing: 2px;">
                     ••••••••
                 </code>
-                <button type="button" id="passEyeBtn_${u.id}" class="btn btn-outline btn-xs" title="পাসওয়ার্ড দেখুন" onclick="togglePassVisibility(${u.id})" style="padding: 2px 5px; font-size: 0.72rem;">👁️</button>
-                <button type="button" class="btn btn-outline btn-xs" title="কপি করুন" onclick="copyUserPass('${escapeHtml(u.plain_password)}')" style="padding: 2px 5px; font-size: 0.72rem;">📋</button>
+                <button type="button" id="passEyeBtn_${u.id}" class="btn btn-outline btn-xs" title="পাসওয়ার্ড দেখুন" onclick="togglePassVisibility(${u.id}); event.stopPropagation();" style="padding: 2px 5px; font-size: 0.72rem;">👁️</button>
+                <button type="button" class="btn btn-outline btn-xs" title="কপি করুন" onclick="copyUserPass('${escapeHtml(u.plain_password)}'); event.stopPropagation();" style="padding: 2px 5px; font-size: 0.72rem;">📋</button>
             </div>
         ` : `
             <span style="color: var(--text-muted); font-size: 0.75rem; font-style: italic;">লগইন/রিসেট করুন</span>
         `;
 
+        let statusBadge = `<span class="badge-status approved">ACTIVE</span>`;
+        if (u.status === 'banned') {
+            statusBadge = `<span class="badge-status rejected">BANNED</span>`;
+        } else if (u.is_timed_out) {
+            statusBadge = `<span class="badge-status timeout">⏱️ TIMEOUT (${u.timeout_remaining_mins}m)</span>`;
+        }
+
         return `
-        <tr>
+        <tr class="user-table-row" onclick="openUserActionModal(${u.id})" title="ক্লিক করে এই প্লেয়ারের সম্পূর্ণ কন্ট্রোল প্যানেল খুলুন">
             <td style="font-family: monospace; font-size: 0.8rem;">${u.player_id}</td>
             <td>
-                <b>${escapeHtml(u.username)}</b>
+                <b style="color: #0284c7;">${escapeHtml(u.username)}</b>
                 ${u.role === 'admin' ? '<span class="tab-admin-badge" style="margin-left: 4px;">ADMIN</span>' : ''}
                 ${u.role === 'moderator' ? '<span class="tab-admin-badge" style="margin-left: 4px; background: var(--neon-cyan); color: #000;">MOD</span>' : ''}
             </td>
@@ -1177,44 +1190,473 @@ function renderAdminUsersTable(users) {
                 <div style="font-size: 0.75rem; color: var(--text-muted); font-family: monospace;">UID: ${escapeHtml(u.ff_uid)}</div>
             </td>
             <td style="font-family: monospace;">${escapeHtml(u.phone)}</td>
-            <td>${passDisplay}</td>
+            <td onclick="event.stopPropagation()">${passDisplay}</td>
             <td>
                 <span style="font-family: 'Rajdhani'; font-weight: 800; font-size: 1.1rem; color: var(--neon-amber);">
                     ${u.digits_balance} 🪙
                 </span>
             </td>
-            <td>
-                <span class="badge-status ${u.status === 'active' ? 'approved' : 'rejected'}">${u.status}</span>
-            </td>
-            <td>
-                <div style="display: flex; gap: 6px; flex-wrap: wrap;">
-                    <button class="btn btn-outline btn-sm" onclick="openAdjustDigitsModal(${u.id}, '${escapeHtml(u.username)}', ${u.digits_balance})" title="ডিজিট ব্যালেন্স পরিবর্তন">
-                        🪙 +/- ডিজিট
+            <td>${statusBadge}</td>
+            <td onclick="event.stopPropagation()">
+                <div style="display: flex; gap: 6px; flex-wrap: wrap; align-items: center;">
+                    <button type="button" class="btn-action-manage" onclick="openUserActionModal(${u.id}); event.stopPropagation();" title="সম্পূর্ণ কন্ট্রোল প্যানেল খুলুন">
+                        ⚙️ কন্ট্রোল
                     </button>
-                    <button class="btn btn-neon btn-sm" onclick="openResetPasswordModal(${u.id}, '${escapeHtml(u.username)}', '${escapeHtml(u.player_id)}')" style="border-color: #00d2ff; color: #00d2ff;" title="পাসওয়ার্ড পরিবর্তন করুন">
-                        🔒 রিসেট
+                    <button type="button" class="btn btn-outline btn-sm" onclick="openAdjustDigitsModal(${u.id}, '${escapeHtml(u.username)}', ${u.digits_balance}); event.stopPropagation();" title="ডিজিট ব্যালেন্স পরিবর্তন">
+                        🪙 +/-
                     </button>
                     ${u.role !== 'admin' ? `
-                        ${u.role === 'moderator' ? `
-                            <button class="btn btn-outline btn-sm" onclick="setUserRole(${u.id}, 'player')" style="color: var(--neon-amber); border-color: var(--neon-amber);" title="মডারেটর পদ বাতিল করুন">
-                                🛡️ রিমুভ মড
-                            </button>
-                        ` : `
-                            <button class="btn btn-outline btn-sm" onclick="setUserRole(${u.id}, 'moderator')" style="color: var(--neon-cyan); border-color: var(--neon-cyan);" title="মডারেটর হিসেবে প্রমোট করুন">
-                                🛡️ মডারেটর বানান
-                            </button>
-                        `}
-                        <button class="btn btn-neon btn-sm" onclick="impersonateUser(${u.id})" title="প্লেয়ার প্রোফাইলে সরাসরি ঢুকুন">
-                            🔑 লগইন
-                        </button>
-                        <button class="btn btn-crimson btn-sm" onclick="toggleUserStatus(${u.id})" title="অ্যাকাউন্ট ব্যান / আনব্যান">
-                            ${u.status === 'active' ? '🚫 ব্যান' : '✅ আনব্যান'}
+                        <button type="button" class="btn btn-crimson btn-sm" onclick="confirmDeleteUser(${u.id}, '${escapeHtml(u.username)}'); event.stopPropagation();" title="প্লেয়ার অ্যাকাউন্ট চিরতরে মুছে ফেলুন" style="padding: 4px 8px; font-size: 0.75rem;">
+                            🗑️ ডিলিট
                         </button>
                     ` : ''}
                 </div>
             </td>
         </tr>
     `}).join('');
+}
+
+// Manual User Creation
+function openCreateUserModal() {
+    const uName = document.getElementById('newPlayerUsername');
+    const uPhone = document.getElementById('newPlayerPhone');
+    const uDigits = document.getElementById('newPlayerDigits');
+    const uRole = document.getElementById('newPlayerRole');
+    const uIgn = document.getElementById('newPlayerIgn');
+    const uUid = document.getElementById('newPlayerUid');
+
+    if (uName) uName.value = '';
+    if (uPhone) uPhone.value = '';
+    if (uDigits) uDigits.value = '0';
+    if (uRole) uRole.value = 'player';
+    if (uIgn) uIgn.value = '';
+    if (uUid) uUid.value = '';
+    generateNewPlayerPassword();
+    openModal('adminCreateUserModal');
+}
+
+function generateNewPlayerPassword() {
+    const randNum = Math.floor(1000 + Math.random() * 9000);
+    const passInput = document.getElementById('newPlayerPassword');
+    if (passInput) {
+        passInput.value = `gomon${randNum}`;
+    }
+}
+
+async function handleAdminCreateUserSubmit(e) {
+    e.preventDefault();
+    const username = document.getElementById('newPlayerUsername').value.trim();
+    const phone = document.getElementById('newPlayerPhone').value.trim();
+    const password = document.getElementById('newPlayerPassword').value.trim();
+    const digits_balance = parseInt(document.getElementById('newPlayerDigits').value) || 0;
+    const role = document.getElementById('newPlayerRole').value;
+    const ff_ign = document.getElementById('newPlayerIgn').value.trim();
+    const ff_uid = document.getElementById('newPlayerUid').value.trim();
+
+    if (!username || username.length < 3) {
+        showToast('ইউজারনেম কমপক্ষে ৩ অক্ষরের হতে হবে', 'error');
+        return;
+    }
+    if (!phone || phone.length < 11) {
+        showToast('১১ ডিজিটের সঠিক ফোন নম্বর দিন', 'error');
+        return;
+    }
+    if (!password || password.length < 4) {
+        showToast('পাসওয়ার্ড কমপক্ষে ৪ অক্ষরের হতে হবে', 'error');
+        return;
+    }
+
+    const submitBtn = document.getElementById('btnSubmitCreateUser');
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerText = 'তৈরি হচ্ছে...';
+    }
+
+    try {
+        const res = await fetch('/api/admin/users/create', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+                username,
+                phone,
+                password,
+                digits_balance,
+                role,
+                ff_ign,
+                ff_uid
+            })
+        });
+
+        const data = await res.json();
+        if (res.ok) {
+            closeModal('adminCreateUserModal');
+            showToast(`প্লেয়ার @${username} তৈরি সফল! পাসওয়ার্ড: ${password}`, 'success');
+            try {
+                navigator.clipboard.writeText(`ইউজারনেম: ${username}\nপাসওয়ার্ড: ${password}`);
+            } catch (err) {}
+            loadAdminUsers();
+            loadAdminOverview();
+        } else {
+            showToast(data.detail || 'ইউজার তৈরি করা সম্ভব হয়নি', 'error');
+        }
+    } catch (err) {
+        showToast('সার্ভার এরর, পুনরায় চেষ্টা করুন', 'error');
+    } finally {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerText = '✅ অ্যাকাউন্ট তৈরি করুন';
+        }
+    }
+}
+
+// Interactive User Action Modal
+function openUserActionModal(userId) {
+    const user = adminUsersCache.find(u => u.id === userId);
+    if (!user) {
+        showToast('প্লেয়ার তথ্য পাওয়া যায়নি', 'error');
+        return;
+    }
+    currentActionUser = user;
+
+    document.getElementById('actionTargetUserId').value = user.id;
+    document.getElementById('userActionUsername').innerText = `@${user.username}`;
+    document.getElementById('userActionPlayerId').innerText = user.player_id || '';
+    document.getElementById('userActionBalance').innerText = `${user.digits_balance} 🪙`;
+    document.getElementById('userActionPhone').innerText = user.phone || '-';
+
+    // Role badge
+    const roleBadge = document.getElementById('userActionRoleBadge');
+    if (roleBadge) {
+        roleBadge.innerText = (user.role || 'player').toUpperCase();
+        roleBadge.style.background = user.role === 'admin' ? '#ef4444' : (user.role === 'moderator' ? '#06b6d4' : '#3b82f6');
+        roleBadge.style.color = '#ffffff';
+    }
+
+    // Status badge
+    const statusBox = document.getElementById('userActionStatusBadge');
+    if (statusBox) {
+        if (user.status === 'banned') {
+            statusBox.innerHTML = `<span class="badge-status rejected">BANNED</span>`;
+        } else if (user.is_timed_out) {
+            statusBox.innerHTML = `<span class="badge-status timeout">TIMEOUT</span>`;
+        } else {
+            statusBox.innerHTML = `<span class="badge-status approved">ACTIVE</span>`;
+        }
+    }
+
+    // Timeout banner
+    const timeoutBanner = document.getElementById('userActionTimeoutBanner');
+    const timeoutRem = document.getElementById('userActionTimeoutRem');
+    if (timeoutBanner && timeoutRem) {
+        if (user.is_timed_out) {
+            timeoutBanner.style.display = 'flex';
+            timeoutRem.innerText = user.timeout_remaining_mins || 0;
+        } else {
+            timeoutBanner.style.display = 'none';
+        }
+    }
+
+    // Password
+    const passEl = document.getElementById('userActionPassText');
+    const eyeBtn = document.getElementById('userActionPassEyeBtn');
+    if (passEl) {
+        passEl.setAttribute('data-pass', user.plain_password || '');
+        passEl.setAttribute('data-masked', 'true');
+        passEl.innerText = '••••••••';
+    }
+    if (eyeBtn) {
+        eyeBtn.innerText = '👁️';
+    }
+
+    // Digit fields
+    const digitInput = document.getElementById('userActionDigitAmount');
+    const reasonInput = document.getElementById('userActionDigitReason');
+    if (digitInput) digitInput.value = '';
+    if (reasonInput) reasonInput.value = '';
+
+    // Timeout input
+    const toInput = document.getElementById('userActionCustomTimeout');
+    if (toInput) toInput.value = '';
+
+    // Moderator toggle button
+    const btnMod = document.getElementById('btnToggleModRole');
+    if (btnMod) {
+        if (user.role === 'admin') {
+            btnMod.style.display = 'none';
+        } else {
+            btnMod.style.display = 'inline-block';
+            if (user.role === 'moderator') {
+                btnMod.innerText = '🛡️ সাধারণ প্লেয়ার করুন';
+                btnMod.style.color = '#d97706';
+                btnMod.style.borderColor = '#f59e0b';
+            } else {
+                btnMod.innerText = '🛡️ মডারেটর বানান';
+                btnMod.style.color = '#0284c7';
+                btnMod.style.borderColor = '#38bdf8';
+            }
+        }
+    }
+
+    // Ban toggle button
+    const btnBan = document.getElementById('btnToggleBanStatus');
+    if (btnBan) {
+        if (user.role === 'admin') {
+            btnBan.style.display = 'none';
+        } else {
+            btnBan.style.display = 'inline-block';
+            if (user.status === 'banned') {
+                btnBan.innerText = '✅ অ্যাকাউন্ট আনব্যান করুন';
+                btnBan.style.borderColor = '#10b981';
+                btnBan.style.color = '#059669';
+            } else {
+                btnBan.innerText = '🚫 অ্যাকাউন্ট ব্যান করুন';
+                btnBan.style.borderColor = '#ef4444';
+                btnBan.style.color = '#dc2626';
+            }
+        }
+    }
+
+    openModal('adminUserActionModal');
+}
+
+function toggleActionModalPass() {
+    const el = document.getElementById('userActionPassText');
+    const btn = document.getElementById('userActionPassEyeBtn');
+    if (!el || !btn) return;
+    const isMasked = el.getAttribute('data-masked') === 'true';
+    if (isMasked) {
+        el.innerText = el.getAttribute('data-pass') || 'লগইন পাসওয়ার্ড নেই';
+        el.setAttribute('data-masked', 'false');
+        btn.innerText = '🙈';
+    } else {
+        el.innerText = '••••••••';
+        el.setAttribute('data-masked', 'true');
+        btn.innerText = '👁️';
+    }
+}
+
+function copyActionModalPass() {
+    const el = document.getElementById('userActionPassText');
+    if (el) {
+        const p = el.getAttribute('data-pass');
+        if (p) {
+            navigator.clipboard.writeText(p);
+            showToast(`পাসওয়ার্ড '${p}' কপি করা হয়েছে!`, 'success');
+        } else {
+            showToast('পাসওয়ার্ড সংরক্ষিত নেই', 'info');
+        }
+    }
+}
+
+function setActionDigitInput(amount) {
+    const input = document.getElementById('userActionDigitAmount');
+    if (input) {
+        input.value = amount;
+    }
+}
+
+async function executeDigitAdjustment(type) {
+    if (!currentActionUser) return;
+    const amtInput = document.getElementById('userActionDigitAmount');
+    const reasonInput = document.getElementById('userActionDigitReason');
+    const val = parseInt(amtInput.value);
+    if (!val || val <= 0) {
+        showToast('সঠিক ডিজিট পরিমাণ দিন (যেমন: 50)', 'error');
+        return;
+    }
+
+    const finalAmount = type === 'subtract' ? -val : val;
+    const reason = reasonInput.value.trim() || (type === 'add' ? 'Manual Digits Added' : 'Manual Digits Deducted');
+
+    try {
+        const res = await fetch('/api/admin/users/adjust-digits', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+                target_user_id: currentActionUser.id,
+                amount: finalAmount,
+                reason: reason
+            })
+        });
+        const data = await res.json();
+        if (res.ok) {
+            showToast(data.message, 'success');
+            playSound('coin');
+            currentActionUser.digits_balance = data.new_balance;
+            document.getElementById('userActionBalance').innerText = `${data.new_balance} 🪙`;
+            amtInput.value = '';
+            reasonInput.value = '';
+            loadAdminUsers();
+            loadAdminOverview();
+        } else {
+            showToast(data.detail || 'ডিজিট পরিবর্তন করা যায়নি', 'error');
+        }
+    } catch (e) {
+        showToast('সার্ভার যোগাযোগ ব্যর্থ', 'error');
+    }
+}
+
+async function applyQuickTimeout(minutes) {
+    if (!currentActionUser) return;
+    if (currentActionUser.role === 'admin') {
+        showToast('Master Admin কে টাইম-আউট করা যাবে না', 'error');
+        return;
+    }
+    if (!confirm(`আপনি কি নিশ্চিত যে @${currentActionUser.username} কে ${minutes} মিনিটের জন্য টাইম-আউট করবেন?`)) return;
+    await setUserTimeout(currentActionUser.id, minutes);
+}
+
+async function applyCustomTimeout() {
+    if (!currentActionUser) return;
+    const mins = parseInt(document.getElementById('userActionCustomTimeout').value);
+    if (!mins || mins <= 0) {
+        showToast('সঠিক সময় (মিনিট) লিখুন', 'error');
+        return;
+    }
+    if (currentActionUser.role === 'admin') {
+        showToast('Master Admin কে টাইম-আউট করা যাবে না', 'error');
+        return;
+    }
+    await setUserTimeout(currentActionUser.id, mins);
+}
+
+async function clearUserTimeoutFromModal() {
+    if (!currentActionUser) return;
+    await setUserTimeout(currentActionUser.id, 0);
+}
+
+async function setUserTimeout(userId, minutes) {
+    try {
+        const res = await fetch(`/api/admin/users/${userId}/timeout`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+                duration_minutes: minutes,
+                reason: minutes > 0 ? `Suspended for ${minutes} mins by Admin` : 'Timeout lifted'
+            })
+        });
+        const data = await res.json();
+        if (res.ok) {
+            showToast(data.message, 'info');
+            await loadAdminUsers();
+            openUserActionModal(userId);
+        } else {
+            showToast(data.detail || 'টাইম-আউট আপডেট করা যায়নি', 'error');
+        }
+    } catch (e) {
+        showToast('সার্ভারে যোগাযোগ করা যায়নি', 'error');
+    }
+}
+
+async function toggleBanFromActionModal() {
+    if (!currentActionUser) return;
+    if (currentActionUser.role === 'admin') {
+        showToast('Master Admin কে ব্যান করা যাবে না', 'error');
+        return;
+    }
+    const isBanning = currentActionUser.status !== 'banned';
+    const msg = isBanning ? 
+        `আপনি কি নিশ্চিত যে @${currentActionUser.username} কে ব্যান করবেন? এই অ্যাকাউন্ট প্ল্যাটফর্ম থেকে ব্লক হয়ে যাবে!` :
+        `আপনি কি @${currentActionUser.username} এর অ্যাকাউন্ট আনব্যান করতে চান?`;
+    if (!confirm(msg)) return;
+
+    try {
+        const res = await fetch(`/api/admin/users/${currentActionUser.id}/toggle-status`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await res.json();
+        if (res.ok) {
+            showToast(`স্ট্যাটাস পরিবর্তন হয়েছে: ${data.new_status}`, 'info');
+            await loadAdminUsers();
+            openUserActionModal(currentActionUser.id);
+        } else {
+            showToast(data.detail || 'ব্যর্থ হয়েছে', 'error');
+        }
+    } catch (e) {
+        showToast('সার্ভার এরর', 'error');
+    }
+}
+
+async function toggleModRoleFromModal() {
+    if (!currentActionUser) return;
+    if (currentActionUser.role === 'admin') {
+        showToast('Master Admin রোল পরিবর্তনযোগ্য নয়', 'error');
+        return;
+    }
+    const newRole = currentActionUser.role === 'moderator' ? 'player' : 'moderator';
+    const msg = newRole === 'moderator' ?
+        `আপনি কি @${currentActionUser.username} কে মডারেটর হিসেবে নিয়োগ দিতে চান?` :
+        `আপনি কি @${currentActionUser.username} এর মডারেটর পদ বাতিল করে সাধারণ প্লেয়ার করতে চান?`;
+    if (!confirm(msg)) return;
+
+    try {
+        const res = await fetch(`/api/admin/users/${currentActionUser.id}/set-role`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ role: newRole })
+        });
+        const data = await res.json();
+        if (res.ok) {
+            showToast(data.message, 'success');
+            await loadAdminUsers();
+            openUserActionModal(currentActionUser.id);
+        } else {
+            showToast(data.detail || 'রোল পরিবর্তন করা যায়নি', 'error');
+        }
+    } catch (e) {
+        showToast('সার্ভার এরর', 'error');
+    }
+}
+
+async function deleteUserFromActionModal() {
+    if (!currentActionUser) return;
+    confirmDeleteUser(currentActionUser.id, currentActionUser.username);
+}
+
+async function confirmDeleteUser(userId, username) {
+    if (!confirm(`🚨 সতর্কবার্তা: আপনি কি নিশ্চিত যে @${username} অ্যাকাউন্টটি চিরতরে মুছে ফেলবেন (DELETE)?\n\nএই প্লেয়ারের সমস্ত ডাটা, ওয়ালেট রেকর্ড ও টুর্নামেন্ট হিস্টোরি স্থায়ীভাবে মুছে যাবে এবং এটি আর ফিরিয়ে আনা যাবে না!`)) {
+        return;
+    }
+    try {
+        const res = await fetch(`/api/admin/users/${userId}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await res.json();
+        if (res.ok) {
+            closeModal('adminUserActionModal');
+            showToast(`@${data.deleted_username || username} অ্যাকাউন্টটি চিরতরে ডিলিট করা হয়েছে!`, 'success');
+            loadAdminUsers();
+            loadAdminOverview();
+        } else {
+            showToast(data.detail || 'অ্যাকাউন্ট ডিলিট করা যায়নি', 'error');
+        }
+    } catch (e) {
+        showToast('সার্ভারে যোগাযোগ করা যায়নি', 'error');
+    }
+}
+
+function openResetPasswordFromActionModal() {
+    if (!currentActionUser) return;
+    openResetPasswordModal(currentActionUser.id, currentActionUser.username, currentActionUser.player_id);
+}
+
+function impersonateFromActionModal() {
+    if (!currentActionUser) return;
+    impersonateUser(currentActionUser.id);
 }
 
 function togglePassVisibility(userId) {
@@ -1765,7 +2207,17 @@ function handleWsMessage(data) {
         if (currentUser) {
             currentUser.digits_balance = data.digits_balance;
             document.getElementById('navDigitsBalance').innerText = data.digits_balance;
+            renderUserProfile();
             playSound('coin');
+            if (data.notice) {
+                showToast(data.notice, 'success');
+            }
+        }
+    } else if (data.type === 'WIN_POINTS_UPDATED') {
+        if (currentUser) {
+            currentUser.win_points = data.win_points;
+            renderUserProfile();
+            playSound('bell');
             if (data.notice) {
                 showToast(data.notice, 'success');
             }
@@ -2016,9 +2468,98 @@ function switchAdminSection(sectionId) {
 }
 
 // -------------------------------------------------------------
+// Player Profile & Categories (Details & Deposit)
+// -------------------------------------------------------------
+function switchProfileCategory(category) {
+    const secDetails = document.getElementById('profileSec-details');
+    const secDeposit = document.getElementById('profileSec-deposit');
+    const btnDetails = document.getElementById('btnProfileCat-details');
+    const btnDeposit = document.getElementById('btnProfileCat-deposit');
+
+    if (category === 'deposit') {
+        if (secDetails) secDetails.style.display = 'none';
+        if (secDeposit) secDeposit.style.display = 'block';
+        if (btnDetails) btnDetails.classList.remove('active');
+        if (btnDeposit) btnDeposit.classList.add('active');
+        loadWalletHistory();
+    } else {
+        if (secDetails) secDetails.style.display = 'block';
+        if (secDeposit) secDeposit.style.display = 'none';
+        if (btnDetails) btnDetails.classList.add('active');
+        if (btnDeposit) btnDeposit.classList.remove('active');
+        renderUserProfile();
+    }
+}
+
+function renderUserProfile() {
+    const notAuthCard = document.getElementById('profileNotAuthCard');
+    const authContent = document.getElementById('profileAuthContent');
+
+    if (!currentUser) {
+        if (notAuthCard) notAuthCard.style.display = 'block';
+        if (authContent) authContent.style.display = 'none';
+        return;
+    }
+
+    if (notAuthCard) notAuthCard.style.display = 'none';
+    if (authContent) authContent.style.display = 'block';
+
+    const elUser = document.getElementById('profUsername');
+    if (elUser) elUser.innerText = currentUser.username || 'প্লেয়ার';
+
+    const elPid = document.getElementById('profPlayerId');
+    if (elPid) elPid.innerText = currentUser.player_id || 'ID N/A';
+
+    const elPhone = document.getElementById('profPhone');
+    if (elPhone) elPhone.innerText = currentUser.phone || 'দেওয়া হয়নি';
+
+    const elEmail = document.getElementById('profEmail');
+    if (elEmail) elEmail.innerText = currentUser.email || 'দেওয়া হয়নি';
+
+    const elBal = document.getElementById('profDigitsBalance');
+    if (elBal) elBal.innerText = currentUser.digits_balance != null ? currentUser.digits_balance : 0;
+
+    const elPts = document.getElementById('profWinPoints');
+    if (elPts) elPts.innerText = currentUser.win_points != null ? currentUser.win_points : 0;
+
+    const elJoined = document.getElementById('profMatchesJoined');
+    if (elJoined) elJoined.innerText = currentUser.matches_joined != null ? currentUser.matches_joined : 0;
+
+    const elWon = document.getElementById('profMatchesWon');
+    if (elWon) elWon.innerText = currentUser.matches_won != null ? currentUser.matches_won : 0;
+
+    const elRole = document.getElementById('profRoleBadge');
+    if (elRole) {
+        elRole.innerText = (currentUser.role || 'PLAYER').toUpperCase();
+        elRole.className = 'badge-status ' + (currentUser.role === 'admin' ? 'approved' : (currentUser.role === 'moderator' ? 'timeout' : 'pending'));
+    }
+
+    const elIgn = document.getElementById('profFFIgn');
+    if (elIgn) elIgn.innerText = currentUser.ff_ign || 'যুক্ত করা হয়নি';
+
+    const elUid = document.getElementById('profFFUid');
+    if (elUid) elUid.innerText = currentUser.ff_uid || 'যুক্ত করা হয়নি';
+
+    const elCreated = document.getElementById('profCreatedAt');
+    if (elCreated) elCreated.innerText = currentUser.created_at ? currentUser.created_at.split(' ')[0] : 'সম্প্রতি';
+}
+
+function copyProfilePlayerId() {
+    if (currentUser && currentUser.player_id) {
+        navigator.clipboard.writeText(currentUser.player_id);
+        showToast(`প্লেয়ার আইডি (${currentUser.player_id}) কপি হয়েছে!`, 'success');
+    }
+}
+
+// -------------------------------------------------------------
 // Tab Switching & Modal Helpers
 // -------------------------------------------------------------
 function switchTab(tabId) {
+    if (tabId === 'tab-recharge') {
+        tabId = 'tab-profile';
+        setTimeout(() => switchProfileCategory('deposit'), 50);
+    }
+
     document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
     document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
     document.querySelectorAll('.mobile-nav-item').forEach(el => el.classList.remove('active'));
@@ -2032,7 +2573,9 @@ function switchTab(tabId) {
     const mBtn = document.getElementById('mNav-' + tabId.replace('tab-', ''));
     if (mBtn) mBtn.classList.add('active');
 
-    if (tabId === 'tab-admin') {
+    if (tabId === 'tab-profile') {
+        renderUserProfile();
+    } else if (tabId === 'tab-admin') {
         applyRolePermissionsUI();
         if (currentUser && currentUser.role === 'moderator') {
             switchAdminSection('matches');

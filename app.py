@@ -9,7 +9,7 @@ import sqlite3
 import base64
 import re
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 # Configure UTF-8 for Windows console
 if sys.platform == "win32":
@@ -148,8 +148,10 @@ def init_db():
             ff_ign TEXT NOT NULL,
             ff_uid TEXT NOT NULL,
             digits_balance INTEGER DEFAULT 0,
+            win_points INTEGER DEFAULT 0,
             role TEXT DEFAULT 'player',
             status TEXT DEFAULT 'active',
+            timeout_until DATETIME,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
 
@@ -228,6 +230,7 @@ def init_db():
             phone TEXT,
             email TEXT COLLATE NOCASE,
             ff_uid TEXT,
+            password_hash TEXT DEFAULT '',
             reason TEXT,
             banned_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
@@ -249,6 +252,21 @@ def init_db():
         except Exception:
             pass
 
+        try:
+            conn.execute("ALTER TABLE users ADD COLUMN timeout_until DATETIME")
+        except Exception:
+            pass
+
+        try:
+            conn.execute("ALTER TABLE users ADD COLUMN win_points INTEGER DEFAULT 0")
+        except Exception:
+            pass
+
+        try:
+            conn.execute("ALTER TABLE banned_records ADD COLUMN password_hash TEXT DEFAULT ''")
+        except Exception:
+            pass
+
         # Migration: Ensure moderator tracking columns exist in matches table
         for col, ctype in [
             ("room_updated_by_id", "INTEGER DEFAULT 0"),
@@ -263,8 +281,12 @@ def init_db():
             except Exception:
                 pass
 
-        # Default Settings
-        conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('admin_bkash', '01700000000 (Personal)')")
+        # Default Settings - Permanent bKash 01988279285
+        conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('admin_bkash', '01988279285 (Personal)')")
+        try:
+            conn.execute("UPDATE settings SET value = '01988279285 (Personal)' WHERE key = 'admin_bkash'")
+        except Exception:
+            pass
         conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('notice', 'স্বাগতম! GOMON HUB টুর্নামেন্টে অংশ নিতে bKash এ ডিপোজিট করে সিডিউল থেকে জয়েন করুন!')")
         conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('site_title', 'GOMON HUB TOURNAMENT')")
 
@@ -273,8 +295,8 @@ def init_db():
         if not admin_row:
             admin_pass = hash_password("admin12345")
             conn.execute("""
-            INSERT INTO users (player_id, username, password_hash, phone, ff_ign, ff_uid, digits_balance, role, status)
-            VALUES ('FF-ADMIN', 'admin', ?, '01700000000', 'SUPER_ADMIN', '100000000', 999999, 'admin', 'active')
+            INSERT INTO users (player_id, username, password_hash, phone, ff_ign, ff_uid, digits_balance, win_points, role, status)
+            VALUES ('FF-ADMIN', 'admin', ?, '01988279285', 'SUPER_ADMIN', '100000000', 999999, 1000, 'admin', 'active')
             """, (admin_pass,))
             print("[INFO] Master Admin created: username='admin', password='admin12345'")
 
@@ -355,6 +377,28 @@ manager = ConnectionManager()
 # -------------------------------------------------------------
 # Dependencies (Authentication & Role Verification)
 # -------------------------------------------------------------
+def check_user_timeout(user: dict) -> tuple[bool, int]:
+    """Returns (is_timed_out, remaining_minutes)"""
+    timeout_val = user.get("timeout_until")
+    if not timeout_val:
+        return False, 0
+    try:
+        s = str(timeout_val).replace("Z", "+00:00")
+        if "T" in s:
+            t_dt = datetime.fromisoformat(s)
+        else:
+            t_dt = datetime.strptime(s.split(".")[0], "%Y-%m-%d %H:%M:%S")
+        if t_dt.tzinfo is None:
+            now_dt = datetime.utcnow()
+        else:
+            now_dt = datetime.now(timezone.utc)
+        if t_dt > now_dt:
+            rem = int((t_dt - now_dt).total_seconds() / 60) + 1
+            return True, rem
+    except Exception:
+        pass
+    return False, 0
+
 def get_current_user(request: Request):
     auth_header = request.headers.get("Authorization")
     if not auth_header or not auth_header.startswith("Bearer "):
@@ -371,7 +415,23 @@ def get_current_user(request: Request):
         raise HTTPException(status_code=401, detail="User not found")
     if user["status"] == "banned":
         raise HTTPException(status_code=403, detail="Your account has been suspended by Admin")
-    return dict(user)
+
+    user_dict = dict(user)
+    is_timed_out, rem_mins = check_user_timeout(user_dict)
+    if is_timed_out:
+        raise HTTPException(status_code=403, detail=f"আপনার অ্যাকাউন্টটি সাময়িকভাবে টাইম-আউটে রয়েছে! অবশিষ্ট সময়: {rem_mins} মিনিট।")
+    elif user["status"] == "timeout":
+        try:
+            c_fix = get_db()
+            with c_fix:
+                c_fix.execute("UPDATE users SET timeout_until = NULL, status = 'active' WHERE id = ?", (user["id"],))
+            c_fix.close()
+            user_dict["status"] = "active"
+            user_dict["timeout_until"] = None
+        except Exception:
+            pass
+
+    return user_dict
 
 def verify_admin(user: dict = Depends(get_current_user)):
     if user["role"] != "admin":
@@ -434,11 +494,30 @@ class AdminAdjustDigits(BaseModel):
     amount: int
     reason: str
 
+class AdminAdjustWinPoints(BaseModel):
+    target_user_id: int
+    amount: int
+    reason: Optional[str] = "Admin Win Points Adjustment"
+
 class AdminResetPassword(BaseModel):
     new_password: str = Field(..., min_length=4)
 
 class SetRoleRequest(BaseModel):
     role: str
+
+class AdminCreateUserRequest(BaseModel):
+    username: str
+    phone: str
+    password: str
+    email: Optional[str] = ""
+    ff_ign: Optional[str] = ""
+    ff_uid: Optional[str] = ""
+    digits_balance: Optional[int] = 0
+    role: Optional[str] = "player"
+
+class AdminTimeoutRequest(BaseModel):
+    duration_minutes: int
+    reason: Optional[str] = "Admin Timeout"
 
 class AdminNoticeRequest(BaseModel):
     title: str
@@ -469,7 +548,7 @@ def get_public_info():
         current_ver = CURRENT_CODE_VERSION
     return {
         "site_title": settings.get("site_title", "GOMON HUB TOURNAMENT"),
-        "admin_bkash": settings.get("admin_bkash", "01700000000"),
+        "admin_bkash": settings.get("admin_bkash", "01988279285 (Personal)"),
         "notice": settings.get("notice", ""),
         "app_version": current_ver,
         "app_update_notes": settings.get("app_update_notes", "GOMON HUB TOURNAMENT নতুন ইন্টারফেস ও সিকিউরিটি আপডেট।"),
@@ -702,6 +781,19 @@ def login(data: LoginRequest):
     if user["status"] == "banned":
         raise HTTPException(status_code=403, detail="আপনার অ্যাকাউন্টটি সাসপেন্ড / ব্যান করা হয়েছে!")
 
+    user_dict = dict(user)
+    is_timed_out, rem_mins = check_user_timeout(user_dict)
+    if is_timed_out:
+        raise HTTPException(status_code=403, detail=f"আপনার অ্যাকাউন্টটি সাময়িকভাবে টাইম-আউটে রয়েছে! অবশিষ্ট সময়: {rem_mins} মিনিট।")
+    elif user["status"] == "timeout":
+        try:
+            c_fix = get_db()
+            with c_fix:
+                c_fix.execute("UPDATE users SET timeout_until = NULL, status = 'active' WHERE id = ?", (user["id"],))
+            c_fix.close()
+        except Exception:
+            pass
+
     # Verify password against hash (raw and trimmed)
     is_valid = verify_password(user["password_hash"], raw_pass) or verify_password(user["password_hash"], trimmed_pass)
 
@@ -734,32 +826,86 @@ def login(data: LoginRequest):
         pass
 
     token = generate_token(user["id"], user["username"], user["role"])
+    
+    # Query extra stats for login response
+    u_dict = dict(user)
+    matches_joined = 0
+    win_points = u_dict.get("win_points") or 0
+    email = u_dict.get("email") or ""
+    status = u_dict.get("status") or "active"
+    created_at = str(u_dict.get("created_at") or "")
+    try:
+        c_stats = get_db()
+        j_row = c_stats.execute("SELECT COUNT(*) FROM participations WHERE user_id = ?", (u_dict["id"],)).fetchone()
+        if j_row:
+            matches_joined = j_row[0]
+        c_stats.close()
+    except Exception:
+        pass
+    matches_won = win_points // 100 if win_points >= 100 else (1 if win_points > 0 else 0)
+
     return {
         "success": True,
         "token": token,
         "user": {
-            "id": user["id"],
-            "player_id": user["player_id"],
-            "username": user["username"],
-            "digits_balance": user["digits_balance"],
-            "role": user["role"],
-            "ff_ign": user["ff_ign"],
-            "ff_uid": user["ff_uid"],
-            "phone": user["phone"]
+            "id": u_dict["id"],
+            "player_id": u_dict["player_id"],
+            "username": u_dict["username"],
+            "phone": u_dict.get("phone", ""),
+            "email": email,
+            "digits_balance": u_dict.get("digits_balance", 0),
+            "win_points": win_points,
+            "matches_joined": matches_joined,
+            "matches_won": matches_won,
+            "role": u_dict.get("role", "player"),
+            "status": status,
+            "ff_ign": u_dict.get("ff_ign", ""),
+            "ff_uid": u_dict.get("ff_uid", ""),
+            "created_at": created_at
         }
     }
 
 @app.get("/api/auth/me")
 def get_me(user: dict = Depends(get_current_user)):
+    matches_joined = 0
+    win_points = 0
+    email = ""
+    status = "active"
+    created_at = ""
+    try:
+        conn = get_db()
+        j_row = conn.execute("SELECT COUNT(*) FROM participations WHERE user_id = ?", (user["id"],)).fetchone()
+        if j_row:
+            matches_joined = j_row[0]
+        u_row = conn.execute("SELECT win_points, email, status, created_at FROM users WHERE id = ?", (user["id"],)).fetchone()
+        if u_row:
+            win_points = u_row["win_points"] if "win_points" in u_row.keys() and u_row["win_points"] is not None else 0
+            email = u_row["email"] if "email" in u_row.keys() and u_row["email"] else ""
+            status = u_row["status"] if "status" in u_row.keys() and u_row["status"] else "active"
+            created_at = str(u_row["created_at"]) if "created_at" in u_row.keys() and u_row["created_at"] else ""
+        conn.close()
+    except Exception:
+        win_points = user.get("win_points") or 0
+        email = user.get("email") or ""
+        status = user.get("status") or "active"
+
+    matches_won = win_points // 100 if win_points >= 100 else (1 if win_points > 0 else 0)
+
     return {
         "id": user["id"],
         "player_id": user["player_id"],
         "username": user["username"],
+        "phone": user.get("phone", ""),
+        "email": email,
         "digits_balance": user["digits_balance"],
+        "win_points": win_points,
+        "matches_joined": matches_joined,
+        "matches_won": matches_won,
         "role": user["role"],
-        "ff_ign": user["ff_ign"],
-        "ff_uid": user["ff_uid"],
-        "phone": user["phone"]
+        "status": status,
+        "ff_ign": user.get("ff_ign", ""),
+        "ff_uid": user.get("ff_uid", ""),
+        "created_at": created_at
     }
 
 # -------------------------------------------------------------
@@ -981,19 +1127,27 @@ def admin_list_users(search: Optional[str] = None, admin: dict = Depends(verify_
     if search:
         s = f"%{search.strip()}%"
         users = conn.execute("""
-        SELECT id, player_id, username, phone, ff_ign, ff_uid, digits_balance, role, status, created_at, plain_password
+        SELECT id, player_id, username, phone, email, ff_ign, ff_uid, digits_balance, win_points, role, status, created_at, plain_password, timeout_until
         FROM users
-        WHERE username LIKE ? OR player_id LIKE ? OR phone LIKE ? OR ff_uid LIKE ?
+        WHERE username LIKE ? OR player_id LIKE ? OR phone LIKE ? OR ff_uid LIKE ? OR email LIKE ?
         ORDER BY id DESC LIMIT 50
-        """, (s, s, s, s)).fetchall()
+        """, (s, s, s, s, s)).fetchall()
     else:
         users = conn.execute("""
-        SELECT id, player_id, username, phone, ff_ign, ff_uid, digits_balance, role, status, created_at, plain_password
+        SELECT id, player_id, username, phone, email, ff_ign, ff_uid, digits_balance, win_points, role, status, created_at, plain_password, timeout_until
         FROM users
         ORDER BY id DESC LIMIT 50
         """).fetchall()
     conn.close()
-    return [dict(u) for u in users]
+
+    result = []
+    for u in users:
+        d = dict(u)
+        is_timed_out, rem_mins = check_user_timeout(d)
+        d["is_timed_out"] = is_timed_out
+        d["timeout_remaining_mins"] = rem_mins
+        result.append(d)
+    return result
 
 @app.post("/api/admin/users/adjust-digits")
 async def admin_adjust_digits(data: AdminAdjustDigits, admin: dict = Depends(verify_admin)):
@@ -1026,6 +1180,40 @@ async def admin_adjust_digits(data: AdminAdjustDigits, admin: dict = Depends(ver
         "success": True,
         "message": f"Updated balance for @{user['username']}. New balance: {new_bal} digits",
         "new_balance": new_bal
+    }
+
+@app.post("/api/admin/users/adjust-win-points")
+async def admin_adjust_win_points(data: AdminAdjustWinPoints, admin: dict = Depends(verify_admin)):
+    conn = get_db()
+    try:
+        user = conn.execute("SELECT * FROM users WHERE id = ?", (data.target_user_id,)).fetchone()
+        if not user:
+            raise HTTPException(status_code=404, detail="Target player not found")
+
+        curr_pts = user["win_points"] if "win_points" in user.keys() and user["win_points"] is not None else 0
+        new_pts = curr_pts + data.amount
+        if new_pts < 0:
+            new_pts = 0
+
+        with conn:
+            conn.execute("UPDATE users SET win_points = ? WHERE id = ?", (new_pts, data.target_user_id))
+            conn.execute("""
+            INSERT INTO audit_logs (admin_id, target_user_id, action, amount, reason)
+            VALUES (?, ?, 'ADMIN_ADJUST_WIN_POINTS', ?, ?)
+            """, (admin["id"], data.target_user_id, data.amount, data.reason or "Admin Win Points Adjustment"))
+    finally:
+        conn.close()
+
+    await manager.send_to_user(data.target_user_id, {
+        "type": "WIN_POINTS_UPDATED",
+        "win_points": new_pts,
+        "notice": f"আপনার উইন পয়েন্ট {data.amount:+d} PTS আপডেট করা হয়েছে!"
+    })
+
+    return {
+        "success": True,
+        "message": f"Updated win points for @{user['username']}. New points: {new_pts} PTS",
+        "new_win_points": new_pts
     }
 
 @app.post("/api/admin/users/{target_user_id}/toggle-status")
@@ -1207,6 +1395,157 @@ async def admin_set_user_role(target_user_id: int, data: SetRoleRequest, admin: 
         "message": f"@{user['username']} এর রোল সফলভাবে '{target_role}' করা হয়েছে!",
         "user_id": target_user_id,
         "new_role": target_role
+    }
+
+@app.post("/api/admin/users/create")
+async def admin_create_user(data: AdminCreateUserRequest, admin: dict = Depends(verify_admin)):
+    username = data.username.strip()
+    phone_raw = data.phone.strip() if data.phone else ""
+    password = data.password.strip()
+    email = data.email.strip().lower() if data.email else f"{username.lower()}@gomonhub.local"
+    ff_ign = data.ff_ign.strip() if data.ff_ign else username
+    ff_uid = data.ff_uid.strip() if data.ff_uid else "0"
+    role = data.role.strip().lower() if data.role else "player"
+    if role not in ["player", "moderator"]:
+        role = "player"
+    initial_balance = max(0, data.digits_balance or 0)
+
+    if len(username) < 3:
+        raise HTTPException(status_code=400, detail="ইউজারনেম কমপক্ষে ৩ অক্ষরের হতে হবে")
+    if len(password) < 4:
+        raise HTTPException(status_code=400, detail="পাসওয়ার্ড কমপক্ষে ৪ অক্ষরের হতে হবে")
+
+    is_valid_phone, phone_err, phone = validate_phone_number(phone_raw)
+    if not is_valid_phone:
+        raise HTTPException(status_code=400, detail=phone_err)
+
+    conn = get_db()
+    try:
+        existing = conn.execute("""
+            SELECT id, username, phone FROM users 
+            WHERE username = ? COLLATE NOCASE OR phone = ?
+        """, (username, phone)).fetchone()
+        if existing:
+            if existing["username"].lower() == username.lower():
+                raise HTTPException(status_code=400, detail="এই ইউজারনেম দিয়ে ইতিমধ্যে অ্যাকাউন্ট রয়েছে")
+            if existing["phone"] == phone:
+                raise HTTPException(status_code=400, detail="এই ফোন নম্বর দিয়ে ইতিমধ্যে অ্যাকাউন্ট রয়েছে")
+
+        rand_id = f"GOMONHUB-{secrets.randbelow(90000) + 10000}"
+        pass_hash = hash_password(password)
+
+        with conn:
+            cursor = conn.execute("""
+                INSERT INTO users (player_id, username, password_hash, plain_password, phone, email, ff_ign, ff_uid, digits_balance, role, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')
+            """, (rand_id, username, pass_hash, password, phone, email, ff_ign, ff_uid, initial_balance, role))
+            new_user_id = cursor.lastrowid
+
+            conn.execute("""
+                INSERT INTO audit_logs (admin_id, target_user_id, action, amount, reason)
+                VALUES (?, ?, 'ADMIN_CREATE_USER', ?, ?)
+            """, (admin["id"], new_user_id, initial_balance, f"Admin manually created user @{username} (Role: {role})"))
+    finally:
+        conn.close()
+
+    return {
+        "success": True,
+        "message": f"প্লেয়ার @{username} সফলভাবে তৈরি করা হয়েছে!",
+        "user": {
+            "id": new_user_id,
+            "player_id": rand_id,
+            "username": username,
+            "phone": phone,
+            "plain_password": password,
+            "digits_balance": initial_balance,
+            "role": role,
+            "status": "active"
+        }
+    }
+
+@app.delete("/api/admin/users/{target_user_id}")
+@app.post("/api/admin/users/{target_user_id}/delete")
+async def admin_delete_user(target_user_id: int, admin: dict = Depends(verify_admin)):
+    conn = get_db()
+    try:
+        user = conn.execute("SELECT * FROM users WHERE id = ?", (target_user_id,)).fetchone()
+        if not user:
+            raise HTTPException(status_code=404, detail="ব্যবহারকারী পাওয়া যায়নি")
+        if user["role"] == "admin":
+            raise HTTPException(status_code=403, detail="Master Admin অ্যাকাউন্ট ডিলিট করা সম্পূর্ণ নিষিদ্ধ!")
+
+        with conn:
+            conn.execute("DELETE FROM participations WHERE user_id = ?", (target_user_id,))
+            conn.execute("DELETE FROM deposits WHERE user_id = ?", (target_user_id,))
+            conn.execute("DELETE FROM push_subscriptions WHERE user_id = ?", (target_user_id,))
+            conn.execute("DELETE FROM audit_logs WHERE target_user_id = ?", (target_user_id,))
+            conn.execute("DELETE FROM users WHERE id = ?", (target_user_id,))
+            conn.execute("""
+                INSERT INTO audit_logs (admin_id, target_user_id, action, amount, reason)
+                VALUES (?, ?, 'ADMIN_DELETE_USER', 0, ?)
+            """, (admin["id"], target_user_id, f"Permanently deleted user @{user['username']}"))
+    finally:
+        conn.close()
+
+    try:
+        await manager.send_to_user(target_user_id, {
+            "type": "ACCOUNT_DELETED_KICK",
+            "message": "আপনার অ্যাকাউন্টটি অ্যাডমিন দ্বারা সম্পূর্ণ ডিলিট করা হয়েছে।"
+        })
+    except Exception:
+        pass
+
+    return {
+        "success": True,
+        "message": f"@{user['username']} অ্যাকাউন্টটি স্থায়ীভাবে ডিলিট করা হয়েছে!",
+        "deleted_user_id": target_user_id,
+        "deleted_username": user["username"]
+    }
+
+@app.post("/api/admin/users/{target_user_id}/timeout")
+async def admin_timeout_user(target_user_id: int, data: AdminTimeoutRequest, admin: dict = Depends(verify_admin)):
+    conn = get_db()
+    try:
+        user = conn.execute("SELECT * FROM users WHERE id = ?", (target_user_id,)).fetchone()
+        if not user:
+            raise HTTPException(status_code=404, detail="ব্যবহারকারী পাওয়া যায়নি")
+        if user["role"] == "admin":
+            raise HTTPException(status_code=403, detail="Master Admin কে টাইম-আউট করা সম্ভব নয়!")
+
+        duration = data.duration_minutes
+        if duration > 0:
+            timeout_until = (datetime.utcnow() + timedelta(minutes=duration)).strftime("%Y-%m-%d %H:%M:%S")
+            new_status = "timeout"
+            log_reason = f"Timeout for {duration} mins: {data.reason}"
+        else:
+            timeout_until = None
+            new_status = "active"
+            log_reason = f"Timeout removed by admin"
+
+        with conn:
+            conn.execute("UPDATE users SET status = ?, timeout_until = ? WHERE id = ?", (new_status, timeout_until, target_user_id))
+            conn.execute("""
+                INSERT INTO audit_logs (admin_id, target_user_id, action, amount, reason)
+                VALUES (?, ?, 'ADMIN_TIMEOUT', ?, ?)
+            """, (admin["id"], target_user_id, duration, log_reason))
+    finally:
+        conn.close()
+
+    if duration > 0:
+        try:
+            await manager.send_to_user(target_user_id, {
+                "type": "ACCOUNT_TIMEOUT_KICK",
+                "message": f"আপনার অ্যাকাউন্টটি {duration} মিনিটের জন্য টাইম-আউট করা হয়েছে।"
+            })
+        except Exception:
+            pass
+
+    return {
+        "success": True,
+        "message": f"@{user['username']} এর জন্য {f'{duration} মিনিটের টাইম-আউট কার্যকর করা হয়েছে' if duration > 0 else 'টাইম-আউট তুলে নেওয়া হয়েছে'}",
+        "status": new_status,
+        "timeout_until": timeout_until,
+        "duration_minutes": duration
     }
 
 @app.get("/api/admin/moderators")

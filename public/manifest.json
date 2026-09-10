@@ -1,8 +1,8 @@
 {
   "id": "/ff-tournament-app",
-  "name": "Free Fire Pro Tournaments",
-  "short_name": "FF Tournament",
-  "description": "Play Free Fire Custom Matches, win prizes, and recharge digits with bKash",
+  "name": "GOMON HUB",
+  "short_name": "GOMON HUB",
+  "description": "GOMON HUB Tournament Platform",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

@@ -476,7 +476,7 @@ def register(data: RegisterRequest):
     """).fetchall()
 
     for b_row in banned_hashes:
-        if b_row["password_hash"] and verify_password(data.password, b_row["password_hash"]):
+        if b_row["password_hash"] and verify_password(b_row["password_hash"], data.password):
             conn.close()
             raise HTTPException(status_code=403, detail="🚨 এই পাসওয়ার্ডটি পূর্বে ব্যানকৃত অ্যাকাউন্টে ব্যবহৃত হয়েছিল! সুরক্ষা নিশ্চিত করতে অন্য একটি নতুন পাসওয়ার্ড দিন।")
 

@@ -223,8 +223,8 @@ def init_db():
 
         # Default Settings
         conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('admin_bkash', '01700000000 (Personal)')")
-        conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('notice', 'স্বাগতম! GOMON টুর্নামেন্টে অংশ নিতে bKash এ ডিপোজিট করে সিডিউল থেকে জয়েন করুন!')")
-        conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('site_title', 'GOMON')")
+        conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('notice', 'স্বাগতম! GOMON HUB টুর্নামেন্টে অংশ নিতে bKash এ ডিপোজিট করে সিডিউল থেকে জয়েন করুন!')")
+        conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('site_title', 'GOMON HUB')")
 
         # Create Default Master Admin if not exists
         admin_row = conn.execute("SELECT id FROM users WHERE role = 'admin' LIMIT 1").fetchone()
@@ -403,7 +403,7 @@ class PushSubscribeRequest(BaseModel):
 # -------------------------------------------------------------
 # Public & Auth Endpoints
 # -------------------------------------------------------------
-CURRENT_CODE_VERSION = "v2.2.0"
+CURRENT_CODE_VERSION = "v2.3.0"
 
 @app.get("/api/info")
 def get_public_info():
@@ -412,14 +412,14 @@ def get_public_info():
     conn.close()
     settings = {r["key"]: r["value"] for r in settings_rows}
     current_ver = settings.get("app_version")
-    if not current_ver or current_ver in ["v1.0.0", "v1.1.0", "v2.1.0"]:
+    if not current_ver or current_ver in ["v1.0.0", "v1.1.0", "v2.1.0", "v2.2.0"]:
         current_ver = CURRENT_CODE_VERSION
     return {
-        "site_title": settings.get("site_title", "GOMON"),
+        "site_title": settings.get("site_title", "GOMON HUB"),
         "admin_bkash": settings.get("admin_bkash", "01700000000"),
         "notice": settings.get("notice", ""),
         "app_version": current_ver,
-        "app_update_notes": settings.get("app_update_notes", "GOMON প্ল্যাটফর্ম আপডেট ও সিকিউরিটি বৃদ্ধি।"),
+        "app_update_notes": settings.get("app_update_notes", "GOMON HUB নতুন ইন্টারফেস ও সিকিউরিটি আপডেট।"),
         "vapid_public_key": VAPID_KEYS["public_key"]
     }
 
@@ -485,7 +485,7 @@ def register(data: RegisterRequest):
         if existing["email"] and existing["email"].lower() == email.lower():
             raise HTTPException(status_code=400, detail="এই ইমেইল দিয়ে ইতিমধ্যে অ্যাকাউন্ট রয়েছে।")
 
-    rand_id = f"GOMON-{secrets.randbelow(90000) + 10000}"
+    rand_id = f"GOMONHUB-{secrets.randbelow(90000) + 10000}"
     pass_hash = hash_password(data.password)
 
     with conn:
@@ -869,7 +869,7 @@ async def admin_toggle_status(target_user_id: int, admin: dict = Depends(verify_
         # 2. Kick the banned user immediately
         await manager.send_to_user(target_user_id, {
             "type": "ACCOUNT_BANNED_KICK",
-            "message": "আপনার অ্যাকাউন্টটি GOMON প্ল্যাটফর্ম থেকে ব্যান করা হয়েছে।"
+            "message": "আপনার অ্যাকাউন্টটি GOMON HUB প্ল্যাটফর্ম থেকে ব্যান করা হয়েছে।"
         })
 
         # 3. Native Mobile Push Notification

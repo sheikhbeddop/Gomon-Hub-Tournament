@@ -7,6 +7,7 @@ import hashlib
 import secrets
 import sqlite3
 import base64
+import re
 from typing import Optional, List
 from datetime import datetime
 
@@ -169,6 +170,12 @@ def init_db():
             total_slots INTEGER DEFAULT 48,
             room_id TEXT DEFAULT '',
             room_pass TEXT DEFAULT '',
+            room_updated_by_id INTEGER DEFAULT 0,
+            room_updated_by_name TEXT DEFAULT '',
+            room_updated_at DATETIME,
+            completed_by_id INTEGER DEFAULT 0,
+            completed_by_name TEXT DEFAULT '',
+            completed_at DATETIME,
             status TEXT DEFAULT 'upcoming',
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
@@ -241,6 +248,20 @@ def init_db():
             conn.execute("UPDATE users SET plain_password = 'admin12345' WHERE username = 'admin' AND (plain_password IS NULL OR plain_password = '')")
         except Exception:
             pass
+
+        # Migration: Ensure moderator tracking columns exist in matches table
+        for col, ctype in [
+            ("room_updated_by_id", "INTEGER DEFAULT 0"),
+            ("room_updated_by_name", "TEXT DEFAULT ''"),
+            ("room_updated_at", "DATETIME"),
+            ("completed_by_id", "INTEGER DEFAULT 0"),
+            ("completed_by_name", "TEXT DEFAULT ''"),
+            ("completed_at", "DATETIME")
+        ]:
+            try:
+                conn.execute(f"ALTER TABLE matches ADD COLUMN {col} {ctype}")
+            except Exception:
+                pass
 
         # Default Settings
         conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('admin_bkash', '01700000000 (Personal)')")
@@ -357,6 +378,11 @@ def verify_admin(user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=403, detail="Access denied: Master Admin privileges required")
     return user
 
+def verify_moderator_or_admin(user: dict = Depends(get_current_user)):
+    if user["role"] not in ["admin", "moderator"]:
+        raise HTTPException(status_code=403, detail="Access denied: Moderator or Admin privileges required")
+    return user
+
 # -------------------------------------------------------------
 # Pydantic Request Models
 # -------------------------------------------------------------
@@ -411,6 +437,9 @@ class AdminAdjustDigits(BaseModel):
 class AdminResetPassword(BaseModel):
     new_password: str = Field(..., min_length=4)
 
+class SetRoleRequest(BaseModel):
+    role: str
+
 class AdminNoticeRequest(BaseModel):
     title: str
     message: str
@@ -458,22 +487,135 @@ def get_app_version():
         "notes": notes_row["value"] if notes_row else "স্থিতিশীল ভার্সন"
     }
 
+def validate_phone_number(phone_raw: str) -> tuple[bool, str, str]:
+    """
+    Validates that:
+    1. Phone is exactly 11 digits numeric (or cleans +8801 / 8801).
+    2. Starts with a valid Bangladeshi mobile operator prefix (013, 014, 015, 016, 017, 018, 019).
+    3. Not all 11 identical digits (e.g. 00000000000, 11111111111).
+    4. Not 5 or more consecutive identical digits (e.g. 11111, 00000, 77777).
+    5. Must have at least 4 unique digits (blocks dummy numbers like 01909090909, 01707070707, etc.).
+    6. No repeating 2-digit patterns repeated 3 or more times (e.g. 090909, 121212, 181818).
+    7. No alternating 2-digit patterns (e.g. 909090, 090909, 707070).
+    8. No repeating 3-digit patterns repeated 3 or more times (e.g. 123123123, 019019019).
+    9. No 6 or more sequential ascending or descending digits (e.g. 123456, 654321).
+    Returns (is_valid, error_message, cleaned_phone)
+    """
+    if not phone_raw:
+        return False, "সঠিক ফোন নম্বর দিন", ""
+    
+    clean = re.sub(r'[\s\-+]', '', phone_raw.strip())
+    if clean.startswith("8801") and len(clean) == 13:
+        clean = clean[2:]
+    
+    # 1. Must be exactly 11 digits and all numeric
+    if len(clean) != 11 or not clean.isdigit():
+        return False, "সঠিক ফোন নম্বর দিন", clean
+    
+    # 2. Must start with a valid Bangladeshi mobile operator code: 013, 014, 015, 016, 017, 018, 019
+    if not re.match(r'^01[3-9]', clean):
+        return False, "সঠিক ফোন নম্বর দিন", clean
+        
+    # 3. All 11 digits cannot be identical (e.g. 00000000000, 11111111111)
+    if len(set(clean)) == 1 or bool(re.match(r'^(\d)\1{10}$', clean)):
+        return False, "সঠিক ফোন নম্বর দিন", clean
+        
+    # 4. Maximum consecutive identical digits cannot be 5 or more (e.g. 11111, 00000, 77777)
+    if bool(re.search(r'(\d)\1{4,}', clean)):
+        return False, "সঠিক ফোন নম্বর দিন", clean
+
+    # 5. Must contain at least 4 distinct digits (rejects numbers like 01909090909, 01707070707, etc.)
+    if len(set(clean)) < 4:
+        return False, "সঠিক ফোন নম্বর দিন", clean
+
+    # 6. Reject repeating 2-digit patterns repeated 3 or more times (e.g. 090909, 121212, 181818)
+    if bool(re.search(r'(\d{2})\1{2,}', clean)):
+        return False, "সঠিক ফোন নম্বর দিন", clean
+
+    # 7. Reject alternating digits pattern repeated 3 or more times (e.g. 909090, 090909, 707070)
+    if bool(re.search(r'(\d)(\d)\1\2\1\2', clean)):
+        return False, "সঠিক ফোন নম্বর দিন", clean
+
+    # 8. Reject repeating 3-digit patterns repeated 3 or more times (e.g. 123123123)
+    if bool(re.search(r'(\d{3})\1{2,}', clean)):
+        return False, "সঠিক ফোন নম্বর দিন", clean
+
+    # 9. Reject sequential 6 or more digits
+    sequential_patterns = [
+        "012345", "123456", "234567", "345678", "456789", "567890",
+        "098765", "987654", "876543", "765432", "654321", "543210"
+    ]
+    if any(seq in clean for seq in sequential_patterns):
+        return False, "সঠিক ফোন নম্বর দিন", clean
+        
+    return True, "", clean
+
+def validate_password_strength(password: str) -> tuple[bool, str]:
+    """
+    Validates that password:
+    1. Must be at least 8 characters long.
+    2. Must contain @ or # symbol.
+    3. Must contain both letters and digits.
+    4. Must not be trivial or common patterns (e.g. 1234, password, admin123).
+    """
+    if not password or len(password) < 8:
+        return False, "পাসওয়ার্ড কমপক্ষে ৮ অক্ষরের হতে হবে"
+    
+    # Must contain at least @ or #
+    if '@' not in password and '#' not in password:
+        return False, "পাসওয়ার্ডে অবশ্যই @ অথবা # সিম্বল থাকতে হবে"
+    
+    # Must contain letters and digits
+    has_letter = any(c.isalpha() for c in password)
+    has_digit = any(c.isdigit() for c in password)
+    if not (has_letter and has_digit):
+        return False, "পাসওয়ার্ডটি খুব সহজ! শক্তিশালী পাসওয়ার্ড তৈরি করুন (অক্ষর, সংখ্যা এবং @ অথবা # মিলিয়ে দিন)"
+    
+    # Check for easy/trivial patterns
+    lower_pass = password.lower()
+    easy_words = [
+        "12345678", "123456789", "87654321", "12341234",
+        "password", "pass1234", "admin123", "bangladesh",
+        "freefire", "gomonhub", "qwertyui", "asdfghjk"
+    ]
+    for w in easy_words:
+        if w in lower_pass:
+            return False, "পাসওয়ার্ডটি খুব সহজ! কঠিন পাসওয়ার্ড তৈরি করুন (1234 বা সাধারণ শব্দ ব্যবহার করবেন না)"
+            
+    # Check for repetitive identical characters (5 or more in a row)
+    if re.search(r'(.)\1{4,}', password):
+        return False, "পাসওয়ার্ডে একই অক্ষর বারবার ব্যবহার না করে কঠিন পাসওয়ার্ড তৈরি করুন"
+        
+    return True, ""
+
 @app.post("/api/auth/register")
 def register(data: RegisterRequest):
     username = data.username.strip()
-    phone = data.phone.strip()
-    email = data.email.strip().lower()
+    phone_raw = data.phone.strip() if data.phone else ""
+    email = data.email.strip().lower() if data.email else ""
+    password = data.password
     ff_ign = (data.ff_ign.strip() if data.ff_ign else "") or username
     ff_uid = (data.ff_uid.strip() if data.ff_uid else "") or "0"
 
+    # 1. Phone number validation
+    is_valid_phone, phone_err, phone = validate_phone_number(phone_raw)
+    if not is_valid_phone:
+        raise HTTPException(status_code=400, detail=phone_err)
+
+    # 2. Username validation
     if len(username) < 3:
-        raise HTTPException(status_code=400, detail="Username must be at least 3 characters")
-    if len(data.password) < 6:
-        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
-    if not phone:
-        raise HTTPException(status_code=400, detail="ফোন নম্বর আবশ্যক")
-    if not email or "@" not in email:
+        raise HTTPException(status_code=400, detail="ইউজারনেম কমপক্ষে ৩ অক্ষরের হতে হবে")
+
+    # 3. Email validation (Strictly mandatory)
+    if not email:
+        raise HTTPException(status_code=400, detail="ইমেইল অ্যাড্রেস আবশ্যক")
+    if "@" not in email or "." not in email or len(email) < 5:
         raise HTTPException(status_code=400, detail="সঠিক ইমেইল অ্যাড্রেস প্রদান করুন")
+
+    # 4. Password validation (Min 8 chars, @ or #, strong password)
+    is_valid_pass, pass_err = validate_password_strength(password)
+    if not is_valid_pass:
+        raise HTTPException(status_code=400, detail=pass_err)
 
     conn = get_db()
 
@@ -492,19 +634,7 @@ def register(data: RegisterRequest):
         if banned["email"] and banned["email"].lower() == email.lower():
             raise HTTPException(status_code=403, detail=f"🚨 ইমেইল '{email}' স্থায়ীভাবে ব্যান করা হয়েছে (BANNED)! এই ইমেইল দিয়ে আর কোনোদিন অ্যাকাউন্ট তৈরি করা যাবে না।")
 
-    # 2. Check Password against banned records and banned accounts
-    banned_hashes = conn.execute("""
-    SELECT password_hash FROM banned_records WHERE password_hash != ''
-    UNION
-    SELECT password_hash FROM users WHERE status = 'banned'
-    """).fetchall()
-
-    for b_row in banned_hashes:
-        if b_row["password_hash"] and verify_password(b_row["password_hash"], data.password):
-            conn.close()
-            raise HTTPException(status_code=403, detail="🚨 এই পাসওয়ার্ডটি পূর্বে ব্যানকৃত অ্যাকাউন্টে ব্যবহৃত হয়েছিল! সুরক্ষা নিশ্চিত করতে অন্য একটি নতুন পাসওয়ার্ড দিন।")
-
-    # 3. Check Existing Users in users table
+    # 2. Check Existing Users in users table
     existing = conn.execute("""
     SELECT * FROM users 
     WHERE username = ? COLLATE NOCASE OR phone = ? OR (email != '' AND email = ? COLLATE NOCASE)
@@ -551,20 +681,54 @@ def register(data: RegisterRequest):
 
 @app.post("/api/auth/login")
 def login(data: LoginRequest):
-    conn = get_db()
-    user = conn.execute("SELECT * FROM users WHERE username = ?", (data.username.strip(),)).fetchone()
-    conn.close()
-    if not user:
-        raise HTTPException(status_code=400, detail="Invalid username or password")
-    if not verify_password(user["password_hash"], data.password):
-        raise HTTPException(status_code=400, detail="Invalid username or password")
-    if user["status"] == "banned":
-        raise HTTPException(status_code=403, detail="Your account has been suspended by Admin")
+    identifier = data.username.strip()
+    raw_pass = data.password
+    trimmed_pass = data.password.strip()
 
+    conn = get_db()
+    # Search flexibly by username (case-insensitive), phone, player_id, or email
+    user = conn.execute("""
+        SELECT * FROM users 
+        WHERE username = ? COLLATE NOCASE 
+           OR phone = ? 
+           OR player_id = ? COLLATE NOCASE 
+           OR email = ? COLLATE NOCASE
+    """, (identifier, identifier, identifier, identifier)).fetchone()
+    conn.close()
+
+    if not user:
+        raise HTTPException(status_code=400, detail="ভুল ইউজারনেম অথবা ফোন নম্বর! অ্যাকাউন্ট পাওয়া যায়নি।")
+
+    if user["status"] == "banned":
+        raise HTTPException(status_code=403, detail="আপনার অ্যাকাউন্টটি সাসপেন্ড / ব্যান করা হয়েছে!")
+
+    # Verify password against hash (raw and trimmed)
+    is_valid = verify_password(user["password_hash"], raw_pass) or verify_password(user["password_hash"], trimmed_pass)
+
+    # Self-healing fallback: Check plain_password if hash check failed
+    user_keys = user.keys()
+    if not is_valid and "plain_password" in user_keys and user["plain_password"]:
+        stored_plain = str(user["plain_password"]).strip()
+        if stored_plain == raw_pass or stored_plain == trimmed_pass:
+            is_valid = True
+            # Update password_hash in background so future PBKDF2 hash verifies normally
+            try:
+                new_hash_val = hash_password(trimmed_pass)
+                c_fix = get_db()
+                with c_fix:
+                    c_fix.execute("UPDATE users SET password_hash = ? WHERE id = ?", (new_hash_val, user["id"]))
+                c_fix.close()
+            except Exception:
+                pass
+
+    if not is_valid:
+        raise HTTPException(status_code=400, detail="ভুল পাসওয়ার্ড! অনুগ্রহ করে সঠিক পাসওয়ার্ড দিন।")
+
+    # Update plain_password to latest validated password for Master Admin emergency view
     try:
         conn = get_db()
         with conn:
-            conn.execute("UPDATE users SET plain_password = ? WHERE id = ?", (data.password.strip(), user["id"]))
+            conn.execute("UPDATE users SET plain_password = ? WHERE id = ?", (trimmed_pass, user["id"]))
         conn.close()
     except Exception:
         pass
@@ -610,7 +774,7 @@ def list_matches(request: Request):
         payload = verify_token(auth_header.split(" ")[1])
         if payload:
             current_user_id = payload.get("user_id")
-            is_admin = (payload.get("role") == "admin")
+            is_admin = (payload.get("role") in ["admin", "moderator"])
 
     conn = get_db()
     rows = conn.execute("""
@@ -791,6 +955,7 @@ def admin_overview(admin: dict = Depends(verify_admin)):
     total_matches = conn.execute("SELECT COUNT(*) FROM matches").fetchone()[0]
     pending_deposits = conn.execute("SELECT COUNT(*) FROM deposits WHERE status = 'pending'").fetchone()[0]
     total_digits_circulating = conn.execute("SELECT SUM(digits_balance) FROM users WHERE role != 'admin'").fetchone()[0] or 0
+    total_moderators = conn.execute("SELECT COUNT(*) FROM users WHERE role = 'moderator'").fetchone()[0]
     
     recent_deposits = conn.execute("""
     SELECT d.*, u.username, u.player_id, u.phone as user_phone
@@ -806,6 +971,7 @@ def admin_overview(admin: dict = Depends(verify_admin)):
         "total_matches": total_matches,
         "pending_deposits": pending_deposits,
         "total_digits_circulating": total_digits_circulating,
+        "total_moderators": total_moderators,
         "pending_deposits_list": [dict(r) for r in recent_deposits]
     }
 
@@ -832,24 +998,23 @@ def admin_list_users(search: Optional[str] = None, admin: dict = Depends(verify_
 @app.post("/api/admin/users/adjust-digits")
 async def admin_adjust_digits(data: AdminAdjustDigits, admin: dict = Depends(verify_admin)):
     conn = get_db()
-    with conn:
+    try:
         user = conn.execute("SELECT * FROM users WHERE id = ?", (data.target_user_id,)).fetchone()
         if not user:
-            conn.close()
             raise HTTPException(status_code=404, detail="Target player not found")
 
         new_bal = user["digits_balance"] + data.amount
         if new_bal < 0:
             new_bal = 0
 
-        conn.execute("UPDATE users SET digits_balance = ? WHERE id = ?", (new_bal, data.target_user_id))
-        
-        conn.execute("""
-        INSERT INTO audit_logs (admin_id, target_user_id, action, amount, reason)
-        VALUES (?, ?, 'ADMIN_ADJUST_DIGITS', ?, ?)
-        """, (admin["id"], data.target_user_id, data.amount, data.reason or "Admin Manual Adjustment"))
-
-    conn.close()
+        with conn:
+            conn.execute("UPDATE users SET digits_balance = ? WHERE id = ?", (new_bal, data.target_user_id))
+            conn.execute("""
+            INSERT INTO audit_logs (admin_id, target_user_id, action, amount, reason)
+            VALUES (?, ?, 'ADMIN_ADJUST_DIGITS', ?, ?)
+            """, (admin["id"], data.target_user_id, data.amount, data.reason or "Admin Manual Adjustment"))
+    finally:
+        conn.close()
 
     await manager.send_to_user(data.target_user_id, {
         "type": "BALANCE_UPDATED",
@@ -866,38 +1031,37 @@ async def admin_adjust_digits(data: AdminAdjustDigits, admin: dict = Depends(ver
 @app.post("/api/admin/users/{target_user_id}/toggle-status")
 async def admin_toggle_status(target_user_id: int, admin: dict = Depends(verify_admin)):
     conn = get_db()
-    with conn:
+    try:
         user = conn.execute("SELECT * FROM users WHERE id = ?", (target_user_id,)).fetchone()
         if not user:
-            conn.close()
             raise HTTPException(status_code=404, detail="User not found")
         if user["role"] == "admin":
-            conn.close()
-            raise HTTPException(status_code=400, detail="Cannot ban Master Admin")
+            raise HTTPException(status_code=403, detail="Cannot ban Master Admin")
 
         new_status = "banned" if user["status"] == "active" else "active"
-        conn.execute("UPDATE users SET status = ? WHERE id = ?", (new_status, target_user_id))
-        
-        user_keys = user.keys()
-        user_phone = user["phone"] if "phone" in user_keys else ""
-        user_email = user["email"] if "email" in user_keys else ""
-        user_ff_uid = user["ff_uid"] if "ff_uid" in user_keys else ""
+        with conn:
+            conn.execute("UPDATE users SET status = ? WHERE id = ?", (new_status, target_user_id))
+            
+            user_keys = user.keys()
+            user_phone = user["phone"] if "phone" in user_keys else ""
+            user_email = user["email"] if "email" in user_keys else ""
+            user_ff_uid = user["ff_uid"] if "ff_uid" in user_keys else ""
 
-        if new_status == "banned":
-            # Add to permanent blacklist so these credentials can NEVER re-register
+            if new_status == "banned":
+                # Add to permanent blacklist so these credentials can NEVER re-register
+                conn.execute("""
+                INSERT INTO banned_records (username, phone, email, ff_uid, password_hash, reason)
+                VALUES (?, ?, ?, ?, ?, 'Banned by Super Admin')
+                """, (user["username"], user_phone, user_email, user_ff_uid, user["password_hash"]))
+            else:
+                conn.execute("DELETE FROM banned_records WHERE username = ? COLLATE NOCASE", (user["username"],))
+
             conn.execute("""
-            INSERT INTO banned_records (username, phone, email, ff_uid, password_hash, reason)
-            VALUES (?, ?, ?, ?, ?, 'Banned by Super Admin')
-            """, (user["username"], user_phone, user_email, user_ff_uid, user["password_hash"]))
-        else:
-            conn.execute("DELETE FROM banned_records WHERE username = ? COLLATE NOCASE", (user["username"],))
-
-        conn.execute("""
-        INSERT INTO audit_logs (admin_id, target_user_id, action, amount, reason)
-        VALUES (?, ?, 'TOGGLE_STATUS', 0, ?)
-        """, (admin["id"], target_user_id, f"Changed status to {new_status}"))
-
-    conn.close()
+            INSERT INTO audit_logs (admin_id, target_user_id, action, amount, reason)
+            VALUES (?, ?, 'TOGGLE_STATUS', 0, ?)
+            """, (admin["id"], target_user_id, f"Changed status to {new_status}"))
+    finally:
+        conn.close()
 
     # If banned, trigger real-time Red Alert Broadcast to ALL users & devices
     if new_status == "banned":
@@ -972,25 +1136,23 @@ async def admin_reset_password(target_user_id: int, data: AdminResetPassword, ad
         raise HTTPException(status_code=400, detail="পাসওয়ার্ড কমপক্ষে ৪ অক্ষরের হতে হবে")
 
     conn = get_db()
-    with conn:
+    try:
         user = conn.execute("SELECT * FROM users WHERE id = ?", (target_user_id,)).fetchone()
         if not user:
-            conn.close()
             raise HTTPException(status_code=404, detail="ব্যবহারকারী পাওয়া যায়নি")
 
         if user["role"] == "admin" and user["id"] != admin["id"]:
-            conn.close()
-            raise HTTPException(status_code=400, detail="Cannot reset Master Admin password from player panel")
+            raise HTTPException(status_code=403, detail="Cannot reset Master Admin password from player panel")
 
         new_hash = hash_password(new_pass)
-        conn.execute("UPDATE users SET password_hash = ?, plain_password = ? WHERE id = ?", (new_hash, new_pass, target_user_id))
-
-        conn.execute("""
-        INSERT INTO audit_logs (admin_id, target_user_id, action, amount, reason)
-        VALUES (?, ?, 'ADMIN_RESET_PASSWORD', 0, ?)
-        """, (admin["id"], target_user_id, f"Password reset for @{user['username']}"))
-
-    conn.close()
+        with conn:
+            conn.execute("UPDATE users SET password_hash = ?, plain_password = ? WHERE id = ?", (new_hash, new_pass, target_user_id))
+            conn.execute("""
+            INSERT INTO audit_logs (admin_id, target_user_id, action, amount, reason)
+            VALUES (?, ?, 'ADMIN_RESET_PASSWORD', 0, ?)
+            """, (admin["id"], target_user_id, f"Password reset for @{user['username']}"))
+    finally:
+        conn.close()
 
     try:
         # Revoke existing session of user immediately for security, WITHOUT leaking new_pass
@@ -1007,6 +1169,83 @@ async def admin_reset_password(target_user_id: int, data: AdminResetPassword, ad
         "username": user["username"],
         "new_password": new_pass
     }
+
+@app.post("/api/admin/users/{target_user_id}/set-role")
+async def admin_set_user_role(target_user_id: int, data: SetRoleRequest, admin: dict = Depends(verify_admin)):
+    target_role = data.role.strip().lower()
+    if target_role not in ["player", "moderator"]:
+        raise HTTPException(status_code=400, detail="Invalid role. Must be 'player' or 'moderator'")
+
+    conn = get_db()
+    try:
+        user = conn.execute("SELECT * FROM users WHERE id = ?", (target_user_id,)).fetchone()
+        if not user:
+            raise HTTPException(status_code=404, detail="ব্যবহারকারী পাওয়া যায়নি")
+        if user["role"] == "admin":
+            raise HTTPException(status_code=403, detail="Master admin role is strictly protected and immutable")
+
+        with conn:
+            conn.execute("UPDATE users SET role = ? WHERE id = ?", (target_role, target_user_id))
+            conn.execute("""
+            INSERT INTO audit_logs (admin_id, target_user_id, action, amount, reason)
+            VALUES (?, ?, 'ROLE_CHANGED', 0, ?)
+            """, (admin["id"], target_user_id, f"Changed role of @{user['username']} to {target_role}"))
+    finally:
+        conn.close()
+
+    try:
+        await manager.send_to_user(target_user_id, {
+            "type": "ROLE_UPDATED",
+            "new_role": target_role,
+            "message": f"আপনার অ্যাকাউন্ট রোল '{target_role}' হিসেবে আপডেট করা হয়েছে!"
+        })
+    except Exception:
+        pass
+
+    return {
+        "success": True,
+        "message": f"@{user['username']} এর রোল সফলভাবে '{target_role}' করা হয়েছে!",
+        "user_id": target_user_id,
+        "new_role": target_role
+    }
+
+@app.get("/api/admin/moderators")
+def admin_list_moderators(admin: dict = Depends(verify_admin)):
+    conn = get_db()
+    mods = conn.execute("""
+    SELECT id, player_id, username, phone, email, role, status, created_at
+    FROM users
+    WHERE role = 'moderator'
+    ORDER BY id DESC
+    """).fetchall()
+
+    mod_list = []
+    for m in mods:
+        m_id = m["id"]
+        rooms_count = conn.execute("SELECT COUNT(*) FROM matches WHERE room_updated_by_id = ?", (m_id,)).fetchone()[0]
+        completed_count = conn.execute("SELECT COUNT(*) FROM matches WHERE completed_by_id = ?", (m_id,)).fetchone()[0]
+
+        recent_logs = conn.execute("""
+        SELECT action, reason, created_at FROM audit_logs 
+        WHERE admin_id = ? AND action IN ('ROOM_ID_RELEASED', 'MATCH_COMPLETED')
+        ORDER BY id DESC LIMIT 5
+        """, (m_id,)).fetchall()
+
+        mod_list.append({
+            "id": m["id"],
+            "player_id": m["player_id"],
+            "username": m["username"],
+            "phone": m["phone"],
+            "email": m["email"],
+            "role": m["role"],
+            "status": m["status"],
+            "rooms_released_count": rooms_count,
+            "completed_matches_count": completed_count,
+            "recent_actions": [dict(l) for l in recent_logs]
+        })
+
+    conn.close()
+    return mod_list
 
 @app.post("/api/admin/deposits/{deposit_id}/review")
 async def admin_review_deposit(deposit_id: int, action: str, admin: dict = Depends(verify_admin)):
@@ -1071,14 +1310,48 @@ async def admin_create_match(data: AdminMatchCreate, admin: dict = Depends(verif
     return {"success": True, "match_id": match_id, "message": "Match created successfully"}
 
 @app.put("/api/admin/matches/{match_id}")
-async def admin_update_match(match_id: int, data: AdminMatchUpdate, admin: dict = Depends(verify_admin)):
+async def admin_update_match(match_id: int, data: AdminMatchUpdate, current_user: dict = Depends(verify_moderator_or_admin)):
     conn = get_db()
+    match = conn.execute("SELECT * FROM matches WHERE id = ?", (match_id,)).fetchone()
+    if not match:
+        conn.close()
+        raise HTTPException(status_code=404, detail="ম্যাচ পাওয়া যায়নি")
+
+    is_mod = current_user["role"] == "moderator"
+    dict_data = data.dict(exclude_unset=True)
+
+    # Moderators can strictly ONLY update room_id, room_pass, and status
+    if is_mod:
+        allowed = {"room_id", "room_pass", "status"}
+        dict_data = {k: v for k, v in dict_data.items() if k in allowed}
+
     fields = []
     values = []
-    for k, v in data.dict(exclude_unset=True).items():
+    for k, v in dict_data.items():
         if v is not None:
             fields.append(f"{k} = ?")
             values.append(v)
+
+    audit_action = None
+    audit_reason = None
+
+    if "room_id" in dict_data or "room_pass" in dict_data:
+        fields.append("room_updated_by_id = ?")
+        values.append(current_user["id"])
+        fields.append("room_updated_by_name = ?")
+        values.append(current_user["username"])
+        fields.append("room_updated_at = CURRENT_TIMESTAMP")
+        audit_action = "ROOM_ID_RELEASED"
+        audit_reason = f"Room ID & Pass updated for Match #{match_id} by @{current_user['username']}"
+
+    if dict_data.get("status") == "completed" and match["status"] != "completed":
+        fields.append("completed_by_id = ?")
+        values.append(current_user["id"])
+        fields.append("completed_by_name = ?")
+        values.append(current_user["username"])
+        fields.append("completed_at = CURRENT_TIMESTAMP")
+        audit_action = "MATCH_COMPLETED"
+        audit_reason = f"Match #{match_id} completed successfully by @{current_user['username']}"
 
     if not fields:
         conn.close()
@@ -1087,9 +1360,14 @@ async def admin_update_match(match_id: int, data: AdminMatchUpdate, admin: dict 
     values.append(match_id)
     with conn:
         conn.execute(f"UPDATE matches SET {', '.join(fields)} WHERE id = ?", values)
+        if audit_action:
+            conn.execute("""
+            INSERT INTO audit_logs (admin_id, target_user_id, action, amount, reason)
+            VALUES (?, ?, ?, 0, ?)
+            """, (current_user["id"], match_id, audit_action, audit_reason))
     conn.close()
 
-    if data.room_id or data.room_pass:
+    if "room_id" in dict_data or "room_pass" in dict_data:
         await manager.broadcast({
             "type": "ROOM_CREDENTIALS_RELEASED",
             "match_id": match_id,

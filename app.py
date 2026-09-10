@@ -471,9 +471,28 @@ def init_db():
             admin_pass = hash_password("admin12345")
             conn.execute("""
             INSERT INTO users (player_id, username, password_hash, phone, ff_ign, ff_uid, digits_balance, win_points, role, status)
-            VALUES ('FF-ADMIN', 'admin', ?, '01988279285', 'SUPER_ADMIN', '100000000', 999999, 1000, 'admin', 'active')
+            VALUES ('FF-ADMIN', 'admin', ?, '01700000000', 'SUPER_ADMIN', '100000000', 999999, 1000, 'admin', 'active')
             """, (admin_pass,))
             print("[INFO] Master Admin created: username='admin', password='admin12345'")
+        else:
+            try:
+                conn.execute("UPDATE users SET phone = '01700000000' WHERE role = 'admin' AND phone = '01988279285'")
+            except Exception:
+                pass
+
+        # One-time migration: Clean legacy test users on deployment so everyone can re-register with their phone numbers
+        try:
+            cleaned_flag = conn.execute("SELECT value FROM settings WHERE key = 'legacy_users_cleaned_v4'").fetchone()
+            if not cleaned_flag:
+                conn.execute("DELETE FROM participations WHERE user_id IN (SELECT id FROM users WHERE role != 'admin')")
+                conn.execute("DELETE FROM deposits WHERE user_id IN (SELECT id FROM users WHERE role != 'admin')")
+                conn.execute("DELETE FROM withdrawals WHERE user_id IN (SELECT id FROM users WHERE role != 'admin')")
+                conn.execute("DELETE FROM banned_records")
+                conn.execute("DELETE FROM users WHERE role != 'admin'")
+                conn.execute("INSERT INTO settings (key, value) VALUES ('legacy_users_cleaned_v4', 'done')")
+                print("[INFO] Cleaned legacy non-admin users so everyone can re-register fresh with their phone numbers.")
+        except Exception:
+            pass
 
     conn.close()
 
@@ -2577,6 +2596,23 @@ def serve_app_icon(request: Request):
             "Expires": "0"
         }
     )
+
+@app.post("/api/admin/system/reset-players")
+def admin_reset_all_players(admin: dict = Depends(verify_admin)):
+    conn = get_db()
+    with conn:
+        p_deleted = conn.execute("DELETE FROM participations WHERE user_id IN (SELECT id FROM users WHERE role != 'admin')").rowcount
+        d_deleted = conn.execute("DELETE FROM deposits WHERE user_id IN (SELECT id FROM users WHERE role != 'admin')").rowcount
+        w_deleted = conn.execute("DELETE FROM withdrawals WHERE user_id IN (SELECT id FROM users WHERE role != 'admin')").rowcount
+        b_deleted = conn.execute("DELETE FROM banned_records").rowcount
+        u_deleted = conn.execute("DELETE FROM users WHERE role != 'admin'").rowcount
+        conn.execute("UPDATE users SET phone = '01700000000' WHERE role = 'admin'")
+    conn.close()
+    return {
+        "success": True, 
+        "deleted_users": u_deleted,
+        "message": f"সফলভাবে {u_deleted} জন ইউজারের পূর্বের রেকর্ড ও হিস্ট্রি মুছে ফেলা হয়েছে। এখন সবাই নতুন করে তাদের ফোন নম্বর দিয়ে অ্যাকাউন্ট খুলতে পারবে।"
+    }
 
 app.mount("/static", StaticFiles(directory=public_dir), name="static")
 

@@ -842,29 +842,301 @@ body {
 .toast.error { border-left: 4px solid var(--neon-crimson); }
 .toast.info { border-left: 4px solid var(--neon-cyan); }
 
-/* Responsive adjustments */
+/* -------------------------------------------------------------
+   Mobile-First & Native App Responsiveness
+------------------------------------------------------------- */
+.mobile-bottom-nav {
+    display: none;
+}
+
 @media (max-width: 768px) {
+    /* Hide top desktop tabs nav on phones to save vertical space */
+    .tabs-nav {
+        display: none !important;
+    }
+
+    /* Fixed Native Mobile Bottom Navigation Bar */
+    .mobile-bottom-nav {
+        display: flex;
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 62px;
+        background: rgba(10, 14, 22, 0.95);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border-top: 1px solid var(--border-glass);
+        z-index: 1000;
+        justify-content: space-around;
+        align-items: center;
+        padding-bottom: max(6px, env(safe-area-inset-bottom));
+        box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.7);
+    }
+
+    .mobile-nav-item {
+        background: transparent;
+        border: none;
+        color: var(--text-muted);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 2px;
+        cursor: pointer;
+        flex: 1;
+        height: 100%;
+        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        position: relative;
+    }
+
+    .mobile-nav-item .m-icon {
+        font-size: 1.25rem;
+        transition: transform 0.2s;
+    }
+
+    .mobile-nav-item .m-label {
+        font-size: 0.7rem;
+        font-weight: 700;
+        font-family: 'Outfit', sans-serif;
+        letter-spacing: 0.3px;
+        transition: color 0.2s;
+    }
+
+    .mobile-nav-item.active {
+        color: var(--neon-green);
+    }
+
+    .mobile-nav-item.active .m-icon {
+        transform: translateY(-2px) scale(1.18);
+    }
+
+    .mobile-nav-item.active .m-label {
+        color: var(--neon-green);
+        font-weight: 800;
+    }
+
+    .mobile-nav-item.active::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 22%;
+        right: 22%;
+        height: 3px;
+        background: var(--neon-green);
+        border-radius: var(--radius-full);
+        box-shadow: 0 0 12px var(--neon-green);
+    }
+
+    /* Main Container Padding for Phone */
+    .main-container {
+        padding: 14px 12px 85px;
+    }
+
+    /* Compact Mobile Navbar */
+    .navbar {
+        padding: 8px 12px;
+    }
+
     .nav-container {
-        padding: 0 4px;
+        gap: 8px;
     }
+
+    .brand-logo {
+        gap: 8px;
+    }
+
+    .brand-icon {
+        width: 32px;
+        height: 32px;
+    }
+
     .brand-title {
-        font-size: 1.15rem;
+        font-size: 1.1rem;
+        letter-spacing: 0.5px;
     }
+
+    .brand-tag {
+        display: none; /* Hide tag on small screens to prevent crowding */
+    }
+
+    .nav-actions {
+        gap: 8px;
+    }
+
     .wallet-pill {
         padding: 4px 10px;
+        gap: 6px;
     }
+
+    .digit-icon {
+        font-size: 1rem;
+    }
+
     .digit-val {
         font-size: 1.1rem;
     }
+
+    .digit-label {
+        display: none; /* Hide label on mobile, coin icon suffices */
+    }
+
+    .notif-bell-btn {
+        width: 34px;
+        height: 34px;
+        font-size: 0.9rem;
+    }
+
+    .btn-sm {
+        padding: 5px 10px;
+        font-size: 0.78rem;
+    }
+
+    /* Live Announcement Bar on Mobile */
+    .announcement-bar {
+        padding: 6px 12px;
+        font-size: 0.78rem;
+    }
+
+    #connectionStatus {
+        display: none; /* Free up space on mobile announcement bar */
+    }
+
+    /* Matches Lobby on Mobile */
     .matches-grid {
         grid-template-columns: 1fr;
+        gap: 14px;
+        margin-top: 14px;
     }
+
+    .match-card {
+        border-radius: var(--radius-md);
+    }
+
+    .match-card-header {
+        padding: 12px 14px;
+    }
+
+    .match-title {
+        font-size: 1.1rem;
+        margin-top: 6px;
+    }
+
+    .match-stats-row {
+        padding: 10px 12px;
+        gap: 6px;
+    }
+
+    .stat-val {
+        font-size: 1.15rem;
+    }
+
+    .stat-label {
+        font-size: 0.65rem;
+    }
+
+    .slot-progress-wrapper {
+        padding: 10px 14px;
+    }
+
+    .match-card-footer {
+        padding: 10px 14px 14px;
+    }
+
+    .btn {
+        padding: 10px 16px;
+    }
+
+    /* bKash Recharge Card on Mobile */
     .recharge-card {
-        padding: 18px;
+        padding: 16px 14px;
+        border-radius: var(--radius-md);
     }
+
     .bkash-banner {
         flex-direction: column;
         align-items: flex-start;
-        gap: 12px;
+        gap: 10px;
+        padding: 14px;
+    }
+
+    .bkash-num {
+        font-size: 1.3rem;
+    }
+
+    .instructions-list {
+        margin: 12px 0 18px;
+        padding-left: 18px;
+        font-size: 0.82rem;
+    }
+
+    /* Modals for Mobile (Bottom-Sheet / Responsive Dialog) */
+    .modal-overlay {
+        padding: 10px;
+        align-items: flex-end;
+    }
+
+    .modal-box {
+        max-width: 100%;
+        border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+        max-height: 90vh;
+        overflow-y: auto;
+        animation: slideUpMobile 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    @keyframes slideUpMobile {
+        from { transform: translateY(100%); }
+        to { transform: translateY(0); }
+    }
+
+    .modal-header {
+        padding: 14px 18px;
+    }
+
+    .modal-body {
+        padding: 16px 18px 28px;
+    }
+
+    /* Admin Panel on Mobile */
+    .admin-grid-stats {
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+    }
+
+    .admin-stat-card {
+        padding: 12px;
+        gap: 10px;
+    }
+
+    .admin-stat-icon {
+        width: 38px;
+        height: 38px;
+        font-size: 1.1rem;
+    }
+
+    .admin-panel-card {
+        padding: 16px 12px;
+        border-radius: var(--radius-md);
+        margin-bottom: 16px;
+    }
+
+    .admin-card-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
+
+    /* Toast for Mobile */
+    .toast-container {
+        bottom: 74px; /* Above the mobile bottom bar */
+        right: 12px;
+        left: 12px;
+    }
+
+    .toast {
+        min-width: 0;
+        max-width: 100%;
+        width: 100%;
     }
 }
+

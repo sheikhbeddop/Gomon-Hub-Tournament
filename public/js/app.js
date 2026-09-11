@@ -154,10 +154,12 @@ async function startApp() {
     await initAuth();
     initServiceWorker();
 
-    // Show Important Notice modal immediately on app entry
-    setTimeout(() => {
-        openWelcomeNotice();
-    }, 350);
+    // Show Important Notice modal on fresh app entry (only if logged in and not yet dismissed this session)
+    if (token || currentUser) {
+        setTimeout(() => {
+            openWelcomeNotice(false);
+        }, 350);
+    }
 }
 
 if (document.readyState === 'loading') {
@@ -421,6 +423,7 @@ function renderLoggedOutNav() {
     }
 }
 function logout(manual = true) {
+    sessionStorage.removeItem('welcome_notice_dismissed');
     localStorage.removeItem('ff_token');
     localStorage.removeItem('ff_user');
     token = null;
@@ -577,7 +580,8 @@ async function handleLoginSubmit(e) {
             playSound('success');
 
             // Safe isolated post-login initialization
-            try { openWelcomeNotice(); } catch(e) {}
+            sessionStorage.removeItem('welcome_notice_dismissed');
+            try { openWelcomeNotice(true); } catch(e) {}
             try { renderLoggedInNav(); } catch(e) { console.error('Error in renderLoggedInNav:', e); }
             try { renderUserProfile(); } catch(e) { console.error('Error in renderUserProfile:', e); }
             try { loadMatches(); } catch(e) { console.error('Error in loadMatches:', e); }
@@ -853,7 +857,8 @@ async function handleRegisterSubmit(e) {
     playSound('success');
 
     // Safe background UI updates
-    try { openWelcomeNotice(); } catch(e) {}
+    sessionStorage.removeItem('welcome_notice_dismissed');
+    try { openWelcomeNotice(true); } catch(e) {}
     try { renderLoggedInNav(); } catch(e) { console.error('Error in renderLoggedInNav:', e); }
     try { renderUserProfile(); } catch(e) { console.error('Error in renderUserProfile:', e); }
     try { loadMatches(); } catch(e) { console.error('Error in loadMatches:', e); }
@@ -3345,12 +3350,21 @@ async function loadCompletedResults(category, btnElem) {
 // -------------------------------------------------------------
 // Important Notice Popup Helpers
 // -------------------------------------------------------------
-function openWelcomeNotice() {
+function openWelcomeNotice(force = false) {
+    // If not forced and already dismissed in this session, don't show (e.g. on page refresh)
+    if (!force && sessionStorage.getItem('welcome_notice_dismissed')) {
+        return;
+    }
     const modal = document.getElementById('welcomeNoticeModal');
-    if (modal) modal.classList.add('show');
+    if (modal) {
+        modal.classList.add('show');
+        // Once shown in this session, mark so page refreshes will not show it again
+        sessionStorage.setItem('welcome_notice_dismissed', 'true');
+    }
 }
 
 function closeWelcomeNotice() {
+    sessionStorage.setItem('welcome_notice_dismissed', 'true');
     const modal = document.getElementById('welcomeNoticeModal');
     if (modal) modal.classList.remove('show');
 }

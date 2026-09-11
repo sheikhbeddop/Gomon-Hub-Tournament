@@ -523,6 +523,163 @@
             text-transform: uppercase;
         }
 
+        /* =============================================================
+           IMPORTANT NOTICE POPUP (WELCOME MODAL) - COMPACT SCREENSHOT MATCH
+           ============================================================= */
+        .welcome-notice-overlay {
+            position: fixed;
+            inset: 0;
+            width: 100vw;
+            height: 100vh;
+            height: 100dvh;
+            background: rgba(0, 0, 0, 0.75);
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999999;
+            padding: 16px;
+            box-sizing: border-box;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+
+        .welcome-notice-overlay.show {
+            display: flex !important;
+            opacity: 1 !important;
+        }
+
+        .welcome-notice-card {
+            background: #ffffff;
+            color: #1f2937;
+            width: 88%;
+            max-width: 340px;
+            max-height: 86vh;
+            max-height: 86dvh;
+            border-radius: 14px;
+            box-shadow: 0 20px 50px -10px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(0, 0, 0, 0.05);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            transform: scale(0.93) translateY(6px);
+            transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+
+        .welcome-notice-overlay.show .welcome-notice-card {
+            transform: scale(1) translateY(0);
+        }
+
+        .welcome-notice-header {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 7px;
+            padding: 14px 16px 4px 16px;
+            background: #ffffff;
+        }
+
+        .welcome-notice-icon {
+            width: 22px;
+            height: 22px;
+            flex-shrink: 0;
+        }
+
+        .welcome-notice-title {
+            font-size: 1.05rem;
+            font-weight: 800;
+            color: #111827;
+            margin: 0;
+            letter-spacing: -0.2px;
+            font-family: 'Inter', -apple-system, sans-serif;
+        }
+
+        .welcome-notice-body {
+            padding: 4px 16px 8px 16px;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            font-size: 0.72rem;
+            line-height: 1.38;
+            color: #374151;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .welcome-notice-body::-webkit-scrollbar {
+            width: 4px;
+        }
+        .welcome-notice-body::-webkit-scrollbar-thumb {
+            background: rgba(0, 0, 0, 0.15);
+            border-radius: 99px;
+        }
+
+        .notice-highlight-text {
+            font-weight: 700;
+            color: #111827;
+            font-size: 0.76rem;
+            margin: 0;
+        }
+
+        .notice-text-p {
+            margin: 0;
+            color: #374151;
+            text-align: left;
+        }
+
+        .notice-item-row {
+            display: flex;
+            align-items: flex-start;
+            gap: 6px;
+            margin: 0;
+        }
+
+        .notice-item-icon {
+            font-size: 0.8rem;
+            line-height: 1.35;
+            flex-shrink: 0;
+        }
+
+        .notice-item-content {
+            flex: 1;
+            color: #374151;
+        }
+
+        .welcome-notice-footer {
+            display: flex;
+            justify-content: flex-end;
+            padding: 4px 16px 12px 16px;
+            background: #ffffff;
+            border-top: 1px solid rgba(0, 0, 0, 0.04);
+        }
+
+        .btn-got-it {
+            background: #ef4444;
+            color: #ffffff;
+            font-weight: 800;
+            font-size: 0.78rem;
+            letter-spacing: 0.5px;
+            padding: 6px 20px;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            box-shadow: 0 3px 10px rgba(239, 68, 68, 0.35);
+            transition: background 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+            text-transform: uppercase;
+            outline: none;
+        }
+
+        .btn-got-it:hover {
+            background: #dc2626;
+            box-shadow: 0 5px 14px rgba(220, 38, 38, 0.45);
+            transform: translateY(-1px);
+        }
+
+        .btn-got-it:active {
+            transform: translateY(1px);
+            box-shadow: 0 2px 5px rgba(220, 38, 38, 0.3);
+        }
     </style>
 
 </head>
@@ -2683,10 +2840,60 @@
         </div>
     </div>
 
+    <!-- MODAL: IMPORTANT NOTICE POPUP (WELCOME MODAL) -->
+    <div class="modal-overlay welcome-notice-overlay" id="welcomeNoticeModal" onclick="closeWelcomeNoticeOnBackdrop(event)">
+        <div class="welcome-notice-card" onclick="event.stopPropagation()">
+            <div class="welcome-notice-header">
+                <svg class="welcome-notice-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M12 2L1 21H23L12 2Z" fill="#EF4444"/>
+                    <path d="M12 9V14M12 17.5V17.6" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round"/>
+                </svg>
+                <h3 class="welcome-notice-title">Important Notice</h3>
+            </div>
+            <div class="welcome-notice-body">
+                <p class="notice-highlight-text">👉 We Support only fair players 😎</p>
+                
+                <p class="notice-text-p">
+                    প্রথমে নিয়ম পড়বেন all rules button এ click করে, সমস্ত mode এর নিয়ম আলাদা 🤝 যারা নিয়ম মেনে খেলতে পারবেন তাদের জন্য GOMON HUB TOUR সেরা🥳 নিয়ম না মানতে পারলে ম্যাচে জয়েন করবেন না leave and go এই অ্যাপস তাদের জন্য না!
+                </p>
+                
+                <div class="notice-item-row">
+                    <span class="notice-item-icon">⛔</span>
+                    <div class="notice-item-content">
+                        একের অধিক (বেশি) ফ্রী ফায়ার আইডি দিয়ে যে এক্সে গেম খেলবে তাকে এ্যপ থেকে ব্যান করা হবে!
+                    </div>
+                </div>
+
+                <div class="notice-item-row">
+                    <span class="notice-item-icon">⛔</span>
+                    <div class="notice-item-content">
+                        এক্সেস ম্যাচের মধ্যে Garena Free Fire যে প্লেয়ার কে (garena free fire was eliminated by the system due to abnormal behaviour) এই লিখা দিয়ে Eliminate করবে তাকে সঙ্গে সঙ্গে আমাদের এ্যপ থেকে পার্মানেন্ট ব্যান করা হবে!
+                    </div>
+                </div>
+
+                <div class="notice-item-row">
+                    <span class="notice-item-icon">✔️</span>
+                    <div class="notice-item-content">
+                        Withdraw 100 টাকার নিচে হলে 5 টাকা খরচ কাটা হবে এবং 100 টাকার বেশি হলে ( যেমন 101 টাকা থেকে আপনার যত টাকা ইচ্ছে) 10 টাকা খরচ কাটা হবে! প্রত্যেক উইথড্র উইথড্র রিকোয়েস্ট পাঠানোর 48 ঘণ্টার মধ্যে যাচাই-বাছাই করে সম্পন্ন করা হয়✔️ সারাদিন যতবার ইচ্ছে ততবার উইথড্র করবেন🥰✔️
+                    </div>
+                </div>
+
+                <p class="notice-text-p" style="color: #4b5563; font-size: 0.70rem;">
+                    যে কোন সমস্যায় সরাসরি আমাদের হোয়াটসঅ্যাপে মেসেজ করবেন, সমস্যা নিয়ে যদি আপনি আমাদের সাথে যোগাযোগ না করেন সে ক্ষেত্রে আপনার নিজেরই ক্ষতি আর আমরা সেটা জানতেও পারব না, তাই নির্দ্বিধায় আমাদেরকে হোয়াটসঅ্যাপে মেসেজ করবেন!
+                </p>
+            </div>
+            <div class="welcome-notice-footer">
+                <button type="button" class="btn-got-it" id="btnGotItNotice" onclick="closeWelcomeNotice()">
+                    GOT IT
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Toast Notification Container -->
     <div class="toast-container" id="toastContainer"></div>
 
-    <script src="/static/js/app.js?v=4.3.3"></script>
+    <script src="/static/js/app.js?v=4.3.4"></script>
 </body>
 </html>
 

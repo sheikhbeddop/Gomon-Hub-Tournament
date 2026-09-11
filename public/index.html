@@ -526,49 +526,60 @@
         /* =============================================================
            IMPORTANT NOTICE POPUP (WELCOME MODAL) - COMPACT SCREENSHOT MATCH
            ============================================================= */
-        .welcome-notice-overlay {
-            position: fixed;
-            inset: 0;
-            width: 100vw;
-            height: 100vh;
-            height: 100dvh;
-            background: rgba(0, 0, 0, 0.75);
-            backdrop-filter: blur(4px);
-            -webkit-backdrop-filter: blur(4px);
+        .welcome-notice-overlay,
+        #welcomeNoticeModal {
+            position: fixed !important;
+            inset: 0 !important;
+            top: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            bottom: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            height: 100dvh !important;
+            background: rgba(0, 0, 0, 0.75) !important;
+            backdrop-filter: blur(5px) !important;
+            -webkit-backdrop-filter: blur(5px) !important;
             display: none;
-            align-items: center;
-            justify-content: center;
-            z-index: 9999999;
-            padding: 16px;
-            box-sizing: border-box;
+            align-items: center !important;
+            justify-content: center !important;
+            z-index: 9999999 !important;
+            padding: 16px !important;
+            box-sizing: border-box !important;
             opacity: 0;
             transition: opacity 0.2s ease;
         }
 
-        .welcome-notice-overlay.show {
+        .welcome-notice-overlay.show,
+        #welcomeNoticeModal.show {
             display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
             opacity: 1 !important;
         }
 
         .welcome-notice-card {
-            background: #ffffff;
-            color: #1f2937;
-            width: 88%;
-            max-width: 340px;
-            max-height: 86vh;
-            max-height: 86dvh;
-            border-radius: 14px;
-            box-shadow: 0 20px 50px -10px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(0, 0, 0, 0.05);
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-            transform: scale(0.93) translateY(6px);
+            background: #ffffff !important;
+            color: #1f2937 !important;
+            width: 88% !important;
+            max-width: 340px !important;
+            max-height: 86vh !important;
+            max-height: 86dvh !important;
+            border-radius: 14px !important;
+            box-shadow: 0 20px 50px -10px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(0, 0, 0, 0.05) !important;
+            display: flex !important;
+            flex-direction: column !important;
+            overflow: hidden !important;
+            margin: auto !important;
+            align-self: center !important;
+            transform: scale(0.93) translateY(0);
             transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         }
 
-        .welcome-notice-overlay.show .welcome-notice-card {
-            transform: scale(1) translateY(0);
+        .welcome-notice-overlay.show .welcome-notice-card,
+        #welcomeNoticeModal.show .welcome-notice-card {
+            transform: scale(1) translateY(0) !important;
         }
 
         .welcome-notice-header {
@@ -679,6 +690,22 @@
         .btn-got-it:active {
             transform: translateY(1px);
             box-shadow: 0 2px 5px rgba(220, 38, 38, 0.3);
+        }
+
+        @media (max-width: 768px) {
+            #welcomeNoticeModal.welcome-notice-overlay,
+            .welcome-notice-overlay {
+                align-items: center !important;
+                justify-content: center !important;
+                padding: 16px !important;
+            }
+            #welcomeNoticeModal .welcome-notice-card,
+            .welcome-notice-card {
+                margin: auto !important;
+                align-self: center !important;
+                bottom: auto !important;
+                top: auto !important;
+            }
         }
     </style>
 
@@ -2841,8 +2868,8 @@
     </div>
 
     <!-- MODAL: IMPORTANT NOTICE POPUP (WELCOME MODAL) -->
-    <div class="modal-overlay welcome-notice-overlay" id="welcomeNoticeModal" onclick="closeWelcomeNoticeOnBackdrop(event)">
-        <div class="welcome-notice-card" onclick="event.stopPropagation()">
+    <div class="modal-overlay welcome-notice-overlay" id="welcomeNoticeModal" onclick="closeWelcomeNoticeOnBackdrop(event)" style="align-items: center !important; justify-content: center !important;">
+        <div class="welcome-notice-card" onclick="event.stopPropagation()" style="margin: auto !important; align-self: center !important;">
             <div class="welcome-notice-header">
                 <svg class="welcome-notice-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path d="M12 2L1 21H23L12 2Z" fill="#EF4444"/>
@@ -2893,7 +2920,7 @@
     <!-- Toast Notification Container -->
     <div class="toast-container" id="toastContainer"></div>
 
-    <script src="/static/js/app.js?v=4.5.0"></script>
+    <script src="/static/js/app.js?v=4.6.0"></script>
 </body>
 </html>
 

@@ -1240,7 +1240,7 @@ body {
     }
 
     /* Modals for Mobile (Bottom-Sheet / Responsive Dialog) */
-    .modal-overlay:not(#authModal) {
+    .modal-overlay:not(#authModal):not(#welcomeNoticeModal):not(.welcome-notice-overlay) {
         padding: 10px;
         align-items: flex-end;
     }

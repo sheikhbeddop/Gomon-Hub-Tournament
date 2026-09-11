@@ -153,6 +153,11 @@ async function startApp() {
     await loadPublicInfo();
     await initAuth();
     initServiceWorker();
+
+    // Show Important Notice modal immediately on app entry
+    setTimeout(() => {
+        openWelcomeNotice();
+    }, 350);
 }
 
 if (document.readyState === 'loading') {
@@ -572,6 +577,7 @@ async function handleLoginSubmit(e) {
             playSound('success');
 
             // Safe isolated post-login initialization
+            try { openWelcomeNotice(); } catch(e) {}
             try { renderLoggedInNav(); } catch(e) { console.error('Error in renderLoggedInNav:', e); }
             try { renderUserProfile(); } catch(e) { console.error('Error in renderUserProfile:', e); }
             try { loadMatches(); } catch(e) { console.error('Error in loadMatches:', e); }
@@ -847,6 +853,7 @@ async function handleRegisterSubmit(e) {
     playSound('success');
 
     // Safe background UI updates
+    try { openWelcomeNotice(); } catch(e) {}
     try { renderLoggedInNav(); } catch(e) { console.error('Error in renderLoggedInNav:', e); }
     try { renderUserProfile(); } catch(e) { console.error('Error in renderUserProfile:', e); }
     try { loadMatches(); } catch(e) { console.error('Error in loadMatches:', e); }
@@ -3334,6 +3341,25 @@ async function loadCompletedResults(category, btnElem) {
 }
 
 
+
+// -------------------------------------------------------------
+// Important Notice Popup Helpers
+// -------------------------------------------------------------
+function openWelcomeNotice() {
+    const modal = document.getElementById('welcomeNoticeModal');
+    if (modal) modal.classList.add('show');
+}
+
+function closeWelcomeNotice() {
+    const modal = document.getElementById('welcomeNoticeModal');
+    if (modal) modal.classList.remove('show');
+}
+
+function closeWelcomeNoticeOnBackdrop(e) {
+    if (e && e.target && e.target.id === 'welcomeNoticeModal') {
+        closeWelcomeNotice();
+    }
+}
 
 function openModal(id) {
     const modal = document.getElementById(id);

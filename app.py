@@ -1387,7 +1387,7 @@ def get_wallet_history(user: dict = Depends(get_current_user)):
     }
 
 @app.post("/api/wallet/withdraw")
-def request_withdraw(data: WithdrawRequest, user: dict = Depends(get_current_user)):
+async def request_withdraw(data: WithdrawRequest, user: dict = Depends(get_current_user)):
     if data.amount <= 0:
         raise HTTPException(status_code=400, detail="উইথড্র পরিমাণ ০ এর বেশি হতে হবে")
     if len(data.bkash_number.strip()) < 11:
@@ -1413,7 +1413,7 @@ def request_withdraw(data: WithdrawRequest, user: dict = Depends(get_current_use
     conn.close()
 
     new_bal = current_balance - data.amount
-    schedule_broadcast({
+    await manager.broadcast({
         "type": "BALANCE_UPDATED",
         "user_id": user["id"],
         "digits_balance": new_bal

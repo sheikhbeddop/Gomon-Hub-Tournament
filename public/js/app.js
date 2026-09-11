@@ -205,7 +205,7 @@ async function loadPublicInfo() {
 
             // Check if installed app needs an update
             if (currentInstalledVersion && data.app_version !== currentInstalledVersion) {
-                promptAppUpdate(data.app_version, data.app_update_notes || 'নতুন আপডেট ইনস্টল করুন');
+                promptAppUpdate(data.app_version, data.app_update_notes || 'Install the latest update');
             }
         }
     } catch (e) {
@@ -275,7 +275,7 @@ async function initAuth() {
             }
         } else if (res.status === 403) {
             const data = await res.json();
-            alert(data.detail || "🚨 আপনার অ্যাকাউন্টটি ব্যান করা হয়েছে!");
+            alert(data.detail || "🚨 Your account has been banned from GOMON HUB!");
             logout(false);
         } else if (res.status === 401) {
             logout(false);
@@ -308,7 +308,7 @@ function updateBalanceUI(balance) {
     if (withdrawBal) withdrawBal.innerText = 'BDT ' + balNum;
 
     const modalBal = document.getElementById('walletModalUserBalance');
-    if (modalBal) modalBal.innerText = 'BDT ' + balNum + ' ডিজিট';
+    if (modalBal) modalBal.innerText = balNum + ' Digits';
 }
 
 function fetchMatches() {
@@ -352,7 +352,7 @@ function renderLoggedInNav() {
         if (mAdmin) mAdmin.style.display = 'flex';
 
         if (isMod) {
-            if (tabBtnText) tabBtnText.innerText = '🛡️ মডারেটর';
+            if (tabBtnText) tabBtnText.innerText = '🛡️ Moderator';
             if (tabBtnBadge) {
                 tabBtnBadge.innerText = 'MOD';
                 tabBtnBadge.style.background = 'var(--neon-cyan)';
@@ -390,7 +390,7 @@ function applyRolePermissionsUI() {
 
     if (isMod) {
         if (titleEl) titleEl.innerHTML = '🛡️ MODERATOR CONTROL PANEL';
-        if (subEl) subEl.innerText = 'ম্যাচ শিডিউল, রুম কোড ও ফলাফল আপডেট কন্ট্রোল';
+        if (subEl) subEl.innerText = 'Schedule, Room Credentials & Match Conclude Control';
         if (topActionBtns) topActionBtns.style.display = 'none';
 
         document.querySelectorAll('.admin-only-card, .admin-only-nav').forEach(el => {
@@ -398,7 +398,7 @@ function applyRolePermissionsUI() {
         });
     } else if (isAdmin) {
         if (titleEl) titleEl.innerHTML = '👑 SUPER-ADMIN MASTER CONTROL';
-        if (subEl) subEl.innerText = 'ওয়েবসাইট, প্লেয়ার ও টুর্নামেন্ট ওভারভিউ ও ম্যানেজমেন্ট কন্ট্রোল';
+        if (subEl) subEl.innerText = 'Complete overview of matches, players, finances, and platform settings';
         if (topActionBtns) topActionBtns.style.display = 'flex';
 
         document.querySelectorAll('.admin-only-card, .admin-only-nav').forEach(el => {
@@ -437,7 +437,7 @@ function logout(manual = true) {
     if (uInp && saved) {
         uInp.value = saved;
     }
-    if (manual) showToast('লগআউট সফল হয়েছে', 'info');
+    if (manual) showToast('Logged out successfully', 'info');
 }
 
 function exitImpersonation() {
@@ -490,7 +490,7 @@ function handleForgotPassword() {
     if (modal) {
         openModal('forgotPasswordModal');
     } else {
-        alert("So Sad Baby\n\nএডমিন বা GOMON HUB এর সাথে যোগাযোগ করুন। আর কিচ্ছু লাগবে না!\n\nWhatsApp: 01952851550\n২৪ ঘণ্টার যেকোনো সময় সাপোর্ট পাওয়া যাবে।");
+        alert("Need help resetting your password?\n\nPlease contact GOMON HUB Admin on WhatsApp.\n\nWhatsApp: 01952851550\n24/7 dedicated support available anytime.");
     }
 }
 
@@ -539,11 +539,11 @@ async function handleLoginSubmit(e) {
     const p = document.getElementById('loginPassword').value;
 
     if (!u) {
-        showLoginError('অনুগ্রহ করে ইউজারনেম, ফোন অথবা প্লেয়ার আইডি দিন');
+        showLoginError('Please enter your username, phone number, or Player ID');
         return;
     }
     if (!p) {
-        showLoginError('অনুগ্রহ করে পাসওয়ার্ড দিন');
+        showLoginError('Please enter your password');
         return;
     }
 
@@ -551,7 +551,7 @@ async function handleLoginSubmit(e) {
     const originalBtnText = submitBtn ? submitBtn.innerText : 'Sign In';
     if (submitBtn) {
         submitBtn.disabled = true;
-        submitBtn.innerText = 'লগইন হচ্ছে...';
+        submitBtn.innerText = 'Signing in...';
     }
 
     try {
@@ -573,7 +573,7 @@ async function handleLoginSubmit(e) {
             if (mainApp) mainApp.style.display = 'block';
             closeModal('authModal');
             dismissSplashScreen();
-            showToast(`স্বাগতম, ${currentUser.username}! লগইন সফল।`, 'success');
+            showToast(`Welcome back, ${currentUser.username}! Login successful.`, 'success');
             playSound('success');
 
             // Safe isolated post-login initialization
@@ -589,12 +589,12 @@ async function handleLoginSubmit(e) {
                 try { loadAdminOverview(); } catch(e) { console.error('Error in loadAdminOverview:', e); }
             }
         } else {
-            const errMsg = data.detail || 'ভুল ইউজারনেম বা পাসওয়ার্ড! অনুগ্রহ করে আবার চেষ্টা করুন।';
+            const errMsg = data.detail || 'Invalid username or password. Please try again.';
             showLoginError(errMsg);
         }
     } catch (err) {
         console.error('Login network error:', err);
-        showLoginError('সার্ভারে যোগাযোগ করা যায়নি! অনুগ্রহ করে সার্ভার চালু আছে কিনা চেক করুন।');
+        showLoginError('Unable to connect to server. Please check your network connection.');
     } finally {
         if (submitBtn) {
             submitBtn.disabled = false;
@@ -604,42 +604,42 @@ async function handleLoginSubmit(e) {
 }
 
 function validatePhoneNumber(raw) {
-    if (!raw) return { valid: false, message: 'সঠিক ফোন নম্বর দিন' };
+    if (!raw) return { valid: false, message: 'Please enter a valid 11-digit phone number' };
     let clean = raw.replace(/\s+/g, '').replace(/[-+]/g, '');
     if (clean.startsWith('8801') && clean.length === 13) {
         clean = clean.substring(2);
     }
     // 1. Must be exactly 11 digits and all numeric
     if (!/^\d{11}$/.test(clean)) {
-        return { valid: false, message: 'সঠিক ফোন নম্বর দিন' };
+        return { valid: false, message: 'Please enter a valid 11-digit phone number' };
     }
     // 2. Must start with a valid Bangladeshi mobile operator code: 013, 014, 015, 016, 017, 018, 019
     if (!/^01[3-9]/.test(clean)) {
-        return { valid: false, message: 'সঠিক ফোন নম্বর দিন' };
+        return { valid: false, message: 'Please enter a valid 11-digit phone number' };
     }
     // 3. Cannot be all 11 identical digits (e.g. 00000000000, 11111111111)
     if (/^(\d)\1{10}$/.test(clean) || new Set(clean.split('')).size === 1) {
-        return { valid: false, message: 'সঠিক ফোন নম্বর দিন' };
+        return { valid: false, message: 'Please enter a valid 11-digit phone number' };
     }
     // 4. Maximum consecutive identical digits cannot be 5 or more (e.g. 11111, 00000, 77777)
     if (/(\d)\1{4,}/.test(clean)) {
-        return { valid: false, message: 'সঠিক ফোন নম্বর দিন' };
+        return { valid: false, message: 'Please enter a valid 11-digit phone number' };
     }
     // 5. Must contain at least 4 distinct digits (rejects dummy numbers like 01909090909, 01707070707)
     if (new Set(clean.split('')).size < 4) {
-        return { valid: false, message: 'সঠিক ফোন নম্বর দিন' };
+        return { valid: false, message: 'Please enter a valid 11-digit phone number' };
     }
     // 6. Reject repeating 2-digit patterns repeated 3 or more times (e.g. 090909, 121212, 181818)
     if (/(\d{2})\1{2,}/.test(clean)) {
-        return { valid: false, message: 'সঠিক ফোন নম্বর দিন' };
+        return { valid: false, message: 'Please enter a valid 11-digit phone number' };
     }
     // 7. Reject alternating digits pattern repeated 3 or more times (e.g. 909090, 090909, 707070)
     if (/(\d)(\d)\1\2\1\2/.test(clean)) {
-        return { valid: false, message: 'সঠিক ফোন নম্বর দিন' };
+        return { valid: false, message: 'Please enter a valid 11-digit phone number' };
     }
     // 8. Reject repeating 3-digit pattern repeated 3 or more times (e.g. 123123123)
     if (/(\d{3})\1{2,}/.test(clean)) {
-        return { valid: false, message: 'সঠিক ফোন নম্বর দিন' };
+        return { valid: false, message: 'Please enter a valid 11-digit phone number' };
     }
     // 9. Reject sequential 6 or more digits
     const sequentialPatterns = [
@@ -647,7 +647,7 @@ function validatePhoneNumber(raw) {
         '098765', '987654', '876543', '765432', '654321', '543210'
     ];
     if (sequentialPatterns.some(pat => clean.includes(pat))) {
-        return { valid: false, message: 'সঠিক ফোন নম্বর দিন' };
+        return { valid: false, message: 'Please enter a valid 11-digit phone number' };
     }
     return { valid: true, phone: clean };
 }
@@ -687,15 +687,15 @@ function showSignupError(msg, targetInputId = null) {
 
 function validatePasswordStrength(password) {
     if (!password || password.length < 8) {
-        return { valid: false, message: 'পাসওয়ার্ড কমপক্ষে ৮ অক্ষরের হতে হবে' };
+        return { valid: false, message: 'Password must be at least 8 characters long' };
     }
     if (!password.includes('@') && !password.includes('#')) {
-        return { valid: false, message: 'পাসওয়ার্ডে অবশ্যই @ অথবা # সিম্বল থাকতে হবে' };
+        return { valid: false, message: 'Password must contain an @ or # symbol' };
     }
     const hasLetter = /[a-zA-Z]/.test(password);
     const hasDigit = /\d/.test(password);
     if (!hasLetter || !hasDigit) {
-        return { valid: false, message: 'পাসওয়ার্ডটি খুব সহজ! শক্তিশালী পাসওয়ার্ড তৈরি করুন (অক্ষর, সংখ্যা এবং @ অথবা # মিলিয়ে দিন)' };
+        return { valid: false, message: 'Password is too simple. Use a mix of letters, numbers, and symbols (@ or #).' };
     }
     const lower = password.toLowerCase();
     const easyWords = [
@@ -705,11 +705,11 @@ function validatePasswordStrength(password) {
     ];
     for (let w of easyWords) {
         if (lower.includes(w)) {
-            return { valid: false, message: 'পাসওয়ার্ডটি খুব সহজ! কঠিন পাসওয়ার্ড তৈরি করুন (1234 বা সাধারণ শব্দ ব্যবহার করবেন না)' };
+            return { valid: false, message: 'Password is too predictable. Avoid sequential numbers like 1234.' };
         }
     }
     if (/(.)\1{4,}/.test(password)) {
-        return { valid: false, message: 'পাসওয়ার্ডে একই অক্ষর বারবার ব্যবহার না করে কঠিন পাসওয়ার্ড তৈরি করুন' };
+        return { valid: false, message: 'Avoid repeating identical characters in your password.' };
     }
     return { valid: true };
 }
@@ -731,7 +731,7 @@ async function handleRegisterSubmit(e) {
     const terms = document.getElementById('regTermsCheckbox');
 
     if (!username || username.length < 3) {
-        showSignupError('ইউজারনেম কমপক্ষে ৩ অক্ষরের হতে হবে', 'regUsername');
+        showSignupError('Username must be at least 3 characters', 'regUsername');
         return;
     }
 
@@ -745,11 +745,11 @@ async function handleRegisterSubmit(e) {
 
     // 2. Email validation (strictly mandatory)
     if (!email) {
-        showSignupError('ইমেইল অ্যাড্রেস আবশ্যক', 'regEmail');
+        showSignupError('Email address is required', 'regEmail');
         return;
     }
     if (!email.includes('@') || !email.includes('.') || email.length < 5) {
-        showSignupError('সঠিক ইমেইল অ্যাড্রেস প্রদান করুন', 'regEmail');
+        showSignupError('Please enter a valid email address', 'regEmail');
         return;
     }
 
@@ -757,11 +757,11 @@ async function handleRegisterSubmit(e) {
     const ffUid = document.getElementById('regFFUid') ? document.getElementById('regFFUid').value.trim() : '';
     const ffIgn = document.getElementById('regFFIgn') ? document.getElementById('regFFIgn').value.trim() : '';
     if (!ffUid) {
-        showSignupError('ফ্রি ফায়ার ইউআইডি (Free Fire UID) দেওয়া আবশ্যক', 'regFFUid');
+        showSignupError('Free Fire numeric UID is required', 'regFFUid');
         return;
     }
     if (!/^\d{6,15}$/.test(ffUid)) {
-        showSignupError('সঠিক ফ্রি ফায়ার ইউআইডি দিন (৬ থেকে ১৫ ডিজিটের সংখ্যা হতে হবে)', 'regFFUid');
+        showSignupError('Please enter a valid numeric UID (6 to 15 digits)', 'regFFUid');
         return;
     }
 
@@ -773,7 +773,7 @@ async function handleRegisterSubmit(e) {
     }
 
     if (terms && !terms.checked) {
-        showSignupError('শর্তাবলী ও নীতিমালা গ্রহণ করা আবশ্যক', 'regTermsCheckbox');
+        showSignupError('You must agree to the Terms & Conditions', 'regTermsCheckbox');
         return;
     }
 
@@ -781,7 +781,7 @@ async function handleRegisterSubmit(e) {
     const originalBtnText = submitBtn ? submitBtn.innerText : 'Create Account';
     if (submitBtn) {
         submitBtn.disabled = true;
-        submitBtn.innerText = 'অ্যাকাউন্ট তৈরি হচ্ছে...';
+        submitBtn.innerText = 'Creating account...';
     }
 
     let res;
@@ -805,7 +805,7 @@ async function handleRegisterSubmit(e) {
             submitBtn.disabled = false;
             submitBtn.innerText = originalBtnText;
         }
-        showSignupError('সার্ভারে যোগাযোগ করা যায়নি! অনুগ্রহ করে সার্ভার চালু আছে কিনা চেক করুন।');
+        showSignupError('Unable to connect to server. Please check your network connection.');
         return;
     }
 
@@ -823,15 +823,15 @@ async function handleRegisterSubmit(e) {
 
     if (!res.ok) {
         if (res.status >= 500) {
-            showSignupError('সার্ভারে সাময়িক সমস্যা হচ্ছে (HTTP ' + res.status + ')। কিছুক্ষণ পর চেষ্টা করুন।');
+            showSignupError('Server temporary issue (HTTP ' + res.status + '). Please try again later.');
         } else {
-            const errMsg = (data && data.detail) || 'রেজিস্ট্রেশন ব্যর্থ হয়েছে';
+            const errMsg = (data && data.detail) || 'Registration failed';
             let targetId = null;
-            if (errMsg.includes('ইউআইডি') || errMsg.includes('UID')) targetId = 'regFFUid';
-            else if (errMsg.includes('ফোন')) targetId = 'regPhone';
-            else if (errMsg.includes('ইউজারনেম')) targetId = 'regUsername';
-            else if (errMsg.includes('পাসওয়ার্ড')) targetId = 'regPassword';
-            else if (errMsg.includes('ইমেইল')) targetId = 'regEmail';
+            if (errMsg.toLowerCase().includes('uid') || errMsg.includes('ইউআইডি')) targetId = 'regFFUid';
+            else if (errMsg.toLowerCase().includes('phone') || errMsg.includes('ফোন')) targetId = 'regPhone';
+            else if (errMsg.toLowerCase().includes('username') || errMsg.includes('ইউজারনেম')) targetId = 'regUsername';
+            else if (errMsg.toLowerCase().includes('password') || errMsg.includes('পাসওয়ার্ড')) targetId = 'regPassword';
+            else if (errMsg.toLowerCase().includes('email') || errMsg.includes('ইমেইল')) targetId = 'regEmail';
             showSignupError(errMsg, targetId);
         }
         return;
@@ -849,7 +849,7 @@ async function handleRegisterSubmit(e) {
     if (mainApp) mainApp.style.display = 'block';
     closeModal('authModal');
     dismissSplashScreen();
-    showToast(`একাউন্ট তৈরি সফল! আপনার প্লেয়ার আইডি: ${currentUser.player_id}`, 'success');
+    showToast(`Account created successfully! Your Player ID: ${currentUser.player_id}`, 'success');
     playSound('success');
 
     // Safe background UI updates
@@ -897,7 +897,7 @@ function filterMatches(category, btnElem) {
         document.querySelectorAll('#tab-matches .filter-pill').forEach(b => {
             const txt = (b.innerText || '').trim().toLowerCase();
             const cat = activeCategoryFilter.toLowerCase();
-            if ((cat === 'all' || cat === 'সব ম্যাচ') && (txt === 'সব ম্যাচ' || txt === 'all')) {
+            if ((cat === 'all' || cat === 'সব ম্যাচ' || cat === 'all matches') && (txt === 'all matches' || txt === 'all' || txt === 'সব ম্যাচ')) {
                 b.classList.add('active');
             } else if (txt === cat) {
                 b.classList.add('active');
@@ -915,7 +915,7 @@ function renderMatches() {
     if (!grid) return;
 
     let filtered = allMatches || [];
-    if (activeCategoryFilter && activeCategoryFilter !== 'all' && activeCategoryFilter !== 'সব ম্যাচ') {
+    if (activeCategoryFilter && activeCategoryFilter !== 'all' && activeCategoryFilter !== 'all matches' && activeCategoryFilter !== 'সব ম্যাচ') {
         filtered = (allMatches || []).filter(m => (m.match_type || '').toLowerCase().trim() === activeCategoryFilter.toLowerCase().trim());
     }
 
@@ -923,8 +923,8 @@ function renderMatches() {
         grid.innerHTML = `
             <div style="grid-column: 1/-1; text-align: center; padding: 28px 16px; background: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; margin: 10px 0;">
                 <span style="font-size: 1.8rem;">⚡</span>
-                <div style="font-family: 'Rajdhani', sans-serif; font-size: 0.95rem; font-weight: 800; color: #1e293b; margin: 6px 0 2px;">বর্তমানে কোনো একটিভ ম্যাচ নেই</div>
-                <div style="font-size: 0.75rem; color: #64748b;">খুব শীঘ্রই নতুন ম্যাচ যোগ করা হবে, সাথে থাকুন!</div>
+                <div style="font-family: 'Rajdhani', sans-serif; font-size: 0.95rem; font-weight: 800; color: #1e293b; margin: 6px 0 2px;">No Active Matches Scheduled</div>
+                <div style="font-size: 0.75rem; color: #64748b;">New tournament matches will be scheduled shortly. Stay tuned!</div>
             </div>
         `;
         return;
@@ -940,11 +940,11 @@ function renderMatches() {
             actionHtml = `
                 <div style="display: flex; flex-direction: column; gap: 6px;">
                     <div style="display: flex; align-items: center; justify-content: space-between; background: rgba(0, 245, 155, 0.08); border: 1px solid rgba(0, 245, 155, 0.25); border-radius: 8px; padding: 6px 10px;">
-                        <span style="font-size: 0.8rem; color: #a7f3d0; font-weight: 700;">✅ আপনি জয়েন করেছেন</span>
-                        <span style="font-family: 'Rajdhani', sans-serif; font-size: 0.95rem; font-weight: 800; color: #00f59b;">স্লট #${m.my_slot || 1}</span>
+                        <span style="font-size: 0.8rem; color: #a7f3d0; font-weight: 700;">✅ You are Registered</span>
+                        <span style="font-family: 'Rajdhani', sans-serif; font-size: 0.95rem; font-weight: 800; color: #00f59b;">Slot #${m.my_slot || 1}</span>
                     </div>
                     <button class="btn btn-neon" style="width: 100%; padding: 8px 12px; font-size: 0.86rem; font-weight: 800; border-radius: 8px;" onclick="openMatchInnerPortal(${m.id})">
-                        🔑 রুম ও প্লেয়ার ডিটেইলস দেখুন
+                        🔑 View Room & Players
                     </button>
                 </div>
             `;
@@ -952,12 +952,12 @@ function renderMatches() {
             actionHtml = `
                 <div style="display: flex; flex-direction: column; gap: 6px;">
                     <div style="display: flex; align-items: center; justify-content: space-between; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 5px 10px;">
-                        <span style="font-size: 0.78rem; color: #94a3b8; font-weight: 600;">⭕ জয়েন করেননি</span>
-                        <span style="font-size: 0.75rem; color: #ef4444; font-weight: 700;">রেজিস্ট্রেশন বন্ধ</span>
+                        <span style="font-size: 0.78rem; color: #94a3b8; font-weight: 600;">⭕ Not Joined</span>
+                        <span style="font-size: 0.75rem; color: #ef4444; font-weight: 700;">Registration Closed</span>
                     </div>
                     <div style="display: flex; gap: 6px;">
-                        <button class="btn btn-outline" style="flex: 1; opacity: 0.75; cursor: not-allowed; border-color: #ef4444; color: #ef4444; font-size: 0.8rem; font-weight: 700;" disabled>🔒 রেজিস্ট্রেশন বন্ধ</button>
-                        <button class="btn btn-outline" style="flex: 1; padding: 8px 6px; font-size: 0.8rem; font-weight: 700; border-radius: 8px; border-color: #cbd5e1; color: #64748b;" onclick="openMatchInnerPortal(${m.id})">🔒 রুম ডিটেইলস</button>
+                        <button class="btn btn-outline" style="flex: 1; opacity: 0.75; cursor: not-allowed; border-color: #ef4444; color: #ef4444; font-size: 0.8rem; font-weight: 700;" disabled>🔒 Registration Closed</button>
+                        <button class="btn btn-outline" style="flex: 1; padding: 8px 6px; font-size: 0.8rem; font-weight: 700; border-radius: 8px; border-color: #cbd5e1; color: #64748b;" onclick="openMatchInnerPortal(${m.id})">🔒 Room Details</button>
                     </div>
                 </div>
             `;
@@ -965,22 +965,22 @@ function renderMatches() {
             actionHtml = `
                 <div style="display: flex; flex-direction: column; gap: 6px;">
                     <div style="display: flex; align-items: center; justify-content: space-between; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 5px 10px;">
-                        <span style="font-size: 0.78rem; color: #94a3b8; font-weight: 600;">⭕ জয়েন করেননি</span>
-                        <span style="font-size: 0.75rem; color: #10b981; font-weight: 700;">ম্যাচ সমাপ্ত</span>
+                        <span style="font-size: 0.78rem; color: #94a3b8; font-weight: 600;">⭕ Not Joined</span>
+                        <span style="font-size: 0.75rem; color: #10b981; font-weight: 700;">Concluded</span>
                     </div>
-                    <button class="btn btn-outline" style="width: 100%; opacity: 0.75; cursor: not-allowed; border-color: #10b981; color: #10b981; font-size: 0.82rem; font-weight: 700;" disabled>🏁 ম্যাচ সমাপ্ত</button>
+                    <button class="btn btn-outline" style="width: 100%; opacity: 0.75; cursor: not-allowed; border-color: #10b981; color: #10b981; font-size: 0.82rem; font-weight: 700;" disabled>🏁 Concluded</button>
                 </div>
             `;
         } else if (isFull) {
             actionHtml = `
                 <div style="display: flex; flex-direction: column; gap: 6px;">
                     <div style="display: flex; align-items: center; justify-content: space-between; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 5px 10px;">
-                        <span style="font-size: 0.78rem; color: #94a3b8; font-weight: 600;">⭕ জয়েন করেননি</span>
-                        <span style="font-size: 0.75rem; color: #ef4444; font-weight: 700;">রুম পূর্ণ</span>
+                        <span style="font-size: 0.78rem; color: #94a3b8; font-weight: 600;">⭕ Not Joined</span>
+                        <span style="font-size: 0.75rem; color: #ef4444; font-weight: 700;">Slots Full</span>
                     </div>
                     <div style="display: flex; gap: 6px;">
-                        <button class="btn btn-outline" style="flex: 1; opacity: 0.6; cursor: not-allowed; font-size: 0.8rem;" disabled>🔒 সব স্লট পূর্ণ</button>
-                        <button class="btn btn-outline" style="flex: 1; padding: 8px 6px; font-size: 0.8rem; font-weight: 700; border-radius: 8px; border-color: #cbd5e1; color: #64748b;" onclick="openMatchInnerPortal(${m.id})">🔒 রুম ডিটেইলস</button>
+                        <button class="btn btn-outline" style="flex: 1; opacity: 0.6; cursor: not-allowed; font-size: 0.8rem;" disabled>🔒 All Slots Full</button>
+                        <button class="btn btn-outline" style="flex: 1; padding: 8px 6px; font-size: 0.8rem; font-weight: 700; border-radius: 8px; border-color: #cbd5e1; color: #64748b;" onclick="openMatchInnerPortal(${m.id})">🔒 Room Details</button>
                     </div>
                 </div>
             `;
@@ -988,15 +988,15 @@ function renderMatches() {
             actionHtml = `
                 <div style="display: flex; flex-direction: column; gap: 6px;">
                     <div style="display: flex; align-items: center; justify-content: space-between; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 5px 10px;">
-                        <span style="font-size: 0.78rem; color: #64748b; font-weight: 600;">⭕ আপনি এখনও জয়েন করেননি</span>
-                        <span style="font-size: 0.75rem; color: #0284c7; font-weight: 700;">ফি: ${m.entry_fee}🪙</span>
+                        <span style="font-size: 0.78rem; color: #64748b; font-weight: 600;">⭕ You have not joined yet</span>
+                        <span style="font-size: 0.75rem; color: #0284c7; font-weight: 700;">Fee: ${m.entry_fee} Digits</span>
                     </div>
                     <div style="display: flex; gap: 6px;">
                         <button class="btn btn-neon" style="flex: 1.2; padding: 8px 6px; font-size: 0.82rem; font-weight: 800; border-radius: 8px;" onclick="openJoinMatchModal(${m.id}, '${escapeHtml(m.title)}', ${m.entry_fee})">
-                            🎮 জয়েন করুন (${m.entry_fee}🪙)
+                            🎮 Join Match (${m.entry_fee} 🪙)
                         </button>
                         <button class="btn btn-outline" style="flex: 1; padding: 8px 6px; font-size: 0.8rem; font-weight: 700; border-radius: 8px; border-color: #cbd5e1; color: #475569;" onclick="openMatchInnerPortal(${m.id})">
-                            🔒 রুম ডিটেইলস
+                            🔒 Room Details
                         </button>
                     </div>
                 </div>
@@ -1019,23 +1019,23 @@ function renderMatches() {
 
                 <div class="match-stats-row">
                     <div class="stat-item">
-                        <span class="stat-label">প্রাইজ পুল</span>
+                        <span class="stat-label">Prize Pool</span>
                         <span class="stat-val prize">৳${m.prize_pool || 0}</span>
                     </div>
                     <div class="stat-item">
-                        <span class="stat-label">পার কিল</span>
+                        <span class="stat-label">Per Kill</span>
                         <span class="stat-val kill">৳${m.per_kill || 0}</span>
                     </div>
                     <div class="stat-item">
-                        <span class="stat-label">এন্ট্রি ফি</span>
+                        <span class="stat-label">Entry Fee</span>
                         <span class="stat-val fee">${m.entry_fee || 0}🪙</span>
                     </div>
                 </div>
 
                 <div class="slot-progress-wrapper">
                     <div class="slot-text-row">
-                        <span>স্লট বুকিং</span>
-                        <span><b>${m.joined_count || 0}</b> / ${m.total_slots || 48} জন</span>
+                        <span>Slot Booking</span>
+                        <span><b>${m.joined_count || 0}</b> / ${m.total_slots || 48} players</span>
                     </div>
                     <div class="slot-bar-bg">
                         <div class="slot-bar-fill" style="width: ${slotsPercent}%;"></div>
@@ -1052,13 +1052,13 @@ function renderMatches() {
 
 function openJoinMatchModal(matchId, matchTitle, entryFee) {
     if (!currentUser) {
-        showToast('ম্যাচে জয়েন করতে আগে লগইন করুন', 'info');
+        showToast('Please sign in before joining a tournament match', 'info');
         openModal('authModal');
         return;
     }
 
     if (currentUser.digits_balance < entryFee) {
-        showToast(`পর্যাপ্ত ডিজিট নেই! আপনার ব্যালেন্স ${currentUser.digits_balance} ডিজিট। জয়েন করতে ${entryFee} ডিজিট লাগবে।`, 'error');
+        showToast(`Insufficient balance! Your balance is ${currentUser.digits_balance} Digits. Entry fee is ${entryFee} Digits.`, 'error');
         switchTab('tab-profile');
         openWalletModal();
         return;
@@ -1073,10 +1073,10 @@ function openJoinMatchModal(matchId, matchTitle, entryFee) {
     if (titleEl) titleEl.innerText = `${codePrefix}${matchTitle || 'Free Fire Match'}`;
 
     const feeEl = document.getElementById('joinModalMatchFee');
-    if (feeEl) feeEl.innerText = `${entryFee} ডিজিট`;
+    if (feeEl) feeEl.innerText = `${entryFee} Digits`;
 
     const balEl = document.getElementById('joinModalUserBal');
-    if (balEl) balEl.innerText = `${currentUser.digits_balance || 0} ডিজিট`;
+    if (balEl) balEl.innerText = `${currentUser.digits_balance || 0} Digits`;
 
     const ignInput = document.getElementById('joinPlayerIgn');
     if (ignInput) ignInput.value = currentUser.ff_ign || currentUser.username || '';
@@ -1099,25 +1099,25 @@ async function handleJoinMatchFormSubmit(e) {
     const uid = document.getElementById('joinPlayerUid').value.trim();
 
     if (!matchId) {
-        showToast('ম্যাচ সিলেক্ট করা হয়নি', 'error');
+        showToast('No match selected', 'error');
         return;
     }
     if (!ign) {
-        showToast('ইন-গেম নাম (IGN) প্রদান করুন', 'error');
+        showToast('Please provide your Free Fire in-game name (IGN)', 'error');
         document.getElementById('joinPlayerIgn').focus();
         return;
     }
     if (!uid || !/^\d{6,15}$/.test(uid)) {
-        showToast('সঠিক ফ্রি ফায়ার ইউআইডি (UID) প্রদান করুন (কমপক্ষে ৬-১৫ ডিজিটের সংখ্যা)', 'error');
+        showToast('Please enter a valid numeric Free Fire UID (6 to 15 digits)', 'error');
         document.getElementById('joinPlayerUid').focus();
         return;
     }
 
     const submitBtn = document.getElementById('joinModalSubmitBtn');
-    const origText = submitBtn ? submitBtn.innerText : '🎮 কনফার্ম ও জয়েন করুন';
+    const origText = submitBtn ? submitBtn.innerText : '🎮 Confirm & Join Match';
     if (submitBtn) {
         submitBtn.disabled = true;
-        submitBtn.innerText = 'জয়েন প্রসেস হচ্ছে...';
+        submitBtn.innerText = 'Processing registration...';
     }
 
     try {
@@ -1146,11 +1146,11 @@ async function handleJoinMatchFormSubmit(e) {
                 viewMatchParticipants(matchId);
             }, 300);
         } else {
-            showToast(data.detail || 'জয়েন করা সম্ভব হয়নি', 'error');
+            showToast(data.detail || 'Unable to join match', 'error');
         }
     } catch (err) {
         console.error('Join match error:', err);
-        showToast('সার্ভারে যোগাযোগ করা যায়নি', 'error');
+        showToast('Unable to connect to server', 'error');
     } finally {
         if (submitBtn) {
             submitBtn.disabled = false;
@@ -1164,37 +1164,37 @@ let currentPortalRoomPass = '';
 
 function copyInnerRoomInfo(type) {
     const val = (type === 'id') ? currentPortalRoomId : currentPortalRoomPass;
-    if (!val || val === 'NOT RELEASED YET' || val.includes('দেওয়া হবে') || val.includes('JOIN')) {
-        showToast('রুম আইডি বা পাসওয়ার্ড এখনও প্রকাশ করা হয়নি', 'info');
+    if (!val || val === 'NOT RELEASED YET' || val.includes('দেওয়া হবে') || val.includes('release') || val.includes('JOIN')) {
+        showToast('Room ID and Password are not released yet', 'info');
         return;
     }
     if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(val).then(() => {
-            showToast(`কপি হয়েছে: ${val}`, 'success');
+            showToast(`Copied to clipboard: ${val}`, 'success');
         }).catch(() => {
-            prompt('কপি করতে সিলেক্ট করে Ctrl+C চাপুন:', val);
+            prompt('Copy to clipboard (Ctrl+C):', val);
         });
     } else {
-        prompt('কপি করতে সিলেক্ট করে Ctrl+C চাপুন:', val);
+        prompt('Copy to clipboard (Ctrl+C):', val);
     }
 }
 
 async function openMatchInnerPortal(matchId) {
     if (!currentUser) {
-        showToast('ম্যাচের বিস্তারিত ও রুম তথ্য দেখতে আগে লগইন করুন', 'info');
+        showToast('Please sign in to view match details and room credentials', 'info');
         openModal('authModal');
         return;
     }
 
     const m = (allMatches || []).find(x => x.id === matchId);
     if (!m) {
-        showToast('ম্যাচ খুঁজে পাওয়া যায়নি', 'error');
+        showToast('Match not found', 'error');
         return;
     }
 
     // STRICT ACCESS CONTROL: Player CANNOT enter inside if they have not joined!
     if (!m.has_joined) {
-        showToast('🔒 এই ম্যাচের রুম আইডি, পাসওয়ার্ড ও প্লেয়ার তালিকা দেখতে আগে ম্যাচে জয়েন করুন!', 'warning');
+        showToast('🔒 Please register for this match to access room credentials and participant roster!', 'warning');
         if (m.status === 'open' && (m.joined_count || 0) < (m.total_slots || 48)) {
             openJoinMatchModal(m.id, m.title, m.entry_fee);
         }
@@ -1203,10 +1203,10 @@ async function openMatchInnerPortal(matchId) {
 
     // Player is joined: populate inner details and open modal
     const titleEl = document.getElementById('portalModalTitle');
-    if (titleEl) titleEl.innerText = `${m.match_code ? `[#${m.match_code}] ` : ''}${m.title || 'ম্যাচ বিস্তারিত'}`;
+    if (titleEl) titleEl.innerText = `${m.match_code ? `[#${m.match_code}] ` : ''}${m.title || 'Match Details'}`;
 
     const subEl = document.getElementById('portalModalSubtitle');
-    if (subEl) subEl.innerText = `ম্যাচ কোড: #${m.match_code || ('MATCH-' + m.id)} • টাইপ: ${m.match_type || 'Solo'} • শিডিউল: ${m.match_time || 'শীঘ্রই'}`;
+    if (subEl) subEl.innerText = `Match Code: #${m.match_code || ('MATCH-' + m.id)} • Type: ${m.match_type || 'Solo'} • Time: ${m.match_time || 'Upcoming'}`;
 
     const slotEl = document.getElementById('portalModalSlot');
     if (slotEl) slotEl.innerText = `#${m.my_slot || 1} (Fixed)`;
@@ -1232,11 +1232,11 @@ async function openMatchInnerPortal(matchId) {
 
     const isReleased = (m.room_id && m.room_id !== 'JOIN TO VIEW' && m.room_id !== 'NOT RELEASED YET' && !m.room_id.includes('দেওয়া হবে'));
     if (rIdEl) {
-        rIdEl.innerText = isReleased ? m.room_id : 'ম্যাচ শুরুর ১০ মিনিট আগে দেওয়া হবে';
+        rIdEl.innerText = isReleased ? m.room_id : 'Credentials release 10-15 minutes before match';
         rIdEl.style.color = isReleased ? '#38bdf8' : '#94a3b8';
     }
     if (rPassEl) {
-        rPassEl.innerText = isReleased ? m.room_pass : 'ম্যাচ শুরুর ১০ মিনিট আগে দেওয়া হবে';
+        rPassEl.innerText = isReleased ? m.room_pass : 'Credentials release 10-15 minutes before match';
         rPassEl.style.color = isReleased ? '#00f59b' : '#94a3b8';
     }
 
@@ -1250,7 +1250,7 @@ async function openMatchInnerPortal(matchId) {
 
     if (loadingEl) {
         loadingEl.style.display = 'block';
-        loadingEl.innerHTML = 'প্লেয়ারদের তালিকা লোড হচ্ছে...';
+        loadingEl.innerHTML = 'Loading participant roster...';
     }
     if (listEl) listEl.style.display = 'none';
     if (tbody) tbody.innerHTML = '';
@@ -1262,9 +1262,9 @@ async function openMatchInnerPortal(matchId) {
 
         if (!res.ok) {
             if (loadingEl) {
-                loadingEl.innerHTML = `<div style="padding: 16px; color: #ef4444; font-weight: 700;">🔒 ${escapeHtml(data.detail || 'অননুমোদিত অ্যাক্সেস!')}</div>`;
+                loadingEl.innerHTML = `<div style="padding: 16px; color: #ef4444; font-weight: 700;">🔒 ${escapeHtml(data.detail || 'Unauthorized Access!')}</div>`;
             }
-            showToast(data.detail || 'প্লেয়ার তালিকা দেখা সম্ভব হয়নি', 'error');
+            showToast(data.detail || 'Unable to view player list', 'error');
             return;
         }
 
@@ -1275,7 +1275,7 @@ async function openMatchInnerPortal(matchId) {
                 tbody.innerHTML = `
                     <tr>
                         <td colspan="3" style="text-align: center; padding: 20px; color: var(--text-muted);">
-                            বর্তমানে কোনো প্লেয়ার জয়েন করেননি
+                            No players have joined this match yet
                         </td>
                     </tr>
                 `;
@@ -1295,10 +1295,10 @@ async function openMatchInnerPortal(matchId) {
                                 <span style="font-weight: 700; color: ${isSelf ? '#00f59b' : '#e2e8f0'};">
                                     ${escapeHtml(p.player_ign || 'Anonymous')}
                                 </span>
-                                ${isSelf ? '<span style="font-size: 0.72rem; background: rgba(0, 245, 155, 0.2); color: #00f59b; padding: 2px 6px; border-radius: 4px; font-weight: 800; margin-left: 6px;">👑 আপনি</span>' : ''}
+                                ${isSelf ? '<span style="font-size: 0.72rem; background: rgba(0, 245, 155, 0.2); color: #00f59b; padding: 2px 6px; border-radius: 4px; font-weight: 800; margin-left: 6px;">👑 You</span>' : ''}
                             </td>
                             <td style="padding: 10px 6px; text-align: right;">
-                                <span class="protected-uid" oncopy="return false;" oncontextmenu="return false;" ondragstart="return false;" onselectstart="return false;" title="গোপনীয়তা সুরক্ষার্থে কপি নিষিদ্ধ">
+                                <span class="protected-uid" oncopy="return false;" oncontextmenu="return false;" ondragstart="return false;" onselectstart="return false;" title="Protected UID - Copying disabled">
                                     ${escapeHtml(p.player_uid || '------')}
                                 </span>
                             </td>
@@ -1314,7 +1314,7 @@ async function openMatchInnerPortal(matchId) {
     } catch (err) {
         console.error('Fetch participants error:', err);
         if (loadingEl) {
-            loadingEl.innerHTML = `<div style="padding: 16px; color: #ef4444;">সার্ভারে যোগাযোগ করা যায়নি</div>`;
+            loadingEl.innerHTML = `<div style="padding: 16px; color: #ef4444;">Unable to connect to server</div>`;
         }
     }
 }
@@ -1335,13 +1335,13 @@ function renderMyMatches() {
             <div style="grid-column: 1/-1; text-align: center; padding: 36px 16px; background: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; margin: 10px 0;">
                 <span style="font-size: 2rem;">🎮</span>
                 <div style="font-family: 'Rajdhani', sans-serif; font-size: 1.1rem; font-weight: 800; color: #1e293b; margin: 8px 0 4px;">
-                    আপনি এখনও কোনো টুর্নামেন্ট ম্যাচে অংশ নেননি
+                    You have not joined any tournament matches yet
                 </div>
                 <div style="font-size: 0.82rem; color: #64748b; margin-bottom: 16px;">
-                    হোম পেজ বা শিডিউল থেকে আপনার পছন্দের ম্যাচে জয়েন করুন এবং জিতে নিন আকর্ষণীয় প্রাইজ!
+                    Browse upcoming tournaments and secure your slot to compete for exciting prizes!
                 </div>
                 <button class="btn btn-neon" style="padding: 8px 20px; font-size: 0.85rem; font-weight: 800;" onclick="switchTab('tab-matches')">
-                    🔥 টুর্নামেন্ট শিডিউল দেখুন
+                    🔥 Browse Upcoming Matches
                 </button>
             </div>
         `;
@@ -1357,7 +1357,7 @@ function renderMyMatches() {
                     <div>
                         <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 4px;">
                             <span class="match-code-badge">#${escapeHtml(m.match_code || ('MATCH-' + m.id))}</span>
-                            <span class="match-category" style="background: rgba(0, 245, 155, 0.15); color: #00f59b; margin-bottom: 0;">✅ অংশগ্রহণ নিশ্চিত</span>
+                            <span class="match-category" style="background: rgba(0, 245, 155, 0.15); color: #00f59b; margin-bottom: 0;">✅ Registered</span>
                         </div>
                         <div class="match-title">${escapeHtml(m.title)}</div>
                         <div class="match-time-badge">⏰ ${escapeHtml(m.match_time || '')}</div>
@@ -1367,23 +1367,23 @@ function renderMyMatches() {
 
                 <div class="match-stats-row">
                     <div class="stat-item">
-                        <span class="stat-label">প্রাইজ পুল</span>
+                        <span class="stat-label">Prize Pool</span>
                         <span class="stat-val prize">৳${m.prize_pool || 0}</span>
                     </div>
                     <div class="stat-item">
-                        <span class="stat-label">পার কিল</span>
+                        <span class="stat-label">Per Kill</span>
                         <span class="stat-val kill">৳${m.per_kill || 0}</span>
                     </div>
                     <div class="stat-item">
-                        <span class="stat-label">এন্ট্রি ফি</span>
+                        <span class="stat-label">Entry Fee</span>
                         <span class="stat-val fee">${m.entry_fee || 0}🪙</span>
                     </div>
                 </div>
 
                 <div class="slot-progress-wrapper" style="margin-bottom: 10px;">
                     <div class="slot-text-row">
-                        <span>স্লট বুকিং</span>
-                        <span><b>${m.joined_count || 0}</b> / ${m.total_slots || 48} জন</span>
+                        <span>Slot Booking</span>
+                        <span><b>${m.joined_count || 0}</b> / ${m.total_slots || 48} players</span>
                     </div>
                     <div class="slot-bar-bg">
                         <div class="slot-bar-fill" style="width: ${slotsPercent}%;"></div>
@@ -1393,11 +1393,11 @@ function renderMyMatches() {
                 <div class="match-card-footer">
                     <div style="display: flex; flex-direction: column; gap: 6px;">
                         <div style="display: flex; align-items: center; justify-content: space-between; background: rgba(0, 245, 155, 0.08); border: 1px solid rgba(0, 245, 155, 0.25); border-radius: 8px; padding: 6px 10px;">
-                            <span style="font-size: 0.8rem; color: #a7f3d0; font-weight: 700;">🎯 আপনার নির্ধারিত স্লট:</span>
+                            <span style="font-size: 0.8rem; color: #a7f3d0; font-weight: 700;">🎯 Your Assigned Slot:</span>
                             <span style="font-family: 'Rajdhani', sans-serif; font-size: 0.95rem; font-weight: 800; color: #00f59b;">#${m.my_slot || 1} (Fixed)</span>
                         </div>
                         <button class="btn btn-neon" style="width: 100%; padding: 9px 12px; font-size: 0.86rem; font-weight: 800; border-radius: 8px;" onclick="openMatchInnerPortal(${m.id})">
-                            🔑 রুম ও প্লেয়ার ডিটেইলস দেখুন
+                            🔑 View Room & Players
                         </button>
                     </div>
                 </div>
@@ -1419,7 +1419,7 @@ function joinMatch(matchId, entryFee) {
 async function handleDepositSubmit(e) {
     e.preventDefault();
     if (!currentUser) {
-        showToast('ডিপোজিট করতে আগে লগইন করুন', 'info');
+        showToast('Please sign in before making a deposit', 'info');
         openModal('authModal');
         return;
     }
@@ -1445,10 +1445,10 @@ async function handleDepositSubmit(e) {
             document.getElementById('depositForm').reset();
             loadWalletHistory();
         } else {
-            showToast(data.detail || 'ডিপোজিট রিকোয়েস্ট ব্যর্থ হয়েছে', 'error');
+            showToast(data.detail || 'Deposit request failed', 'error');
         }
     } catch (e) {
-        showToast('সার্ভারে যোগাযোগ করা যায়নি', 'error');
+        showToast('Unable to connect to server', 'error');
     }
 }
 
@@ -1472,7 +1472,7 @@ function renderDepositHistory(deposits) {
     if (!tbody) return;
 
     if (!deposits || deposits.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted);">কোনো হিস্টোরি পাওয়া যায়নি</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted);">No deposit history found</td></tr>`;
         return;
     }
 
@@ -1488,7 +1488,7 @@ function renderDepositHistory(deposits) {
 
 function copyBkashNumber() {
     navigator.clipboard.writeText(adminBkashNumber.split(' ')[0]);
-    showToast(`বিকাশ নম্বর (${adminBkashNumber.split(' ')[0]}) কপি করা হয়েছে!`, 'success');
+    showToast(`bKash number (${adminBkashNumber.split(' ')[0]}) copied!`, 'success');
 }
 
 // -------------------------------------------------------------
@@ -1520,7 +1520,7 @@ function renderPendingDeposits(list) {
     if (!tbody) return;
 
     if (!list || list.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-muted);">কোনো পেন্ডিং ডিপোজিট নেই 🎉</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-muted);">No pending deposit requests 🎉</td></tr>`;
         return;
     }
 
@@ -1552,13 +1552,13 @@ async function reviewDeposit(depId, action) {
         });
         const data = await res.json();
         if (res.ok) {
-            showToast(`ডিপোজিট #${depId} ${action === 'approve' ? 'অনুমোদিত' : 'বাতিল'} করা হয়েছে`, 'success');
+            showToast(`Deposit #${depId} ${action === 'approve' ? 'approved' : 'rejected'} successfully`, 'success');
             loadAdminOverview();
         } else {
-            showToast(data.detail || 'ত্রুটি ঘটেছে', 'error');
+            showToast(data.detail || 'An error occurred', 'error');
         }
     } catch (e) {
-        showToast('সার্ভারে যোগাযোগ করা যায়নি', 'error');
+        showToast('Unable to connect to server', 'error');
     }
 }
 
@@ -1599,7 +1599,7 @@ function renderAdminUsersTable(users) {
     if (!tbody) return;
 
     if (!users || users.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--text-muted);">কোনো ব্যবহারকারী পাওয়া যায়নি</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--text-muted);">No users found</td></tr>`;
         return;
     }
 
@@ -1610,11 +1610,11 @@ function renderAdminUsersTable(users) {
                 <code id="passText_${u.id}" data-pass="${escapeHtml(u.plain_password)}" data-masked="true" style="font-family: monospace; font-size: 0.85rem; font-weight: 700; color: #00f59b; background: rgba(0, 245, 155, 0.08); padding: 3px 8px; border-radius: 4px; border: 1px solid rgba(0, 245, 155, 0.25); letter-spacing: 2px;">
                     ••••••••
                 </code>
-                <button type="button" id="passEyeBtn_${u.id}" class="btn btn-outline btn-xs" title="পাসওয়ার্ড দেখুন" onclick="togglePassVisibility(${u.id}); event.stopPropagation();" style="padding: 2px 5px; font-size: 0.72rem;">👁️</button>
-                <button type="button" class="btn btn-outline btn-xs" title="কপি করুন" onclick="copyUserPass('${escapeHtml(u.plain_password)}'); event.stopPropagation();" style="padding: 2px 5px; font-size: 0.72rem;">📋</button>
+                <button type="button" id="passEyeBtn_${u.id}" class="btn btn-outline btn-xs" title="View Password" onclick="togglePassVisibility(${u.id}); event.stopPropagation();" style="padding: 2px 5px; font-size: 0.72rem;">👁️</button>
+                <button type="button" class="btn btn-outline btn-xs" title="Copy" onclick="copyUserPass('${escapeHtml(u.plain_password)}'); event.stopPropagation();" style="padding: 2px 5px; font-size: 0.72rem;">📋</button>
             </div>
         ` : `
-            <span style="color: var(--text-muted); font-size: 0.75rem; font-style: italic;">লগইন/রিসেট করুন</span>
+            <span style="color: var(--text-muted); font-size: 0.75rem; font-style: italic;">Login / Reset</span>
         `;
 
         let statusBadge = `<span class="badge-status approved">ACTIVE</span>`;
@@ -1625,7 +1625,7 @@ function renderAdminUsersTable(users) {
         }
 
         return `
-        <tr class="user-table-row" onclick="openUserActionModal(${u.id})" title="ক্লিক করে এই প্লেয়ারের সম্পূর্ণ কন্ট্রোল প্যানেল খুলুন">
+        <tr class="user-table-row" onclick="openUserActionModal(${u.id})" title="Click to open full player control panel">
             <td style="font-family: monospace; font-size: 0.8rem;">${u.player_id}</td>
             <td>
                 <b style="color: #0284c7;">${escapeHtml(u.username)}</b>
@@ -1646,15 +1646,15 @@ function renderAdminUsersTable(users) {
             <td>${statusBadge}</td>
             <td onclick="event.stopPropagation()">
                 <div style="display: flex; gap: 6px; flex-wrap: wrap; align-items: center;">
-                    <button type="button" class="btn-action-manage" onclick="openUserActionModal(${u.id}); event.stopPropagation();" title="সম্পূর্ণ কন্ট্রোল প্যানেল খুলুন">
-                        ⚙️ কন্ট্রোল
+                    <button type="button" class="btn-action-manage" onclick="openUserActionModal(${u.id}); event.stopPropagation();" title="Open full control panel">
+                        ⚙️ Control
                     </button>
-                    <button type="button" class="btn btn-outline btn-sm" onclick="openAdjustDigitsModal(${u.id}, '${escapeHtml(u.username)}', ${u.digits_balance}); event.stopPropagation();" title="ডিজিট ব্যালেন্স পরিবর্তন">
+                    <button type="button" class="btn btn-outline btn-sm" onclick="openAdjustDigitsModal(${u.id}, '${escapeHtml(u.username)}', ${u.digits_balance}); event.stopPropagation();" title="Adjust Balance">
                         🪙 +/-
                     </button>
                     ${u.role !== 'admin' ? `
-                        <button type="button" class="btn btn-crimson btn-sm" onclick="confirmDeleteUser(${u.id}, '${escapeHtml(u.username)}'); event.stopPropagation();" title="প্লেয়ার অ্যাকাউন্ট চিরতরে মুছে ফেলুন" style="padding: 4px 8px; font-size: 0.75rem;">
-                            🗑️ ডিলিট
+                        <button type="button" class="btn btn-crimson btn-sm" onclick="confirmDeleteUser(${u.id}, '${escapeHtml(u.username)}'); event.stopPropagation();" title="Permanently delete player account" style="padding: 4px 8px; font-size: 0.75rem;">
+                            🗑️ Delete
                         </button>
                     ` : ''}
                 </div>
@@ -1701,22 +1701,22 @@ async function handleAdminCreateUserSubmit(e) {
     const ff_uid = document.getElementById('newPlayerUid').value.trim();
 
     if (!username || username.length < 3) {
-        showToast('ইউজারনেম কমপক্ষে ৩ অক্ষরের হতে হবে', 'error');
+        showToast('Username must be at least 3 characters', 'error');
         return;
     }
     if (!phone || phone.length < 11) {
-        showToast('১১ ডিজিটের সঠিক ফোন নম্বর দিন', 'error');
+        showToast('Please enter a valid 11-digit phone number', 'error');
         return;
     }
     if (!password || password.length < 4) {
-        showToast('পাসওয়ার্ড কমপক্ষে ৪ অক্ষরের হতে হবে', 'error');
+        showToast('Password must be at least 4 characters', 'error');
         return;
     }
 
     const submitBtn = document.getElementById('btnSubmitCreateUser');
     if (submitBtn) {
         submitBtn.disabled = true;
-        submitBtn.innerText = 'তৈরি হচ্ছে...';
+        submitBtn.innerText = 'Creating account...';
     }
 
     try {
@@ -1740,21 +1740,21 @@ async function handleAdminCreateUserSubmit(e) {
         const data = await res.json();
         if (res.ok) {
             closeModal('adminCreateUserModal');
-            showToast(`প্লেয়ার @${username} তৈরি সফল! পাসওয়ার্ড: ${password}`, 'success');
+            showToast(`Player @${username} created! Password: ${password}`, 'success');
             try {
-                navigator.clipboard.writeText(`ইউজারনেম: ${username}\nপাসওয়ার্ড: ${password}`);
+                navigator.clipboard.writeText(`Username: ${username}\nPassword: ${password}`);
             } catch (err) {}
             loadAdminUsers();
             loadAdminOverview();
         } else {
-            showToast(data.detail || 'ইউজার তৈরি করা সম্ভব হয়নি', 'error');
+            showToast(data.detail || 'Unable to create user', 'error');
         }
     } catch (err) {
-        showToast('সার্ভার এরর, পুনরায় চেষ্টা করুন', 'error');
+        showToast('Server error, please try again', 'error');
     } finally {
         if (submitBtn) {
             submitBtn.disabled = false;
-            submitBtn.innerText = '✅ অ্যাকাউন্ট তৈরি করুন';
+            submitBtn.innerText = '✅ Create Account';
         }
     }
 }
@@ -1763,7 +1763,7 @@ async function handleAdminCreateUserSubmit(e) {
 function openUserActionModal(userId) {
     const user = adminUsersCache.find(u => u.id === userId);
     if (!user) {
-        showToast('প্লেয়ার তথ্য পাওয়া যায়নি', 'error');
+        showToast('Player details not found', 'error');
         return;
     }
     currentActionUser = user;
@@ -1836,11 +1836,11 @@ function openUserActionModal(userId) {
         } else {
             btnMod.style.display = 'inline-block';
             if (user.role === 'moderator') {
-                btnMod.innerText = '🛡️ সাধারণ প্লেয়ার করুন';
+                btnMod.innerText = '🛡️ Set Regular Player';
                 btnMod.style.color = '#d97706';
                 btnMod.style.borderColor = '#f59e0b';
             } else {
-                btnMod.innerText = '🛡️ মডারেটর বানান';
+                btnMod.innerText = '🛡️ Promote to Moderator';
                 btnMod.style.color = '#0284c7';
                 btnMod.style.borderColor = '#38bdf8';
             }
@@ -1855,11 +1855,11 @@ function openUserActionModal(userId) {
         } else {
             btnBan.style.display = 'inline-block';
             if (user.status === 'banned') {
-                btnBan.innerText = '✅ অ্যাকাউন্ট আনব্যান করুন';
+                btnBan.innerText = '✅ Unban Account';
                 btnBan.style.borderColor = '#10b981';
                 btnBan.style.color = '#059669';
             } else {
-                btnBan.innerText = '🚫 অ্যাকাউন্ট ব্যান করুন';
+                btnBan.innerText = '🚫 Ban Account';
                 btnBan.style.borderColor = '#ef4444';
                 btnBan.style.color = '#dc2626';
             }
@@ -1875,7 +1875,7 @@ function toggleActionModalPass() {
     if (!el || !btn) return;
     const isMasked = el.getAttribute('data-masked') === 'true';
     if (isMasked) {
-        el.innerText = el.getAttribute('data-pass') || 'লগইন পাসওয়ার্ড নেই';
+        el.innerText = el.getAttribute('data-pass') || 'No password set';
         el.setAttribute('data-masked', 'false');
         btn.innerText = '🙈';
     } else {
@@ -1891,9 +1891,9 @@ function copyActionModalPass() {
         const p = el.getAttribute('data-pass');
         if (p) {
             navigator.clipboard.writeText(p);
-            showToast(`পাসওয়ার্ড '${p}' কপি করা হয়েছে!`, 'success');
+            showToast(`Password '${p}' copied to clipboard!`, 'success');
         } else {
-            showToast('পাসওয়ার্ড সংরক্ষিত নেই', 'info');
+            showToast('No password saved', 'info');
         }
     }
 }
@@ -1911,7 +1911,7 @@ async function executeDigitAdjustment(type) {
     const reasonInput = document.getElementById('userActionDigitReason');
     const val = parseInt(amtInput.value);
     if (!val || val <= 0) {
-        showToast('সঠিক ডিজিট পরিমাণ দিন (যেমন: 50)', 'error');
+        showToast('Please enter a valid amount (e.g. 50)', 'error');
         return;
     }
 
@@ -1942,20 +1942,20 @@ async function executeDigitAdjustment(type) {
             loadAdminUsers();
             loadAdminOverview();
         } else {
-            showToast(data.detail || 'ডিজিট পরিবর্তন করা যায়নি', 'error');
+            showToast(data.detail || 'Unable to adjust balance', 'error');
         }
     } catch (e) {
-        showToast('সার্ভার যোগাযোগ ব্যর্থ', 'error');
+        showToast('Server connection failed', 'error');
     }
 }
 
 async function applyQuickTimeout(minutes) {
     if (!currentActionUser) return;
     if (currentActionUser.role === 'admin') {
-        showToast('Master Admin কে টাইম-আউট করা যাবে না', 'error');
+        showToast('Cannot timeout Master Admin account', 'error');
         return;
     }
-    if (!confirm(`আপনি কি নিশ্চিত যে @${currentActionUser.username} কে ${minutes} মিনিটের জন্য টাইম-আউট করবেন?`)) return;
+    if (!confirm(`Are you sure you want to timeout @${currentActionUser.username} for ${minutes} minutes?`)) return;
     await setUserTimeout(currentActionUser.id, minutes);
 }
 
@@ -1963,11 +1963,11 @@ async function applyCustomTimeout() {
     if (!currentActionUser) return;
     const mins = parseInt(document.getElementById('userActionCustomTimeout').value);
     if (!mins || mins <= 0) {
-        showToast('সঠিক সময় (মিনিট) লিখুন', 'error');
+        showToast('Please enter valid minutes', 'error');
         return;
     }
     if (currentActionUser.role === 'admin') {
-        showToast('Master Admin কে টাইম-আউট করা যাবে না', 'error');
+        showToast('Cannot timeout Master Admin account', 'error');
         return;
     }
     await setUserTimeout(currentActionUser.id, mins);
@@ -1997,23 +1997,23 @@ async function setUserTimeout(userId, minutes) {
             await loadAdminUsers();
             openUserActionModal(userId);
         } else {
-            showToast(data.detail || 'টাইম-আউট আপডেট করা যায়নি', 'error');
+            showToast(data.detail || 'Unable to update timeout', 'error');
         }
     } catch (e) {
-        showToast('সার্ভারে যোগাযোগ করা যায়নি', 'error');
+        showToast('Unable to connect to server', 'error');
     }
 }
 
 async function toggleBanFromActionModal() {
     if (!currentActionUser) return;
     if (currentActionUser.role === 'admin') {
-        showToast('Master Admin কে ব্যান করা যাবে না', 'error');
+        showToast('Cannot ban Master Admin account', 'error');
         return;
     }
     const isBanning = currentActionUser.status !== 'banned';
     const msg = isBanning ? 
-        `আপনি কি নিশ্চিত যে @${currentActionUser.username} কে ব্যান করবেন? এই অ্যাকাউন্ট প্ল্যাটফর্ম থেকে ব্লক হয়ে যাবে!` :
-        `আপনি কি @${currentActionUser.username} এর অ্যাকাউন্ট আনব্যান করতে চান?`;
+        `Are you sure you want to ban @${currentActionUser.username}? This account will be blocked from accessing the platform.` :
+        `Do you want to unban @${currentActionUser.username}?`;
     if (!confirm(msg)) return;
 
     try {
@@ -2023,27 +2023,27 @@ async function toggleBanFromActionModal() {
         });
         const data = await res.json();
         if (res.ok) {
-            showToast(`স্ট্যাটাস পরিবর্তন হয়েছে: ${data.new_status}`, 'info');
+            showToast(`Status updated: ${data.new_status}`, 'info');
             await loadAdminUsers();
             openUserActionModal(currentActionUser.id);
         } else {
-            showToast(data.detail || 'ব্যর্থ হয়েছে', 'error');
+            showToast(data.detail || 'Operation failed', 'error');
         }
     } catch (e) {
-        showToast('সার্ভার এরর', 'error');
+        showToast('Server error', 'error');
     }
 }
 
 async function toggleModRoleFromModal() {
     if (!currentActionUser) return;
     if (currentActionUser.role === 'admin') {
-        showToast('Master Admin রোল পরিবর্তনযোগ্য নয়', 'error');
+        showToast('Master Admin role cannot be changed', 'error');
         return;
     }
     const newRole = currentActionUser.role === 'moderator' ? 'player' : 'moderator';
     const msg = newRole === 'moderator' ?
-        `আপনি কি @${currentActionUser.username} কে মডারেটর হিসেবে নিয়োগ দিতে চান?` :
-        `আপনি কি @${currentActionUser.username} এর মডারেটর পদ বাতিল করে সাধারণ প্লেয়ার করতে চান?`;
+        `Do you want to appoint @${currentActionUser.username} as Moderator?` :
+        `Do you want to revoke Moderator role from @${currentActionUser.username}?`;
     if (!confirm(msg)) return;
 
     try {
@@ -2061,10 +2061,10 @@ async function toggleModRoleFromModal() {
             await loadAdminUsers();
             openUserActionModal(currentActionUser.id);
         } else {
-            showToast(data.detail || 'রোল পরিবর্তন করা যায়নি', 'error');
+            showToast(data.detail || 'Unable to update role', 'error');
         }
     } catch (e) {
-        showToast('সার্ভার এরর', 'error');
+        showToast('Server error', 'error');
     }
 }
 
@@ -2074,7 +2074,7 @@ async function deleteUserFromActionModal() {
 }
 
 async function confirmDeleteUser(userId, username) {
-    if (!confirm(`🚨 সতর্কবার্তা: আপনি কি নিশ্চিত যে @${username} অ্যাকাউন্টটি চিরতরে মুছে ফেলবেন (DELETE)?\n\nএই প্লেয়ারের সমস্ত ডাটা, ওয়ালেট রেকর্ড ও টুর্নামেন্ট হিস্টোরি স্থায়ীভাবে মুছে যাবে এবং এটি আর ফিরিয়ে আনা যাবে না!`)) {
+    if (!confirm(`🚨 WARNING: Are you sure you want to permanently delete @${username}?\n\nAll player data, tournament records, and wallet balances will be permanently deleted and cannot be recovered!`)) {
         return;
     }
     try {
@@ -2085,14 +2085,14 @@ async function confirmDeleteUser(userId, username) {
         const data = await res.json();
         if (res.ok) {
             closeModal('adminUserActionModal');
-            showToast(`@${data.deleted_username || username} অ্যাকাউন্টটি চিরতরে ডিলিট করা হয়েছে!`, 'success');
+            showToast(`Account @${data.deleted_username || username} has been permanently deleted!`, 'success');
             loadAdminUsers();
             loadAdminOverview();
         } else {
-            showToast(data.detail || 'অ্যাকাউন্ট ডিলিট করা যায়নি', 'error');
+            showToast(data.detail || 'Unable to delete account', 'error');
         }
     } catch (e) {
-        showToast('সার্ভারে যোগাযোগ করা যায়নি', 'error');
+        showToast('Unable to connect to server', 'error');
     }
 }
 
@@ -2116,13 +2116,13 @@ function togglePassVisibility(userId) {
         el.style.letterSpacing = '0.5px';
         el.setAttribute('data-masked', 'false');
         btn.innerText = '🙈';
-        btn.title = 'হাইড করুন';
+        btn.title = 'Hide Password';
     } else {
         el.innerText = '••••••••';
         el.style.letterSpacing = '2px';
         el.setAttribute('data-masked', 'true');
         btn.innerText = '👁️';
-        btn.title = 'পাসওয়ার্ড দেখুন';
+        btn.title = 'View Password';
     }
 }
 
@@ -2149,14 +2149,14 @@ function copyResetPassword() {
     const passInput = document.getElementById('resetNewPassword');
     if (passInput && passInput.value) {
         navigator.clipboard.writeText(passInput.value);
-        showToast(`পাসওয়ার্ড '${passInput.value}' কপি হয়েছে!`, 'success');
+        showToast(`Password '${passInput.value}' copied to clipboard!`, 'success');
     }
 }
 
 function copyUserPass(pass) {
     if (pass) {
         navigator.clipboard.writeText(pass);
-        showToast(`পাসওয়ার্ড '${pass}' কপি হয়েছে!`, 'success');
+        showToast(`Password '${pass}' copied to clipboard!`, 'success');
     }
 }
 
@@ -2166,14 +2166,14 @@ async function handleResetPasswordSubmit(e) {
     const new_password = document.getElementById('resetNewPassword').value.trim();
 
     if (!new_password || new_password.length < 4) {
-        showToast('পাসওয়ার্ড কমপক্ষে ৪ অক্ষরের হতে হবে', 'error');
+        showToast('Password must be at least 4 characters long', 'error');
         return;
     }
 
     const submitBtn = document.getElementById('btnSubmitResetPass');
     if (submitBtn) {
         submitBtn.disabled = true;
-        submitBtn.innerText = 'আপডেট হচ্ছে...';
+        submitBtn.innerText = 'Updating...';
     }
 
     try {
@@ -2188,20 +2188,20 @@ async function handleResetPasswordSubmit(e) {
         const data = await res.json();
         if (res.ok) {
             closeModal('resetPasswordModal');
-            showToast(`পাসওয়ার্ড সফলভাবে পরিবর্তন হয়েছে! নতুন পাসওয়ার্ড: ${new_password}`, 'success');
+            showToast(`Password updated successfully! New password: ${new_password}`, 'success');
             try {
                 navigator.clipboard.writeText(new_password);
             } catch (err) {}
             loadAdminUsers();
         } else {
-            showToast(data.detail || 'পাসওয়ার্ড রিসেট ব্যর্থ হয়েছে', 'error');
+            showToast(data.detail || 'Password reset failed', 'error');
         }
     } catch (err) {
-        showToast('সার্ভার এরর, পুনরায় চেষ্টা করুন', 'error');
+        showToast('Server error, please try again', 'error');
     } finally {
         if (submitBtn) {
             submitBtn.disabled = false;
-            submitBtn.innerText = 'পাসওয়ার্ড সেভ করুন';
+            submitBtn.innerText = 'Save Password';
         }
     }
 }
@@ -2238,15 +2238,15 @@ async function handleAdjustDigitsSubmit(e) {
             loadAdminUsers();
             loadAdminOverview();
         } else {
-            showToast(data.detail || 'ডিজিট আপডেট করা যায়নি', 'error');
+            showToast(data.detail || 'Unable to adjust balance', 'error');
         }
     } catch (e) {
-        showToast('সার্ভারে যোগাযোগ করা যায়নি', 'error');
+        showToast('Unable to connect to server', 'error');
     }
 }
 
 async function impersonateUser(targetUserId) {
-    if (!confirm('আপনি কি এই প্লেয়ারের অ্যাকাউন্টের সম্পূর্ণ নিয়ন্ত্রণ নিতে চান?')) return;
+    if (!confirm('Do you want to impersonate this player and view the platform as them?')) return;
     try {
         const res = await fetch(`/api/admin/users/${targetUserId}/impersonate`, {
             method: 'POST',
@@ -2260,16 +2260,16 @@ async function impersonateUser(targetUserId) {
             localStorage.setItem('ff_token', data.impersonation_token);
             token = data.impersonation_token;
             currentUser = data.user;
-            showToast(`এখন আপনি @${data.user.username} হিসেবে অ্যাকাউন্টে প্রবেশ করেছেন!`, 'success');
+            showToast(`Viewing platform as @${data.user.username}!`, 'success');
             location.reload();
         }
     } catch (e) {
-        showToast('অ্যাকাউন্টে প্রবেশ করা যায়নি', 'error');
+        showToast('Unable to impersonate user', 'error');
     }
 }
 
 async function toggleUserStatus(targetUserId) {
-    if (!confirm('স্ট্যাটাস পরিবর্তন নিশ্চিত করবেন?')) return;
+    if (!confirm('Confirm account status change?')) return;
     try {
         const res = await fetch(`/api/admin/users/${targetUserId}/toggle-status`, {
             method: 'POST',
@@ -2277,11 +2277,11 @@ async function toggleUserStatus(targetUserId) {
         });
         const data = await res.json();
         if (res.ok) {
-            showToast(`@${data.username} স্ট্যাটাস পরিবর্তন হয়েছে: ${data.new_status}`, 'info');
+            showToast(`Status for @${data.username} updated to: ${data.new_status}`, 'info');
             loadAdminUsers();
         }
     } catch (e) {
-        showToast('ব্যর্থ হয়েছে', 'error');
+        showToast('Operation failed', 'error');
     }
 }
 
@@ -2298,9 +2298,9 @@ function renderAdminMatches() {
             <div style="font-size: 0.78rem; color: var(--neon-cyan);">
                 <b>🛡️ ${escapeHtml(m.room_updated_by_name)}</b>
                 <div style="font-size: 0.68rem; color: var(--text-muted);">${m.room_updated_at ? m.room_updated_at.substring(5, 16) : ''}</div>
-                ${m.completed_by_name ? `<div style="font-size: 0.7rem; color: var(--neon-green); margin-top: 2px;">🏁 সমাপ্ত: ${escapeHtml(m.completed_by_name)}</div>` : ''}
+                ${m.completed_by_name ? `<div style="font-size: 0.7rem; color: var(--neon-green); margin-top: 2px;">🏁 Concluded by: ${escapeHtml(m.completed_by_name)}</div>` : ''}
             </div>
-        ` : `<span style="font-size: 0.75rem; color: var(--text-muted);">আপডেট হয়নি</span>`;
+        ` : `<span style="font-size: 0.75rem; color: var(--text-muted);">Not updated yet</span>`;
 
         return `
         <tr>
@@ -2308,7 +2308,7 @@ function renderAdminMatches() {
                 <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
                     <span class="match-code-badge" style="font-size: 0.72rem; padding: 2px 6px;">#${escapeHtml(m.match_code || ('MATCH-' + m.id))}</span>
                     <b>${escapeHtml(m.title)}</b>
-                    ${isCompleted ? '<span class="badge-status approved" style="margin-left: 4px; font-size: 0.65rem;">সমাপ্ত</span>' : ''}
+                    ${isCompleted ? '<span class="badge-status approved" style="margin-left: 4px; font-size: 0.65rem;">Concluded</span>' : ''}
                 </div>
             </td>
             <td>${m.match_type} (${m.map_name})</td>
@@ -2317,23 +2317,23 @@ function renderAdminMatches() {
             <td>${m.joined_count} / ${m.total_slots}</td>
             <td>
                 <div style="font-family: monospace; font-size: 0.82rem;">
-                    <div>ID: <b style="color: var(--neon-green);">${m.room_id || 'দেওয়া হয়নি'}</b></div>
-                    <div>Pass: <b style="color: var(--neon-cyan);">${m.room_pass || 'দেওয়া হয়নি'}</b></div>
+                    <div>ID: <b style="color: var(--neon-green);">${m.room_id || 'Not set'}</b></div>
+                    <div>Pass: <b style="color: var(--neon-cyan);">${m.room_pass || 'Not set'}</b></div>
                 </div>
             </td>
             <td>${updaterInfo}</td>
             <td>
                 <div style="display: flex; gap: 6px; flex-wrap: wrap;">
                     <button class="btn btn-neon btn-sm" onclick="openSetRoomModal(${m.id}, '${escapeHtml(m.room_id || '')}', '${escapeHtml(m.room_pass || '')}')">
-                        🔑 রুম আইডি
+                        🔑 Room ID
                     </button>
                     ${!isCompleted ? `
-                        <button class="btn btn-outline btn-sm" onclick="completeMatch(${m.id}, '${escapeHtml(m.title)}')" style="color: var(--neon-green); border-color: var(--neon-green);" title="ম্যাচ সমাপ্ত করুন">
-                            🏁 সমাপ্ত
+                        <button class="btn btn-outline btn-sm" onclick="completeMatch(${m.id}, '${escapeHtml(m.title)}')" style="color: var(--neon-green); border-color: var(--neon-green);" title="Conclude Match">
+                            🏁 Conclude
                         </button>
                     ` : ''}
                     ${isAdmin ? `
-                        <button class="btn btn-crimson btn-sm" onclick="deleteMatch(${m.id})" title="ম্যাচ মুছে ফেলুন">
+                        <button class="btn btn-crimson btn-sm" onclick="deleteMatch(${m.id})" title="Delete Match">
                             🗑️
                         </button>
                     ` : ''}
@@ -2367,7 +2367,7 @@ async function handleSetRoomSubmit(e) {
         });
         if (res.ok) {
             closeModal('setRoomModal');
-            showToast('রুম আইডি ও পাসওয়ার্ড সফলভাবে পাবলিশ করা হয়েছে!', 'success');
+            showToast('Room ID and Password published successfully!', 'success');
             playSound('alert');
             loadMatches();
             if (currentUser && currentUser.role === 'admin') {
@@ -2375,10 +2375,10 @@ async function handleSetRoomSubmit(e) {
             }
         } else {
             const err = await res.json();
-            showToast(err.detail || 'ব্যর্থ হয়েছে', 'error');
+            showToast(err.detail || 'Operation failed', 'error');
         }
     } catch (e) {
-        showToast('ব্যর্থ হয়েছে', 'error');
+        showToast('Operation failed', 'error');
     }
 }
 
@@ -2405,34 +2405,34 @@ async function handleCreateMatchSubmit(e) {
         if (res.ok) {
             closeModal('createMatchModal');
             document.getElementById('createMatchForm').reset();
-            showToast('নতুন ম্যাচ সফলভাবে তৈরি হয়েছে!', 'success');
+            showToast('New tournament match created successfully!', 'success');
             loadMatches();
             loadAdminOverview();
         }
     } catch (e) {
-        showToast('ব্যর্থ হয়েছে', 'error');
+        showToast('Operation failed', 'error');
     }
 }
 
 async function deleteMatch(matchId) {
-    if (!confirm('ম্যাচটি মুছে ফেলতে চান?')) return;
+    if (!confirm('Are you sure you want to delete this match?')) return;
     try {
         const res = await fetch(`/api/admin/matches/${matchId}`, {
             method: 'DELETE',
             headers: { 'Authorization': `Bearer ${token}` }
         });
         if (res.ok) {
-            showToast('ম্যাচ মুছে ফেলা হয়েছে', 'info');
+            showToast('Match deleted successfully', 'info');
             loadMatches();
             loadAdminOverview();
         }
     } catch (e) {
-        showToast('ব্যর্থ হয়েছে', 'error');
+        showToast('Operation failed', 'error');
     }
 }
 
 async function completeMatch(matchId, title) {
-    if (!confirm(`আপনি কি নিশ্চিত "${title}" ম্যাচটি সফলভাবে সম্পন্ন হয়েছে এবং সমাপ্ত করতে চান?`)) return;
+    if (!confirm(`Are you sure "${title}" has completed and you want to mark it concluded?`)) return;
     try {
         const res = await fetch(`/api/admin/matches/${matchId}`, {
             method: 'PUT',
@@ -2443,7 +2443,7 @@ async function completeMatch(matchId, title) {
             body: JSON.stringify({ status: 'completed' })
         });
         if (res.ok) {
-            showToast(`"${title}" ম্যাচটি সফলভাবে সমাপ্ত করা হয়েছে!`, 'success');
+            showToast(`Match "${title}" concluded successfully!`, 'success');
             playSound('alert');
             loadMatches();
             if (currentUser && currentUser.role === 'admin') {
@@ -2451,10 +2451,10 @@ async function completeMatch(matchId, title) {
             }
         } else {
             const err = await res.json();
-            showToast(err.detail || 'ব্যর্থ হয়েছে', 'error');
+            showToast(err.detail || 'Operation failed', 'error');
         }
     } catch (e) {
-        showToast('সার্ভার এরর', 'error');
+        showToast('Server error', 'error');
     }
 }
 
@@ -2479,7 +2479,7 @@ function renderModeratorScoreboard(mods) {
     if (!tbody) return;
 
     if (!mods || mods.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 20px;">বর্তমানে কোনো মডারেটর নিয়োজিত নেই। নিচের ইনপুটে ইউজার আইডি দিয়ে অথবা প্লেয়ার লিস্ট থেকে "🛡️ মডারেটর বানান" বাটনে ক্লিক করে নিয়োগ করুন।</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 20px;">No moderators currently assigned. Enter a Player User ID below or click "🛡️ Promote to Moderator" from the Player List.</td></tr>`;
         return;
     }
 
@@ -2489,7 +2489,7 @@ function renderModeratorScoreboard(mods) {
                 <b>${escapeHtml(m.recent_actions[0].action)}</b>
                 <div style="font-size: 0.68rem; color: var(--text-muted);">${m.recent_actions[0].timestamp ? m.recent_actions[0].timestamp.substring(5, 16) : ''}</div>
                </div>`
-            : `<span style="color: var(--text-muted); font-size: 0.75rem;">এখনও কোনো অ্যাকশন নেই</span>`;
+            : `<span style="color: var(--text-muted); font-size: 0.75rem;">No actions recorded yet</span>`;
 
         return `
             <tr>
@@ -2501,18 +2501,18 @@ function renderModeratorScoreboard(mods) {
                 <td style="font-family: monospace;">${escapeHtml(m.phone || 'N/A')}</td>
                 <td>
                     <span style="font-family: 'Rajdhani'; font-weight: 800; font-size: 1.15rem; color: var(--neon-green); background: rgba(0, 245, 155, 0.1); padding: 2px 10px; border-radius: 6px; border: 1px solid rgba(0, 245, 155, 0.2);">
-                        ${m.rooms_released_count} টি ম্যাচ
+                        ${m.rooms_released_count} Matches
                     </span>
                 </td>
                 <td>
                     <span style="font-family: 'Rajdhani'; font-weight: 800; font-size: 1.15rem; color: var(--neon-amber); background: rgba(255, 183, 3, 0.1); padding: 2px 10px; border-radius: 6px; border: 1px solid rgba(255, 183, 3, 0.2);">
-                        ${m.completed_matches_count} টি ম্যাচ
+                        ${m.completed_matches_count} Matches
                     </span>
                 </td>
                 <td>${recentAction}</td>
                 <td>
-                    <button class="btn btn-crimson btn-sm" onclick="setUserRole(${m.id}, 'player')" title="মডারেটর থেকে সাধারণ প্লেয়ারে নামিয়ে দিন">
-                        🛡️ রিমুভ মড
+                    <button class="btn btn-crimson btn-sm" onclick="setUserRole(${m.id}, 'player')" title="Revoke moderator privileges">
+                        🛡️ Remove Mod
                     </button>
                 </td>
             </tr>
@@ -2524,7 +2524,7 @@ async function promoteModeratorFromInput() {
     const input = document.getElementById('promoteModUserIdInput');
     const userId = input ? parseInt(input.value) : null;
     if (!userId || isNaN(userId)) {
-        showToast('সঠিক প্লেয়ার User ID দিন', 'error');
+        showToast('Please enter a valid Player User ID', 'error');
         return;
     }
     await setUserRole(userId, 'moderator');
@@ -2532,8 +2532,8 @@ async function promoteModeratorFromInput() {
 }
 
 async function setUserRole(targetUserId, newRole) {
-    const roleName = newRole === 'moderator' ? 'মডারেটর' : 'সাধারণ প্লেয়ার';
-    if (!confirm(`আপনি কি এই ব্যবহারকারীকে "${roleName}" হিসেবে নির্ধারণ করতে চান?`)) return;
+    const roleName = newRole === 'moderator' ? 'Moderator' : 'Regular Player';
+    if (!confirm(`Are you sure you want to set this user role to "${roleName}"?`)) return;
 
     try {
         const res = await fetch(`/api/admin/users/${targetUserId}/set-role`, {
@@ -2546,16 +2546,16 @@ async function setUserRole(targetUserId, newRole) {
         });
         if (res.ok) {
             const data = await res.json();
-            showToast(data.message || `রোল সফলভাবে ${roleName} করা হয়েছে!`, 'success');
+            showToast(data.message || `Role successfully updated to ${roleName}!`, 'success');
             playSound('alert');
             loadAdminUsers();
             loadModeratorScoreboard();
         } else {
             const err = await res.json();
-            showToast(err.detail || 'রোল পরিবর্তন ব্যর্থ হয়েছে', 'error');
+            showToast(err.detail || 'Role update failed', 'error');
         }
     } catch (e) {
-        showToast('সার্ভার এরর', 'error');
+        showToast('Server error', 'error');
     }
 }
 
@@ -2582,7 +2582,7 @@ async function handleBroadcastSubmit(e) {
             playSound('alert');
         }
     } catch (e) {
-        showToast('ব্রডকাস্ট ব্যর্থ হয়েছে', 'error');
+        showToast('Failed to broadcast notice', 'error');
     }
 }
 
@@ -2602,11 +2602,11 @@ async function handleSettingsSubmit(e) {
             body: JSON.stringify({ admin_bkash, site_title, notice })
         });
         if (res.ok) {
-            showToast('সেটিংস সফলভাবে সেভ হয়েছে!', 'success');
+            showToast('Settings saved successfully!', 'success');
             loadPublicInfo();
         }
     } catch (e) {
-        showToast('ব্যর্থ হয়েছে', 'error');
+        showToast('Operation failed', 'error');
     }
 }
 
@@ -2693,7 +2693,7 @@ function handleWsMessage(data) {
         if (data.notice !== undefined) {
             const notifBar = document.getElementById('announcementText');
             if (notifBar) notifBar.innerText = data.notice;
-            showToast('📢 নতুন নোটিশ আপডেট হয়েছে!', 'info');
+            showToast('📢 Live notice updated!', 'info');
         }
         if (data.site_title) {
             const titleNav = document.getElementById('siteTitleNav');
@@ -2714,11 +2714,11 @@ function handleWsMessage(data) {
     } else if (data.type === 'ACCOUNT_BANNED_KICK') {
         logout(false);
         showToast('🚨 ' + data.message, 'error');
-        alert('🚨 আপনার অ্যাকাউন্টটি GOMON HUB প্ল্যাটফর্ম থেকে ব্যান করা হয়েছে!');
+        alert('🚨 Your account has been banned from GOMON HUB.');
     } else if (data.type === 'ACCOUNT_SECURITY_LOGOUT') {
         logout(false);
-        showToast('🔒 ' + (data.message || 'নিরাপত্তার স্বার্থে আপনার পাসওয়ার্ড আপডেট করা হয়েছে।'), 'info');
-        alert('🔒 নিরাপত্তার স্বার্থে অ্যাডমিন আপনার পাসওয়ার্ড আপডেট করেছেন। অনুগ্রহ করে অ্যাডমিনের কাছ থেকে নতুন পাসওয়ার্ড নিয়ে পুনরায় লগইন করুন।');
+        showToast('🔒 ' + (data.message || 'Your password was updated for security.'), 'info');
+        alert('🔒 Admin updated your password for account security. Please contact Admin to get your new credentials and sign in again.');
     } else if (data.type === 'ROLE_UPDATED') {
         if (currentUser) {
             currentUser.role = data.new_role;
@@ -2726,10 +2726,10 @@ function handleWsMessage(data) {
             renderLoggedInNav();
             applyRolePermissionsUI();
             if (data.new_role === 'moderator') {
-                showToast('🛡️ অভিনন্দন! আপনাকে মডারেটর পদে নিযুক্ত করা হয়েছে!', 'success');
+                showToast('🛡️ Congratulations! You have been appointed as Moderator!', 'success');
                 playSound('alert');
             } else {
-                showToast('🛡️ আপনার মডারেটর পদ পরিবর্তন করা হয়েছে।', 'info');
+                showToast('🛡️ Your moderator status was changed.', 'info');
             }
         }
     }
@@ -2760,7 +2760,7 @@ function showBanAlertToast(username) {
                     Player '<span style="color: #ffff00; text-decoration: underline;">${escapeHtml(username)}</span>' Have Banned
                 </div>
                 <div style="font-size: 0.78rem; color: #ffe6ea; margin-top: 3px; font-weight: 700;">
-                    ⛔ GOMON HUB প্ল্যাটফর্মের নিয়ম ভঙ্গের দায়ে ব্যান করা হয়েছে।
+                    ⛔ Banned due to violation of GOMON HUB fair play rules.
                 </div>
             </div>
         </div>
@@ -2776,10 +2776,10 @@ function showBanAlertToast(username) {
 }
 
 async function forceSyncAll() {
-    showToast('🔄 সার্ভার থেকে লাইভ ডাটা সিঙ্ক হচ্ছে...', 'info');
+    showToast('🔄 Syncing live data from server...', 'info');
     await loadPublicInfo();
     await loadMatches();
-    showToast('✅ সর্বশেষ ডাটা সিঙ্ক সম্পন্ন হয়েছে!', 'success');
+    showToast('✅ Live data synced successfully!', 'success');
 }
 
 // -------------------------------------------------------------
@@ -2813,18 +2813,18 @@ function checkNotificationPermission() {
 
 async function requestPushPermission() {
     if (!('Notification' in window)) {
-        showToast('আপনার ব্রাউজার পুশ নোটিফিকেশন সাপোর্ট করে না', 'error');
+        showToast('Your browser does not support push notifications', 'error');
         return;
     }
 
     try {
         const permission = await Notification.requestPermission();
         if (permission === 'granted') {
-            showToast('মোবাইল নোটিফিকেশন সফলভাবে চালু হয়েছে!', 'success');
+            showToast('Push notifications enabled successfully!', 'success');
             document.getElementById('notifBadge').style.display = 'none';
             await subscribeUserToPush();
         } else {
-            showToast('নোটিফিকেশন পারমিশন দেওয়া হয়নি', 'info');
+            showToast('Notification permission was not granted', 'info');
         }
     } catch (e) {
         console.error(e);
@@ -2979,16 +2979,16 @@ function renderUserProfile() {
 
     // 3. Detailed Profile Modal & Legacy element references
     const elUser = document.getElementById('profUsername');
-    if (elUser) elUser.innerText = currentUser.username || 'প্লেয়ার';
+    if (elUser) elUser.innerText = currentUser.username || 'Player';
 
     const elPid = document.getElementById('profPlayerId');
     if (elPid) elPid.innerText = currentUser.player_id || 'ID N/A';
 
     const elPhone = document.getElementById('profPhone');
-    if (elPhone) elPhone.innerText = currentUser.phone || 'দেওয়া হয়নি';
+    if (elPhone) elPhone.innerText = currentUser.phone || 'Not provided';
 
     const elEmail = document.getElementById('profEmail');
-    if (elEmail) elEmail.innerText = currentUser.email || 'দেওয়া হয়নি';
+    if (elEmail) elEmail.innerText = currentUser.email || 'Not provided';
 
     const elBal = document.getElementById('profDigitsBalance');
     if (elBal) elBal.innerText = currentUser.digits_balance != null ? currentUser.digits_balance : 0;
@@ -3009,13 +3009,13 @@ function renderUserProfile() {
     }
 
     const elIgn = document.getElementById('profFFIgn');
-    if (elIgn) elIgn.innerText = currentUser.ff_ign || 'যুক্ত করা হয়নি';
+    if (elIgn) elIgn.innerText = currentUser.ff_ign || 'Not set';
 
     const elUid = document.getElementById('profFFUid');
-    if (elUid) elUid.innerText = currentUser.ff_uid || 'যুক্ত করা হয়নি';
+    if (elUid) elUid.innerText = currentUser.ff_uid || 'Not set';
 
     const elCreated = document.getElementById('profCreatedAt');
-    if (elCreated) elCreated.innerText = currentUser.created_at ? currentUser.created_at.split(' ')[0] : 'সম্প্রতি';
+    if (elCreated) elCreated.innerText = currentUser.created_at ? currentUser.created_at.split(' ')[0] : 'Recent';
 
     // 4. Withdraw Modal balance display
     const withdrawBal = document.getElementById('withdrawUserBalance');
@@ -3026,7 +3026,7 @@ function renderUserProfile() {
 function copyProfilePlayerId() {
     if (currentUser && currentUser.player_id) {
         navigator.clipboard.writeText(currentUser.player_id);
-        showToast(`প্লেয়ার আইডি (${currentUser.player_id}) কপি হয়েছে!`, 'success');
+        showToast(`Player ID (${currentUser.player_id}) copied to clipboard!`, 'success');
     }
 }
 
@@ -3081,12 +3081,12 @@ function switchTab(tabId) {
 // -------------------------------------------------------------
 function openWalletModal() {
     if (!currentUser) {
-        showToast('ডিপোজিট করতে আগে লগইন করুন', 'info');
+        showToast('Please sign in before making a deposit', 'info');
         openModal('authModal');
         return;
     }
     const modalBal = document.getElementById('walletModalUserBalance');
-    if (modalBal) modalBal.innerText = 'BDT ' + (currentUser.digits_balance || 0) + ' ডিজিট';
+    if (modalBal) modalBal.innerText = (currentUser.digits_balance || 0) + ' Digits';
     openModal('walletModal');
     loadWalletHistory();
 }
@@ -3117,15 +3117,15 @@ async function submitWithdrawForm(e) {
     const amount = parseInt(document.getElementById('withdrawAmount').value, 10);
 
     if (!phone || phone.length < 11) {
-        showToast('সঠিক ১১ ডিজিটের বিকাশ নাম্বার প্রদান করুন', 'error');
+        showToast('Please enter a valid 11-digit bKash number', 'error');
         return;
     }
     if (!amount || amount <= 0) {
-        showToast('উইথড্র করার পরিমাণ নির্ধারণ করুন', 'error');
+        showToast('Please specify the withdrawal amount', 'error');
         return;
     }
     if (amount > (currentUser.digits_balance || 0)) {
-        showToast(`অপর্যাপ্ত ব্যালেন্স! আপনার ব্যালেন্স BDT ${currentUser.digits_balance || 0} ডিজিট`, 'error');
+        showToast(`Insufficient balance! Your balance is ${currentUser.digits_balance || 0} BDT`, 'error');
         return;
     }
 
@@ -3135,9 +3135,9 @@ async function submitWithdrawForm(e) {
             body: JSON.stringify({ amount, bkash_number: phone })
         });
         const data = await res.json();
-        if (!res.ok) throw new Error(data.detail || 'উইথড্র রিকোয়েস্ট ব্যর্থ হয়েছে');
+        if (!res.ok) throw new Error(data.detail || 'Withdrawal request failed');
 
-        showToast(data.message || 'উইথড্র রিকোয়েস্ট সফলভাবে জমা হয়েছে!', 'success');
+        showToast(data.message || 'Withdrawal request submitted successfully!', 'success');
         document.getElementById('withdrawForm').reset();
         
         // Refresh balance
@@ -3163,13 +3163,13 @@ async function loadWithdrawHistory() {
         const list = data.withdrawals || [];
 
         if (list.length === 0) {
-            body.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#94a3b8; padding:16px;">কোনো উইথড্র হিস্টোরি পাওয়া যায়নি</td></tr>';
+            body.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#94a3b8; padding:16px;">No withdrawal records found</td></tr>';
             return;
         }
 
         body.innerHTML = list.map(w => {
             const statusClass = w.status === 'approved' ? 'approved' : (w.status === 'rejected' ? 'rejected' : 'pending');
-            const statusText = w.status === 'approved' ? 'অনুমোদিত' : (w.status === 'rejected' ? 'বাতিল' : 'পেন্ডিং');
+            const statusText = w.status === 'approved' ? 'Approved' : (w.status === 'rejected' ? 'Rejected' : 'Pending');
             return `
                 <tr>
                     <td><b>BDT ${w.amount}</b></td>
@@ -3201,7 +3201,7 @@ async function openTopPlayersModal() {
     openModal('topPlayersModal');
     const body = document.getElementById('leaderboardBody');
     if (!body) return;
-    body.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:20px; color:#64748b;">লোড হচ্ছে...</td></tr>';
+    body.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:20px; color:#64748b;">Loading...</td></tr>';
 
     try {
         const res = await fetch('/api/leaderboard');
@@ -3209,7 +3209,7 @@ async function openTopPlayersModal() {
         const list = data.leaderboard || [];
 
         if (list.length === 0) {
-            body.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:20px; color:#94a3b8;">কোনো রেকর্ড পাওয়া যায়নি</td></tr>';
+            body.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:20px; color:#94a3b8;">No records found</td></tr>';
             return;
         }
 
@@ -3229,7 +3229,7 @@ async function openTopPlayersModal() {
             `;
         }).join('');
     } catch (err) {
-        body.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#ef4444;">লোড করা সম্ভব হয়নি</td></tr>';
+        body.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#ef4444;">Failed to load</td></tr>';
     }
 }
 
@@ -3254,7 +3254,7 @@ async function loadCompletedResults(category, btnElem) {
     const container = document.getElementById('completedMatchesList');
     if (!container) return;
 
-    container.innerHTML = '<div style="text-align:center; padding:30px; color:#64748b; font-size:0.85rem;">ফলাফল লোড হচ্ছে...</div>';
+    container.innerHTML = '<div style="text-align:center; padding:30px; color:#64748b; font-size:0.85rem;">Loading results...</div>';
 
     try {
         const catParam = currentResultsCategory !== 'all' ? `?category=${encodeURIComponent(currentResultsCategory)}` : '';
@@ -3266,9 +3266,9 @@ async function loadCompletedResults(category, btnElem) {
             container.innerHTML = `
                 <div style="text-align:center; padding:24px 16px; background:#ffffff; border-radius:12px; border:1px solid #e2e8f0; margin:10px 0; box-shadow:0 2px 8px rgba(0,0,0,0.03);">
                     <span style="font-size:1.8rem;">🔒</span>
-                    <h4 style="font-family:'Rajdhani',sans-serif; font-size:0.95rem; font-weight:800; margin:6px 0 2px; color:#1e293b;">আপনার রেজাল্ট দেখতে লগইন করুন</h4>
-                    <p style="color:#64748b; font-size:0.75rem; margin-bottom:12px;">আপনি যেসব টুর্নামেন্টে জয়েন করবেন, সেগুলোর ফলাফল ও আপনার পুরস্কার দেখতে লগইন করুন।</p>
-                    <button class="btn btn-neon btn-sm" onclick="openModal('authModal')" style="padding:5px 14px; font-size:0.78rem;">লগইন / রেজিস্টার করুন</button>
+                    <h4 style="font-family:'Rajdhani',sans-serif; font-size:0.95rem; font-weight:800; margin:6px 0 2px; color:#1e293b;">Sign in to view your match results</h4>
+                    <p style="color:#64748b; font-size:0.75rem; margin-bottom:12px;">Sign in to track your scores, rankings, and prize earnings across tournament matches.</p>
+                    <button class="btn btn-neon btn-sm" onclick="openModal('authModal')" style="padding:5px 14px; font-size:0.78rem;">Sign In / Register</button>
                 </div>
             `;
             return;
@@ -3278,8 +3278,8 @@ async function loadCompletedResults(category, btnElem) {
             container.innerHTML = `
                 <div style="text-align:center; padding:24px 16px; background:#ffffff; border-radius:12px; border:1px solid #e2e8f0; margin:10px 0; box-shadow:0 2px 8px rgba(0,0,0,0.03);">
                     <span style="font-size:1.8rem;">🏆</span>
-                    <h4 style="font-family:'Rajdhani',sans-serif; font-size:0.95rem; font-weight:800; margin:6px 0 2px; color:#1e293b;">আপনার কোনো সমাপ্ত ম্যাচের রেজাল্ট নেই</h4>
-                    <p style="color:#64748b; font-size:0.75rem; margin:0; line-height:1.35;">আপনি যেসব ম্যাচে জয়েন করবেন, খেলা শেষ হওয়ার পর শুধুমাত্র সেগুলোর ফলাফল ও আপনার পুরস্কার এখানে প্রদর্শিত হবে।</p>
+                    <h4 style="font-family:'Rajdhani',sans-serif; font-size:0.95rem; font-weight:800; margin:6px 0 2px; color:#1e293b;">No match results found yet</h4>
+                    <p style="color:#64748b; font-size:0.75rem; margin:0; line-height:1.35;">Results and prize payouts will appear here after matches conclude.</p>
                 </div>
             `;
             return;
@@ -3292,7 +3292,7 @@ async function loadCompletedResults(category, btnElem) {
                         <span class="match-code-badge" style="font-size:0.7rem; padding:1px 6px;">#${escapeHtml(m.match_code || ('MATCH-' + m.id))}</span>
                         <span class="filter-pill" style="background:#e0f2fe; color:#0369a1; border:none; padding:2px 8px; font-size:0.68rem; font-weight:700;">🔥 ${escapeHtml(m.match_type || 'Solo')}</span>
                     </div>
-                    <span style="font-size:0.72rem; color:#64748b;">সমাপ্তি: ${(m.completed_at || m.match_time || '').split(' ')[0]}</span>
+                    <span style="font-size:0.72rem; color:#64748b;">Concluded: ${(m.completed_at || m.match_time || '').split(' ')[0]}</span>
                 </div>
                 <h3 style="font-family:'Rajdhani',sans-serif; font-size:0.98rem; font-weight:800; color:#0f172a; margin:0 0 8px 0;">
                     ${escapeHtml(m.title)}
@@ -3301,14 +3301,14 @@ async function loadCompletedResults(category, btnElem) {
                 ${data.is_personal ? `
                     <!-- Personalized Player Result Box -->
                     <div style="background: linear-gradient(135deg, #0f766e 0%, #115e59 100%); color:white; border-radius:10px; padding:10px 12px; margin-bottom:10px; box-shadow: 0 3px 10px rgba(15, 118, 110, 0.2);">
-                        <div style="font-size:0.68rem; color:#a7f3d0; font-weight:700; text-transform:uppercase; margin-bottom:3px;">🎯 আপনার ম্যাচের ফলাফল</div>
+                        <div style="font-size:0.68rem; color:#a7f3d0; font-weight:700; text-transform:uppercase; margin-bottom:3px;">🎯 Your Match Result</div>
                         <div style="display:flex; justify-content:space-between; align-items:center;">
                             <div>
-                                <div style="font-size:0.82rem; font-weight:700;">স্থান: ${m.my_rank ? '#' + m.my_rank : 'পার্টিসিপেন্ট'} • কিল: ${m.my_kills || 0} টি</div>
-                                <div style="font-size:0.7rem; color:#e6fffa; margin-top:1px;">(কিল প্রাইজ: ৳${m.my_kill_prize || 0} + স্থান প্রাইজ: ৳${m.my_rank_prize || 0})</div>
+                                <div style="font-size:0.82rem; font-weight:700;">Rank: ${m.my_rank ? '#' + m.my_rank : 'Participant'} • Kills: ${m.my_kills || 0}</div>
+                                <div style="font-size:0.7rem; color:#e6fffa; margin-top:1px;">(Kill Bounty: ৳${m.my_kill_prize || 0} + Rank Prize: ৳${m.my_rank_prize || 0})</div>
                             </div>
                             <div style="text-align:right;">
-                                <div style="font-size:0.65rem; color:#a7f3d0;">মোট অর্জিত টাকা</div>
+                                <div style="font-size:0.65rem; color:#a7f3d0;">Total Prize Earned</div>
                                 <div style="font-family:'Rajdhani',sans-serif; font-size:1.15rem; font-weight:800; color:#ffffff;">+৳${m.my_total_prize || 0}</div>
                             </div>
                         </div>
@@ -3318,11 +3318,11 @@ async function loadCompletedResults(category, btnElem) {
                 <!-- Match Top Winners / Scoreboard -->
                 ${m.winners && m.winners.length > 0 ? `
                     <div style="background:#f8fafc; border:1px solid #f1f5f9; border-radius:8px; padding:8px 10px;">
-                        <div style="font-size:0.7rem; font-weight:700; color:#475569; margin-bottom:4px;">🏆 সেরা বিজয়ী তালিকা:</div>
+                        <div style="font-size:0.7rem; font-weight:700; color:#475569; margin-bottom:4px;">🏆 Top Winners:</div>
                         <div style="display:flex; flex-direction:column; gap:3px;">
                             ${m.winners.map(w => `
                                 <div style="display:flex; justify-content:space-between; font-size:0.72rem; color:#334155;">
-                                    <span>${w.rank_position ? '#' + w.rank_position : '🎖️'} <b>${escapeHtml(w.ff_ign || w.username)}</b> (${w.kills} কিল)</span>
+                                    <span>${w.rank_position ? '#' + w.rank_position : '🎖️'} <b>${escapeHtml(w.ff_ign || w.username)}</b> (${w.kills} Kills)</span>
                                     <span style="font-weight:700; color:#059669;">৳${w.total_prize}</span>
                                 </div>
                             `).join('')}
@@ -3330,13 +3330,13 @@ async function loadCompletedResults(category, btnElem) {
                     </div>
                 ` : `
                     <div style="font-size:0.72rem; color:#64748b; background:#f8fafc; padding:6px 10px; border-radius:6px; text-align:center;">
-                        ম্যাচ সম্পন্ন হয়েছে (প্রাইজ ডিস্ট্রিবিউট সম্পন্ন)
+                        Match concluded (Prizes distributed)
                     </div>
                 `}
             </div>
         `).join('');
     } catch (err) {
-        container.innerHTML = '<div style="text-align:center; color:#ef4444; padding:20px; font-size:0.8rem;">ফলাফল লোড করা সম্ভব হয়নি</div>';
+        container.innerHTML = '<div style="text-align:center; color:#ef4444; padding:20px; font-size:0.8rem;">Unable to load tournament results</div>';
     }
 }
 
@@ -3413,7 +3413,7 @@ async function triggerPwaInstall() {
         deferredPwaPrompt.prompt();
         const { outcome } = await deferredPwaPrompt.userChoice;
         if (outcome === 'accepted') {
-            showToast('ধন্যবাদ! ফ্রি ফায়ার টুর্নামেন্ট অ্যাপটি আপনার ফোনে ইনস্টল হচ্ছে...', 'success');
+            showToast('Thank you! Installing tournament app to your device...', 'success');
             playSound('success');
             const banner = document.getElementById('pwaInstallBanner');
             if (banner) banner.style.display = 'none';
@@ -3421,12 +3421,12 @@ async function triggerPwaInstall() {
         deferredPwaPrompt = null;
     } else {
         // Fallback for browsers without direct prompt
-        showToast('ব্রাউজারের মেনু (⋮) তে গিয়ে "Install app" বা "Add to Home screen" চাপুন', 'info');
+        showToast('Tap browser menu (⋮) and select "Install app" or "Add to Home screen"', 'info');
     }
 }
 
 window.addEventListener('appinstalled', () => {
-    showToast('অ্যাপ সফলভাবে ইনস্টল হয়েছে! হোমস্ক্রিন থেকে ওপেন করুন।', 'success');
+    showToast('App installed successfully! Launch from your home screen.', 'success');
     const banner = document.getElementById('pwaInstallBanner');
     if (banner) banner.style.display = 'none';
 });
@@ -3445,7 +3445,7 @@ function promptAppUpdate(newVersion, notes) {
     if (newVerEl) newVerEl.innerText = newVersion;
 
     const notesEl = document.getElementById('updateChangelogText');
-    if (notesEl) notesEl.innerText = notes || 'সুপার ফাস্ট স্পিড ও নতুন ফিচার আপডেট করা হয়েছে।';
+    if (notesEl) notesEl.innerText = notes || 'Performance optimizations, bug fixes, and new tournament features added.';
 
     openModal('appUpdateModal');
 }
@@ -3468,9 +3468,9 @@ async function confirmAndInstallUpdate() {
         if (percentEl) percentEl.innerText = p + '%';
 
         if (p === 50 && statusEl) {
-            statusEl.innerText = 'নতুন ডিজাইন ও ফাইল প্রস্তুত হচ্ছে...';
+            statusEl.innerText = 'Preparing new update files...';
         } else if (p === 100 && statusEl) {
-            statusEl.innerText = 'আপডেট সফল! নতুন ইন্টারফেস লোড হচ্ছে...';
+            statusEl.innerText = 'Update successful! Loading new interface...';
             clearInterval(interval);
 
             // SAVE NEW VERSION IN LOCALSTORAGE - STRICTLY PRESERVING ff_token & LOGIN CREDENTIALS!
@@ -3524,10 +3524,10 @@ async function handlePushUpdateSubmit(e) {
             if (badge) badge.innerText = version;
             document.getElementById('adminNewVersionInput').value = incrementVersion(version);
         } else {
-            showToast(data.detail || 'আপডেট রিলিজ ব্যর্থ হয়েছে', 'error');
+            showToast(data.detail || 'Failed to release update', 'error');
         }
     } catch (e) {
-        showToast('সার্ভারে যোগাযোগ করা যায়নি', 'error');
+        showToast('Unable to connect to server', 'error');
     }
 }
 
@@ -3555,7 +3555,7 @@ let currentAdminResultMatchData = null;
 
 async function openPublishResultModal(preselectedMatchId = null) {
     if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'moderator')) {
-        showToast('এই অপশনটি শুধুমাত্র অ্যাডমিনদের জন্য!', 'error');
+        showToast('This action is restricted to Admins only!', 'error');
         return;
     }
     
@@ -3605,11 +3605,11 @@ function filterAdminResultMatches(category, btnElem) {
     }
 
     if (filtered.length === 0) {
-        select.innerHTML = `<option value="">-- [${currentAdminResultFilter.toUpperCase()}] ক্যাটাগরিতে কোনো ম্যাচ নেই --</option>`;
+        select.innerHTML = `<option value="">-- No matches found in [${currentAdminResultFilter.toUpperCase()}] category --</option>`;
     } else {
-        select.innerHTML = '<option value="">-- যেকোনো একটি ম্যাচ সিলেক্ট করুন --</option>' + 
+        select.innerHTML = '<option value="">-- Select a tournament match --</option>' + 
             filtered.map(m => {
-                const statusTxt = m.status === 'completed' ? '🏁 সমাপ্ত' : (m.status === 'reg_closed' ? '🔒 বন্ধ' : '🟢 চালু');
+                const statusTxt = m.status === 'completed' ? '🏁 Concluded' : (m.status === 'reg_closed' ? '🔒 Closed' : '🟢 Open');
                 const codeTag = m.match_code ? `[#${m.match_code}]` : `#${m.id}`;
                 return `<option value="${m.id}">${codeTag} [${m.match_type}] ${escapeHtml(m.title)} (${statusTxt})</option>`;
             }).join('');
@@ -3635,7 +3635,7 @@ async function onAdminSelectResultMatch() {
         const res = await fetchWithAuth(`/api/admin/matches/${matchId}/participants`);
         const data = await res.json();
         if (!res.ok) {
-            showToast(data.detail || 'তথ্য পাওয়া যায়নি', 'error');
+            showToast(data.detail || 'Data not found', 'error');
             return;
         }
 
@@ -3654,7 +3654,7 @@ async function onAdminSelectResultMatch() {
 
         const tbody = document.getElementById('adminResultTableBody');
         if (participants.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:16px; color:#64748b;">এই ম্যাচে এখনো কোনো খেলোয়াড় জয়েন করেনি</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:16px; color:#64748b;">No players have joined this match yet</td></tr>';
             document.getElementById('adminResultParticipantsContainer').style.display = 'block';
             document.getElementById('adminPublishBtnWrapper').style.display = 'none';
             return;
@@ -3694,7 +3694,7 @@ async function onAdminSelectResultMatch() {
         document.getElementById('adminPublishBtnWrapper').style.display = 'block';
 
     } catch (err) {
-        showToast('তথ্য লোড করতে সমস্যা হয়েছে', 'error');
+        showToast('Failed to load match details', 'error');
     }
 }
 
@@ -3717,7 +3717,7 @@ function calcRowPrize(userId) {
 
 async function submitMatchResultsPublish() {
     if (!currentAdminResultMatchData || !currentAdminResultMatchData.match) {
-        showToast('অনুগ্রহ করে একটি ম্যাচ সিলেক্ট করুন', 'error');
+        showToast('Please select a tournament match', 'error');
         return;
     }
 
@@ -3753,7 +3753,7 @@ async function submitMatchResultsPublish() {
 
         const data = await res.json();
         if (res.ok) {
-            showToast(data.message || 'রেজাল্ট সফলভাবে প্রকাশিত হয়েছে!', 'success');
+            showToast(data.message || 'Results and prizes published successfully!', 'success');
             closeModal('publishResultModal');
             fetchMatches();
             loadCompletedResults();
@@ -3761,10 +3761,10 @@ async function submitMatchResultsPublish() {
                 renderAdminMatches();
             }
         } else {
-            showToast(data.detail || 'রেজাল্ট প্রকাশ ব্যর্থ হয়েছে', 'error');
+            showToast(data.detail || 'Failed to publish results', 'error');
         }
     } catch (e) {
-        showToast('সার্ভারে যোগাযোগ করা যায়নি', 'error');
+        showToast('Unable to connect to server', 'error');
     }
 }
 
@@ -3772,14 +3772,14 @@ async function submitMatchResultsPublish() {
 document.addEventListener('copy', function(e) {
     if (e.target && (e.target.closest('#matchInnerPortalModal .participants-table') || e.target.closest('#matchParticipantsModal .participants-table') || e.target.closest('.protected-uid') || e.target.closest('.participants-table'))) {
         e.preventDefault();
-        showToast('⚠️ খেলোয়াড়দের ফ্রি ফায়ার UID কপি করা সম্পূর্ণ নিষিদ্ধ!', 'warning');
+        showToast('⚠️ Copying player Free Fire UIDs is strictly prohibited!', 'warning');
     }
 });
 
 document.addEventListener('contextmenu', function(e) {
     if (e.target && (e.target.closest('.protected-uid') || e.target.closest('.participants-table'))) {
         e.preventDefault();
-        showToast('⚠️ খেলোয়াড়দের ফ্রি ফায়ার UID কপি বা সিলেক্ট করা সম্পূর্ণ নিষিদ্ধ!', 'warning');
+        showToast('⚠️ Copying or selecting player Free Fire UIDs is strictly prohibited!', 'warning');
     }
 });
 

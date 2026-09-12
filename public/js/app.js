@@ -2409,22 +2409,38 @@ function renderAdminMatches() {
                 </div>
             </td>
             <td>${updaterInfo}</td>
-            <td>
-                <div style="display: flex; gap: 6px; flex-wrap: wrap;">
-                    <button class="btn btn-outline btn-sm" onclick="openMatchInnerPortal(${m.id})" style="color: #059669; border-color: #10b981; font-weight: 700; background: #ecfdf5;" title="View Registered Players & UIDs">
-                        👥 Players (${m.joined_count})
+            <td style="white-space: nowrap; text-align: center;">
+                <div style="display: inline-flex; align-items: center; gap: 8px; flex-wrap: nowrap; justify-content: center;">
+                    <button type="button" onclick="openMatchInnerPortal(${m.id})" 
+                        style="background: #ecfdf5; color: #047857; border: 1.5px solid #6ee7b7; font-weight: 800; font-size: 0.82rem; padding: 7px 13px; border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); transition: all 0.2s ease; white-space: nowrap;"
+                        onmouseover="this.style.background='#10b981';this.style.color='#ffffff';this.style.borderColor='#10b981';this.style.boxShadow='0 3px 8px rgba(16,185,129,0.3)';"
+                        onmouseout="this.style.background='#ecfdf5';this.style.color='#047857';this.style.borderColor='#6ee7b7';this.style.boxShadow='0 1px 3px rgba(0,0,0,0.06)';"
+                        title="View Registered Players & UIDs">
+                        <span style="font-size: 0.95rem;">👥</span> Players (${m.joined_count})
                     </button>
-                    <button class="btn btn-neon btn-sm" onclick="openSetRoomModal(${m.id}, '${escapeHtml(m.room_id || '')}', '${escapeHtml(m.room_pass || '')}')">
-                        🔑 Room ID
+                    <button type="button" onclick="openSetRoomModal(${m.id}, '${escapeHtml(m.room_id || '')}', '${escapeHtml(m.room_pass || '')}')"
+                        style="background: linear-gradient(135deg, #059669, #10b981); color: #ffffff; border: 1px solid #047857; font-weight: 800; font-size: 0.82rem; padding: 7px 14px; border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 2px 6px rgba(5,150,105,0.28); transition: all 0.2s ease; white-space: nowrap;"
+                        onmouseover="this.style.filter='brightness(1.1)';this.style.transform='translateY(-1px)';this.style.boxShadow='0 4px 10px rgba(5,150,105,0.4)';"
+                        onmouseout="this.style.filter='none';this.style.transform='translateY(0)';this.style.boxShadow='0 2px 6px rgba(5,150,105,0.28)';"
+                        title="Set / Update Room ID & Password">
+                        <span style="font-size: 0.95rem;">🔑</span> Room ID
                     </button>
 
                     ${!isCompleted ? `
-                        <button class="btn btn-outline btn-sm" onclick="completeMatch(${m.id}, '${escapeHtml(m.title)}')" style="color: var(--neon-green); border-color: var(--neon-green);" title="Conclude Match">
-                            🏁 Conclude
+                        <button type="button" onclick="completeMatch(${m.id}, '${escapeHtml(m.title)}')"
+                            style="background: #fffbeb; color: #b45309; border: 1.5px solid #fcd34d; font-weight: 800; font-size: 0.82rem; padding: 7px 13px; border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); transition: all 0.2s ease; white-space: nowrap;"
+                            onmouseover="this.style.background='#f59e0b';this.style.color='#ffffff';this.style.borderColor='#f59e0b';this.style.boxShadow='0 3px 8px rgba(245,158,11,0.3)';"
+                            onmouseout="this.style.background='#fffbeb';this.style.color='#b45309';this.style.borderColor='#fcd34d';this.style.boxShadow='0 1px 3px rgba(0,0,0,0.06)';"
+                            title="Conclude Tournament & Distribute Prizes">
+                            <span style="font-size: 0.95rem;">🏁</span> Conclude
                         </button>
                     ` : ''}
                     ${isAdmin ? `
-                        <button class="btn btn-crimson btn-sm" onclick="deleteMatch(${m.id})" title="Delete Match">
+                        <button type="button" onclick="deleteMatch(${m.id})"
+                            style="background: #fef2f2; color: #dc2626; border: 1.5px solid #fca5a5; font-weight: 700; font-size: 0.92rem; width: 35px; height: 35px; border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; box-shadow: 0 1px 3px rgba(0,0,0,0.06); transition: all 0.2s ease; flex-shrink: 0;"
+                            onmouseover="this.style.background='#ef4444';this.style.color='#ffffff';this.style.borderColor='#ef4444';this.style.boxShadow='0 3px 8px rgba(239,68,68,0.3)';"
+                            onmouseout="this.style.background='#fef2f2';this.style.color='#dc2626';this.style.borderColor='#fca5a5';this.style.boxShadow='0 1px 3px rgba(0,0,0,0.06)';"
+                            title="Delete Match">
                             🗑️
                         </button>
                     ` : ''}

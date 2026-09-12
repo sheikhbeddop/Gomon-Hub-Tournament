@@ -1388,8 +1388,8 @@ def get_wallet_history(user: dict = Depends(get_current_user)):
 
 @app.post("/api/wallet/withdraw")
 async def request_withdraw(data: WithdrawRequest, user: dict = Depends(get_current_user)):
-    if data.amount <= 0:
-        raise HTTPException(status_code=400, detail="উইথড্র পরিমাণ ০ এর বেশি হতে হবে")
+    if data.amount < 50:
+        raise HTTPException(status_code=400, detail="উইথড্র করার জন্য সর্বনিম্ন পরিমাণ ৫০ টাকা (Minimum withdrawal amount is 50 BDT)")
     if len(data.bkash_number.strip()) < 11:
         raise HTTPException(status_code=400, detail="সঠিক ১১ ডিজিটের বিকাশ নাম্বার আবশ্যক")
     
@@ -1564,6 +1564,7 @@ def admin_overview(admin: dict = Depends(verify_admin)):
     total_users = conn.execute("SELECT COUNT(*) FROM users WHERE role != 'admin'").fetchone()[0]
     total_matches = conn.execute("SELECT COUNT(*) FROM matches").fetchone()[0]
     pending_deposits = conn.execute("SELECT COUNT(*) FROM deposits WHERE status = 'pending'").fetchone()[0]
+    pending_withdrawals = conn.execute("SELECT COUNT(*) FROM withdrawals WHERE status = 'pending'").fetchone()[0]
     total_digits_circulating = conn.execute("SELECT SUM(digits_balance) FROM users WHERE role != 'admin'").fetchone()[0] or 0
     total_moderators = conn.execute("SELECT COUNT(*) FROM users WHERE role = 'moderator'").fetchone()[0]
     
@@ -1575,14 +1576,24 @@ def admin_overview(admin: dict = Depends(verify_admin)):
     ORDER BY d.id DESC LIMIT 30
     """).fetchall()
 
+    recent_withdrawals = conn.execute("""
+    SELECT w.*, u.username, u.player_id, u.phone as user_phone
+    FROM withdrawals w
+    JOIN users u ON w.user_id = u.id
+    WHERE w.status = 'pending'
+    ORDER BY w.id DESC LIMIT 50
+    """).fetchall()
+
     conn.close()
     return {
         "total_users": total_users,
         "total_matches": total_matches,
         "pending_deposits": pending_deposits,
+        "pending_withdrawals": pending_withdrawals,
         "total_digits_circulating": total_digits_circulating,
         "total_moderators": total_moderators,
-        "pending_deposits_list": [dict(r) for r in recent_deposits]
+        "pending_deposits_list": [dict(r) for r in recent_deposits],
+        "pending_withdrawals_list": [dict(r) for r in recent_withdrawals]
     }
 
 @app.get("/api/admin/users")
@@ -2097,6 +2108,82 @@ async def admin_review_deposit(deposit_id: int, action: str, admin: dict = Depen
         })
 
     return {"success": True, "status": new_status, "deposit_id": deposit_id}
+
+
+@app.get("/api/admin/withdrawals")
+def admin_get_withdrawals(status: Optional[str] = "pending", admin: dict = Depends(verify_admin)):
+    conn = get_db()
+    if status == "all":
+        rows = conn.execute("""
+        SELECT w.*, u.username, u.player_id, u.phone as user_phone
+        FROM withdrawals w
+        JOIN users u ON w.user_id = u.id
+        ORDER BY w.id DESC LIMIT 100
+        """).fetchall()
+    else:
+        rows = conn.execute("""
+        SELECT w.*, u.username, u.player_id, u.phone as user_phone
+        FROM withdrawals w
+        JOIN users u ON w.user_id = u.id
+        WHERE w.status = ?
+        ORDER BY w.id DESC LIMIT 100
+        """, (status,)).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+@app.post("/api/admin/withdrawals/{withdrawal_id}/review")
+async def admin_review_withdrawal(withdrawal_id: int, action: str, admin: dict = Depends(verify_admin)):
+    if action not in ["approve", "reject"]:
+        raise HTTPException(status_code=400, detail="Action must be approve or reject")
+
+    conn = get_db()
+    with conn:
+        withdrawal = conn.execute("SELECT * FROM withdrawals WHERE id = ?", (withdrawal_id,)).fetchone()
+        if not withdrawal:
+            conn.close()
+            raise HTTPException(status_code=404, detail="Withdrawal record not found")
+        if withdrawal["status"] != "pending":
+            conn.close()
+            raise HTTPException(status_code=400, detail="Withdrawal is already processed")
+
+        new_status = "approved" if action == "approve" else "rejected"
+        conn.execute("""
+        UPDATE withdrawals SET status = ?, reviewed_at = CURRENT_TIMESTAMP WHERE id = ?
+        """, (new_status, withdrawal_id))
+
+        new_balance = None
+        if action == "approve":
+            conn.execute("""
+            INSERT INTO audit_logs (admin_id, target_user_id, action, amount, reason)
+            VALUES (?, ?, 'WITHDRAW_APPROVED', ?, ?)
+            """, (admin["id"], withdrawal["user_id"], withdrawal["amount"], f"Approved withdrawal of {withdrawal['amount']} BDT to bKash {withdrawal['bkash_number']}"))
+        else:
+            # Refund the digits back to user's balance
+            u = conn.execute("SELECT digits_balance FROM users WHERE id = ?", (withdrawal["user_id"],)).fetchone()
+            if u:
+                new_balance = u["digits_balance"] + withdrawal["amount"]
+                conn.execute("UPDATE users SET digits_balance = ? WHERE id = ?", (new_balance, withdrawal["user_id"]))
+                conn.execute("""
+                INSERT INTO audit_logs (admin_id, target_user_id, action, amount, reason)
+                VALUES (?, ?, 'WITHDRAW_REJECTED_REFUND', ?, ?)
+                """, (admin["id"], withdrawal["user_id"], withdrawal["amount"], f"Rejected withdrawal, refunded {withdrawal['amount']} BDT to user"))
+
+    conn.close()
+
+    if action == "approve":
+        await manager.send_to_user(withdrawal["user_id"], {
+            "type": "WITHDRAWAL_APPROVED",
+            "notice": f"আপনার {withdrawal['amount']} টাকার উইথড্র রিকোয়েস্ট অনুমোদিত হয়েছে এবং bKash এ পাঠানো হয়েছে!"
+        })
+    elif action == "reject" and new_balance is not None:
+        await manager.send_to_user(withdrawal["user_id"], {
+            "type": "BALANCE_UPDATED",
+            "digits_balance": new_balance,
+            "notice": f"আপনার {withdrawal['amount']} টাকার উইথড্র রিকোয়েস্ট বাতিল করা হয়েছে এবং {withdrawal['amount']} টাকা ফেরত দেওয়া হয়েছে।"
+        })
+
+    return {"success": True, "status": new_status, "withdrawal_id": withdrawal_id}
 
 
 @app.get("/api/admin/matches")

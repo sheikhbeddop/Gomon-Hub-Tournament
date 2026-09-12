@@ -393,7 +393,10 @@ function applyRolePermissionsUI() {
     if (isMod) {
         if (titleEl) titleEl.innerHTML = '🛡️ MODERATOR CONTROL PANEL';
         if (subEl) subEl.innerText = 'Schedule, Room Credentials & Match Conclude Control';
-        if (topActionBtns) topActionBtns.style.display = 'none';
+        if (topActionBtns) {
+            topActionBtns.innerHTML = '<span class="badge-status pending" style="font-size: 0.8rem; padding: 6px 14px; font-weight: 700; display: inline-flex; align-items: center; gap: 6px;"><span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #00d2ff;"></span>🛡️ Moderator Active</span>';
+            topActionBtns.style.display = 'flex';
+        }
 
         document.querySelectorAll('.admin-only-card, .admin-only-nav').forEach(el => {
             el.style.setProperty('display', 'none', 'important');
@@ -401,7 +404,10 @@ function applyRolePermissionsUI() {
     } else if (isAdmin) {
         if (titleEl) titleEl.innerHTML = '👑 SUPER-ADMIN MASTER CONTROL';
         if (subEl) subEl.innerText = 'Complete overview of matches, players, finances, and platform settings';
-        if (topActionBtns) topActionBtns.style.display = 'flex';
+        if (topActionBtns) {
+            topActionBtns.innerHTML = '<span class="badge-status approved" style="font-size: 0.8rem; padding: 6px 14px; font-weight: 700; display: inline-flex; align-items: center; gap: 6px;"><span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #10b981;"></span>👑 Master Admin Active</span>';
+            topActionBtns.style.display = 'flex';
+        }
 
         document.querySelectorAll('.admin-only-card, .admin-only-nav').forEach(el => {
             el.style.removeProperty('display');

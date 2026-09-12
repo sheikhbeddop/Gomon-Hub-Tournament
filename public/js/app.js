@@ -878,12 +878,420 @@ async function handleRegisterSubmit(e) {
 // -------------------------------------------------------------
 activeCategoryFilter = activeCategoryFilter || 'all';
 
+// -------------------------------------------------------------
+// 6 TOURNAMENT CATEGORIES SPECIFICATIONS & BANNER SVGS
+// -------------------------------------------------------------
+const MATCH_CATEGORIES_CONFIG = [
+    {
+        id: 'solo_full_map',
+        group: 'Full Map Matches',
+        title: 'SOLO FULL MAP MATCH',
+        shortName: 'Solo Full Map',
+        tag: 'SOLO',
+        matches(m) {
+            const t = (m.match_type || '').toLowerCase();
+            const title = (m.title || '').toLowerCase();
+            if (t.includes('solo full map') || t === 'solo') {
+                if (!title.includes('lone') && !title.includes('wolf') && !title.includes('survival') && !title.includes('bonus')) return true;
+            }
+            return false;
+        }
+    },
+    {
+        id: 'duo_full_map',
+        group: 'Full Map Matches',
+        title: 'DUO - FULL MAP MATCH',
+        shortName: 'Duo Full Map',
+        tag: 'DUO',
+        matches(m) {
+            const t = (m.match_type || '').toLowerCase();
+            const title = (m.title || '').toLowerCase();
+            if (t.includes('duo full map') || t === 'duo') {
+                if (!title.includes('lone') && !title.includes('wolf') && !title.includes('2v2') && !title.includes('survival')) return true;
+            }
+            return false;
+        }
+    },
+    {
+        id: 'br_survival',
+        group: 'Lone Wolf Matches',
+        title: 'BR SURVIVAL - MATCH',
+        subText: 'জোন পুশ ম্যাচ',
+        shortName: 'BR Survival',
+        tag: 'SURVIVAL',
+        matches(m) {
+            const t = (m.match_type || '').toLowerCase();
+            const title = (m.title || '').toLowerCase();
+            return t.includes('survival') || t.includes('zone') || t.includes('জোন') || title.includes('survival') || title.includes('zone') || title.includes('জোন');
+        }
+    },
+    {
+        id: 'lone_wolf',
+        group: 'Lone Wolf Matches',
+        title: '2 VS 2 LONE WOLF - MATCH',
+        shortName: 'Lone Wolf',
+        tag: 'LONE WOLF',
+        matches(m) {
+            const t = (m.match_type || '').toLowerCase();
+            const title = (m.title || '').toLowerCase();
+            return t.includes('lone') || t.includes('wolf') || title.includes('lone') || title.includes('wolf') || t.includes('2v2') || title.includes('2v2');
+        }
+    },
+    {
+        id: 'bonus_match',
+        group: 'BONUS and Clash Squad Matches',
+        title: 'BONUS MATCH',
+        shortName: 'Bonus Match',
+        tag: 'BONUS',
+        matches(m) {
+            const t = (m.match_type || '').toLowerCase();
+            const title = (m.title || '').toLowerCase();
+            return t.includes('bonus') || title.includes('bonus') || title.includes('বোনাস');
+        }
+    },
+    {
+        id: 'cs_4v4',
+        group: 'BONUS and Clash Squad Matches',
+        title: '4 VS 4 CS 4V4 - MATCH',
+        shortName: 'CS 4v4',
+        tag: 'CS 4V4',
+        matches(m) {
+            const t = (m.match_type || '').toLowerCase();
+            const title = (m.title || '').toLowerCase();
+            if (t.includes('cs') || t.includes('clash') || t.includes('4v4')) return true;
+            if (t.includes('squad') && !title.includes('survival')) return true;
+            return false;
+        }
+    }
+];
+
+let selectedCategory = null;
+
+function getCategoryBannerSvg(catId) {
+    if (catId === 'solo_full_map') {
+        return `<svg viewBox="0 0 380 150" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg_solo" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#450a0a"/>
+      <stop offset="30%" stop-color="#9a3412"/>
+      <stop offset="55%" stop-color="#f59e0b"/>
+      <stop offset="85%" stop-color="#d97706"/>
+      <stop offset="100%" stop-color="#2a0800"/>
+    </linearGradient>
+    <radialGradient id="sun_solo" cx="50%" cy="40%" r="65%">
+      <stop offset="0%" stop-color="#fef08a" stop-opacity="1"/>
+      <stop offset="35%" stop-color="#f59e0b" stop-opacity="0.8"/>
+      <stop offset="70%" stop-color="#b45309" stop-opacity="0.3"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0.75"/>
+    </radialGradient>
+    <linearGradient id="gold_txt" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="25%" stop-color="#fef08a"/>
+      <stop offset="65%" stop-color="#f59e0b"/>
+      <stop offset="100%" stop-color="#b45309"/>
+    </linearGradient>
+    <filter id="shadow_solo" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="2" stdDeviation="2.5" flood-color="#000000" flood-opacity="0.9"/>
+    </filter>
+  </defs>
+  <rect width="380" height="150" rx="14" fill="url(#bg_solo)"/>
+  <rect width="380" height="150" rx="14" fill="url(#sun_solo)"/>
+  <path d="M-20 150 C20 115, 60 120, 100 142 C140 110, 190 118, 230 140 C270 112, 310 120, 350 138 C380 115, 410 125, 430 150 Z" fill="#1c0700" opacity="0.88"/>
+  <path d="M-10 150 C30 125, 80 128, 120 146 C160 124, 220 128, 260 146 C300 126, 360 132, 400 150 Z" fill="#0c0300" opacity="0.95"/>
+  <circle cx="190" cy="32" r="18" fill="#ffffff" stroke="#1c1917" stroke-width="2" filter="url(#shadow_solo)"/>
+  <circle cx="190" cy="32" r="15" fill="#fef08a"/>
+  <text x="190" y="37" font-family="'Arial Black', Impact, sans-serif" font-size="16" text-anchor="middle" fill="#0f172a">🎮</text>
+  <text x="190" y="74" font-family="'Rajdhani', 'Arial Black', Impact, sans-serif" font-size="21" font-weight="900" text-anchor="middle" fill="url(#gold_txt)" stroke="#450a0a" stroke-width="1.8" letter-spacing="1.2" filter="url(#shadow_solo)">SOLO FULL MAP MATCH</text>
+  <text x="190" y="94" font-family="'Rajdhani', Arial, sans-serif" font-size="11.5" font-weight="800" text-anchor="middle" fill="#ffffff" stroke="#000000" stroke-width="0.6" letter-spacing="3.5" filter="url(#shadow_solo)">GOMON HUB</text>
+  <text x="190" y="122" font-family="'Arial Black', Impact, sans-serif" font-size="20" font-weight="900" text-anchor="middle" fill="#ffffff" stroke="#000000" stroke-width="1.2" letter-spacing="3" filter="url(#shadow_solo)">FREE FIRE</text>
+</svg>`;
+    }
+    if (catId === 'duo_full_map') {
+        return `<svg viewBox="0 0 380 150" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg_duo" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#431407"/>
+      <stop offset="35%" stop-color="#c2410c"/>
+      <stop offset="55%" stop-color="#fb923c"/>
+      <stop offset="85%" stop-color="#ea580c"/>
+      <stop offset="100%" stop-color="#2a0800"/>
+    </linearGradient>
+    <radialGradient id="sun_duo" cx="50%" cy="40%" r="65%">
+      <stop offset="0%" stop-color="#ffedd5" stop-opacity="1"/>
+      <stop offset="35%" stop-color="#f97316" stop-opacity="0.8"/>
+      <stop offset="70%" stop-color="#c2410c" stop-opacity="0.3"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0.75"/>
+    </radialGradient>
+    <linearGradient id="gold_txt2" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="25%" stop-color="#fef08a"/>
+      <stop offset="65%" stop-color="#f59e0b"/>
+      <stop offset="100%" stop-color="#b45309"/>
+    </linearGradient>
+    <filter id="shadow_duo" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="2" stdDeviation="2.5" flood-color="#000000" flood-opacity="0.9"/>
+    </filter>
+  </defs>
+  <rect width="380" height="150" rx="14" fill="url(#bg_duo)"/>
+  <rect width="380" height="150" rx="14" fill="url(#sun_duo)"/>
+  <path d="M-20 150 C20 115, 60 120, 100 142 C140 110, 190 118, 230 140 C270 112, 310 120, 350 138 C380 115, 410 125, 430 150 Z" fill="#1c0700" opacity="0.88"/>
+  <path d="M-10 150 C30 125, 80 128, 120 146 C160 124, 220 128, 260 146 C300 126, 360 132, 400 150 Z" fill="#0c0300" opacity="0.95"/>
+  <circle cx="190" cy="32" r="18" fill="#ffffff" stroke="#1c1917" stroke-width="2" filter="url(#shadow_duo)"/>
+  <circle cx="190" cy="32" r="15" fill="#fed7aa"/>
+  <text x="190" y="37" font-family="'Arial Black', Impact, sans-serif" font-size="16" text-anchor="middle" fill="#0f172a">👥</text>
+  <text x="190" y="74" font-family="'Rajdhani', 'Arial Black', Impact, sans-serif" font-size="21" font-weight="900" text-anchor="middle" fill="url(#gold_txt2)" stroke="#431407" stroke-width="1.8" letter-spacing="1.2" filter="url(#shadow_duo)">DUO - FULL MAP MATCH</text>
+  <text x="190" y="94" font-family="'Rajdhani', Arial, sans-serif" font-size="11.5" font-weight="800" text-anchor="middle" fill="#ffffff" stroke="#000000" stroke-width="0.6" letter-spacing="3.5" filter="url(#shadow_duo)">GOMON HUB</text>
+  <text x="190" y="122" font-family="'Arial Black', Impact, sans-serif" font-size="20" font-weight="900" text-anchor="middle" fill="#ffffff" stroke="#000000" stroke-width="1.2" letter-spacing="3" filter="url(#shadow_duo)">FREE FIRE</text>
+</svg>`;
+    }
+    if (catId === 'br_survival') {
+        return `<svg viewBox="0 0 380 150" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg_surv" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#064e3b"/>
+      <stop offset="35%" stop-color="#047857"/>
+      <stop offset="60%" stop-color="#b45309"/>
+      <stop offset="85%" stop-color="#78350f"/>
+      <stop offset="100%" stop-color="#1c1917"/>
+    </linearGradient>
+    <radialGradient id="sun_surv" cx="50%" cy="38%" r="60%">
+      <stop offset="0%" stop-color="#fef08a" stop-opacity="0.9"/>
+      <stop offset="40%" stop-color="#f59e0b" stop-opacity="0.6"/>
+      <stop offset="100%" stop-color="#064e3b" stop-opacity="0.8"/>
+    </radialGradient>
+    <linearGradient id="gold_surv" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="30%" stop-color="#fef08a"/>
+      <stop offset="70%" stop-color="#f59e0b"/>
+      <stop offset="100%" stop-color="#b45309"/>
+    </linearGradient>
+    <filter id="shadow_surv" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="2" stdDeviation="2.5" flood-color="#000000" flood-opacity="0.9"/>
+    </filter>
+  </defs>
+  <rect width="380" height="150" rx="14" fill="url(#bg_surv)"/>
+  <rect width="380" height="150" rx="14" fill="url(#sun_surv)"/>
+  <circle cx="190" cy="75" r="55" fill="none" stroke="#34d399" stroke-width="0.8" opacity="0.35" stroke-dasharray="4,4"/>
+  <circle cx="190" cy="75" r="95" fill="none" stroke="#34d399" stroke-width="0.8" opacity="0.25" stroke-dasharray="6,6"/>
+  <rect x="18" y="22" width="48" height="24" rx="12" fill="#000000" stroke="#f59e0b" stroke-width="1.5" filter="url(#shadow_surv)"/>
+  <text x="42" y="39" font-family="'Arial Black', Impact, sans-serif" font-size="13" font-weight="900" text-anchor="middle" fill="#fbbf24">BR</text>
+  <rect x="314" y="22" width="48" height="24" rx="12" fill="#000000" stroke="#f59e0b" stroke-width="1.5" filter="url(#shadow_surv)"/>
+  <text x="338" y="39" font-family="'Arial Black', Impact, sans-serif" font-size="13" font-weight="900" text-anchor="middle" fill="#fbbf24">BR</text>
+  <circle cx="350" cy="18" r="9" fill="#10b981" stroke="#ffffff" stroke-width="1.5"/>
+  <path d="M346 18 L349 21 L355 15" stroke="#ffffff" stroke-width="2" fill="none" stroke-linecap="round"/>
+  <circle cx="190" cy="32" r="18" fill="#ffffff" stroke="#1c1917" stroke-width="2" filter="url(#shadow_surv)"/>
+  <circle cx="190" cy="32" r="15" fill="#a7f3d0"/>
+  <text x="190" y="37" font-family="'Arial Black', Impact, sans-serif" font-size="15" text-anchor="middle" fill="#065f46">🎯</text>
+  <text x="190" y="74" font-family="'Rajdhani', 'Arial Black', Impact, sans-serif" font-size="22" font-weight="900" text-anchor="middle" fill="url(#gold_surv)" stroke="#1c1917" stroke-width="1.8" letter-spacing="1.2" filter="url(#shadow_surv)">SURVIVAL - MATCH</text>
+  <text x="190" y="93" font-family="'Rajdhani', Arial, sans-serif" font-size="11" font-weight="800" text-anchor="middle" fill="#ffffff" stroke="#000000" stroke-width="0.6" letter-spacing="3" filter="url(#shadow_surv)">GOMON HUB</text>
+  <g transform="translate(190, 122)">
+    <rect x="-85" y="-14" width="170" height="26" rx="13" fill="#0f172a" stroke="#fbbf24" stroke-width="1.5" filter="url(#shadow_surv)"/>
+    <circle cx="-68" cy="-1" r="7" fill="#dc2626" stroke="#ffffff" stroke-width="1"/>
+    <text x="-68" y="2" font-size="8" text-anchor="middle" fill="#ffffff">🎯</text>
+    <text x="8" y="4" font-family="system-ui, sans-serif" font-size="12" font-weight="800" text-anchor="middle" fill="#fef08a" letter-spacing="0.5">জোন পুশ ম্যাচ</text>
+  </g>
+</svg>`;
+    }
+    if (catId === 'lone_wolf') {
+        return `<svg viewBox="0 0 380 150" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg_wolf" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#451a03"/>
+      <stop offset="35%" stop-color="#b45309"/>
+      <stop offset="55%" stop-color="#f59e0b"/>
+      <stop offset="85%" stop-color="#9a3412"/>
+      <stop offset="100%" stop-color="#1f0700"/>
+    </linearGradient>
+    <radialGradient id="sun_wolf" cx="50%" cy="40%" r="65%">
+      <stop offset="0%" stop-color="#fef08a" stop-opacity="1"/>
+      <stop offset="40%" stop-color="#f59e0b" stop-opacity="0.8"/>
+      <stop offset="80%" stop-color="#78350f" stop-opacity="0.3"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0.75"/>
+    </radialGradient>
+    <linearGradient id="gold_wolf" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="25%" stop-color="#fef08a"/>
+      <stop offset="65%" stop-color="#f59e0b"/>
+      <stop offset="100%" stop-color="#b45309"/>
+    </linearGradient>
+    <filter id="shadow_wolf" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="2" stdDeviation="2.5" flood-color="#000000" flood-opacity="0.9"/>
+    </filter>
+  </defs>
+  <rect width="380" height="150" rx="14" fill="url(#bg_wolf)"/>
+  <rect width="380" height="150" rx="14" fill="url(#sun_wolf)"/>
+  <path d="M-20 150 C20 115, 60 120, 100 142 C140 110, 190 118, 230 140 C270 112, 310 120, 350 138 C380 115, 410 125, 430 150 Z" fill="#1c0700" opacity="0.88"/>
+  <path d="M-10 150 C30 125, 80 128, 120 146 C160 124, 220 128, 260 146 C300 126, 360 132, 400 150 Z" fill="#0c0300" opacity="0.95"/>
+  <rect x="22" y="24" width="70" height="25" rx="12.5" fill="#facc15" stroke="#000000" stroke-width="2" filter="url(#shadow_wolf)"/>
+  <text x="57" y="41.5" font-family="'Arial Black', Impact, sans-serif" font-size="12.5" font-weight="900" text-anchor="middle" fill="#000000">2 VS 2</text>
+  <rect x="288" y="24" width="70" height="25" rx="12.5" fill="#facc15" stroke="#000000" stroke-width="2" filter="url(#shadow_wolf)"/>
+  <text x="323" y="41.5" font-family="'Arial Black', Impact, sans-serif" font-size="12.5" font-weight="900" text-anchor="middle" fill="#000000">2 VS 2</text>
+  <circle cx="190" cy="32" r="18" fill="#ffffff" stroke="#1c1917" stroke-width="2" filter="url(#shadow_wolf)"/>
+  <circle cx="190" cy="32" r="15" fill="#fef08a"/>
+  <text x="190" y="37" font-family="'Arial Black', Impact, sans-serif" font-size="16" text-anchor="middle" fill="#0f172a">🐺</text>
+  <text x="190" y="74" font-family="'Rajdhani', 'Arial Black', Impact, sans-serif" font-size="21" font-weight="900" text-anchor="middle" fill="url(#gold_wolf)" stroke="#451a03" stroke-width="1.8" letter-spacing="1.2" filter="url(#shadow_wolf)">LONE WOLF - MATCH</text>
+  <text x="190" y="94" font-family="'Rajdhani', Arial, sans-serif" font-size="11.5" font-weight="800" text-anchor="middle" fill="#ffffff" stroke="#000000" stroke-width="0.6" letter-spacing="3.5" filter="url(#shadow_wolf)">GOMON HUB</text>
+  <text x="190" y="122" font-family="'Arial Black', Impact, sans-serif" font-size="20" font-weight="900" text-anchor="middle" fill="#ffffff" stroke="#000000" stroke-width="1.2" letter-spacing="3" filter="url(#shadow_wolf)">FREE FIRE</text>
+</svg>`;
+    }
+    if (catId === 'bonus_match') {
+        return `<svg viewBox="0 0 380 150" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg_bonus" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4a044e"/>
+      <stop offset="35%" stop-color="#831843"/>
+      <stop offset="60%" stop-color="#db2777"/>
+      <stop offset="85%" stop-color="#b45309"/>
+      <stop offset="100%" stop-color="#18041c"/>
+    </linearGradient>
+    <radialGradient id="sun_bonus" cx="50%" cy="45%" r="65%">
+      <stop offset="0%" stop-color="#fef08a" stop-opacity="0.95"/>
+      <stop offset="40%" stop-color="#f43f5e" stop-opacity="0.7"/>
+      <stop offset="100%" stop-color="#3b0764" stop-opacity="0.8"/>
+    </radialGradient>
+    <linearGradient id="gold_bonus" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="25%" stop-color="#fef08a"/>
+      <stop offset="65%" stop-color="#fde047"/>
+      <stop offset="100%" stop-color="#ca8a04"/>
+    </linearGradient>
+    <filter id="shadow_bonus" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#000000" flood-opacity="0.95"/>
+    </filter>
+  </defs>
+  <rect width="380" height="150" rx="14" fill="url(#bg_bonus)"/>
+  <rect width="380" height="150" rx="14" fill="url(#sun_bonus)"/>
+  <circle cx="45" cy="30" r="3" fill="#38bdf8"/>
+  <circle cx="70" cy="50" r="2.5" fill="#fde047"/>
+  <circle cx="310" cy="35" r="3" fill="#4ade80"/>
+  <circle cx="335" cy="55" r="2" fill="#fb7185"/>
+  <polygon points="50,70 54,78 46,78" fill="#f43f5e"/>
+  <polygon points="325,75 330,83 320,83" fill="#38bdf8"/>
+  <polygon points="90,25 93,31 87,31" fill="#facc15"/>
+  <polygon points="290,25 294,31 286,31" fill="#c084fc"/>
+  <text x="35" y="65" font-size="22" filter="url(#shadow_bonus)">🎉</text>
+  <text x="325" y="65" font-size="22" filter="url(#shadow_bonus)">🎊</text>
+  <circle cx="190" cy="32" r="18" fill="#ffffff" stroke="#1c1917" stroke-width="2" filter="url(#shadow_bonus)"/>
+  <circle cx="190" cy="32" r="15" fill="#fdf4ff"/>
+  <text x="190" y="37" font-family="'Arial Black', Impact, sans-serif" font-size="15" text-anchor="middle" fill="#701a75">🎁</text>
+  <text x="190" y="74" font-family="'Rajdhani', 'Arial Black', Impact, sans-serif" font-size="23" font-weight="900" text-anchor="middle" fill="url(#gold_bonus)" stroke="#581c87" stroke-width="1.8" letter-spacing="2" filter="url(#shadow_bonus)">BONUS MATCH</text>
+  <text x="190" y="94" font-family="'Rajdhani', Arial, sans-serif" font-size="11.5" font-weight="800" text-anchor="middle" fill="#ffffff" stroke="#000000" stroke-width="0.6" letter-spacing="3.5" filter="url(#shadow_bonus)">GOMON HUB</text>
+  <text x="190" y="122" font-family="'Arial Black', Impact, sans-serif" font-size="20" font-weight="900" text-anchor="middle" fill="#ffffff" stroke="#000000" stroke-width="1.2" letter-spacing="3" filter="url(#shadow_bonus)">FREE FIRE</text>
+</svg>`;
+    }
+    if (catId === 'cs_4v4') {
+        return `<svg viewBox="0 0 380 150" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg_cs" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#451a03"/>
+      <stop offset="35%" stop-color="#b45309"/>
+      <stop offset="55%" stop-color="#f59e0b"/>
+      <stop offset="85%" stop-color="#9a3412"/>
+      <stop offset="100%" stop-color="#1f0700"/>
+    </linearGradient>
+    <radialGradient id="sun_cs" cx="50%" cy="40%" r="65%">
+      <stop offset="0%" stop-color="#fef08a" stop-opacity="1"/>
+      <stop offset="40%" stop-color="#f59e0b" stop-opacity="0.8"/>
+      <stop offset="80%" stop-color="#78350f" stop-opacity="0.3"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0.75"/>
+    </radialGradient>
+    <linearGradient id="gold_cs" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="25%" stop-color="#fef08a"/>
+      <stop offset="65%" stop-color="#f59e0b"/>
+      <stop offset="100%" stop-color="#b45309"/>
+    </linearGradient>
+    <filter id="shadow_cs" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="2" stdDeviation="2.5" flood-color="#000000" flood-opacity="0.9"/>
+    </filter>
+  </defs>
+  <rect width="380" height="150" rx="14" fill="url(#bg_cs)"/>
+  <rect width="380" height="150" rx="14" fill="url(#sun_cs)"/>
+  <path d="M-20 150 C20 115, 60 120, 100 142 C140 110, 190 118, 230 140 C270 112, 310 120, 350 138 C380 115, 410 125, 430 150 Z" fill="#1c0700" opacity="0.88"/>
+  <path d="M-10 150 C30 125, 80 128, 120 146 C160 124, 220 128, 260 146 C300 126, 360 132, 400 150 Z" fill="#0c0300" opacity="0.95"/>
+  <rect x="22" y="24" width="70" height="25" rx="12.5" fill="#facc15" stroke="#000000" stroke-width="2" filter="url(#shadow_cs)"/>
+  <text x="57" y="41.5" font-family="'Arial Black', Impact, sans-serif" font-size="12.5" font-weight="900" text-anchor="middle" fill="#000000">4 VS 4</text>
+  <rect x="288" y="24" width="70" height="25" rx="12.5" fill="#facc15" stroke="#000000" stroke-width="2" filter="url(#shadow_cs)"/>
+  <text x="323" y="41.5" font-family="'Arial Black', Impact, sans-serif" font-size="12.5" font-weight="900" text-anchor="middle" fill="#000000">4 VS 4</text>
+  <circle cx="190" cy="32" r="18" fill="#ffffff" stroke="#1c1917" stroke-width="2" filter="url(#shadow_cs)"/>
+  <circle cx="190" cy="32" r="15" fill="#fef08a"/>
+  <text x="190" y="37" font-family="'Arial Black', Impact, sans-serif" font-size="15" text-anchor="middle" fill="#0f172a">⚔️</text>
+  <text x="190" y="74" font-family="'Rajdhani', 'Arial Black', Impact, sans-serif" font-size="22" font-weight="900" text-anchor="middle" fill="url(#gold_cs)" stroke="#451a03" stroke-width="1.8" letter-spacing="1.2" filter="url(#shadow_cs)">CS 4V4 - MATCH</text>
+  <text x="190" y="94" font-family="'Rajdhani', Arial, sans-serif" font-size="11.5" font-weight="800" text-anchor="middle" fill="#ffffff" stroke="#000000" stroke-width="0.6" letter-spacing="3.5" filter="url(#shadow_cs)">GOMON HUB</text>
+  <text x="190" y="122" font-family="'Arial Black', Impact, sans-serif" font-size="20" font-weight="900" text-anchor="middle" fill="#ffffff" stroke="#000000" stroke-width="1.2" letter-spacing="3" filter="url(#shadow_cs)">FREE FIRE</text>
+</svg>`;
+    }
+    return '';
+}
+
+function renderCategoryHub() {
+    MATCH_CATEGORIES_CONFIG.forEach(c => {
+        const box = document.getElementById('banner_' + c.id);
+        if (box && !box.hasChildNodes()) {
+            box.innerHTML = getCategoryBannerSvg(c.id);
+        }
+    });
+    updateCategoryCounts();
+}
+
+function updateCategoryCounts() {
+    MATCH_CATEGORIES_CONFIG.forEach(c => {
+        const countEl = document.getElementById('count_' + c.id);
+        if (!countEl) return;
+        const matchesInCat = (allMatches || []).filter(m => c.matches(m));
+        const cnt = matchesInCat.length;
+        if (cnt === 0) {
+            countEl.innerText = 'No Matches Found';
+            countEl.classList.remove('has-matches');
+        } else if (cnt === 1) {
+            countEl.innerText = '1 matches found';
+            countEl.classList.add('has-matches');
+        } else {
+            countEl.innerText = `${cnt} matches found`;
+            countEl.classList.add('has-matches');
+        }
+    });
+}
+
+function selectMatchCategory(catId) {
+    selectedCategory = catId;
+    const cat = MATCH_CATEGORIES_CONFIG.find(c => c.id === catId);
+    const hubView = document.getElementById('categoryHubView');
+    const matchesView = document.getElementById('categoryMatchesView');
+    const headerTitle = document.getElementById('selectedCatHeaderTitle');
+    const badge = document.getElementById('selectedCatMatchCountBadge');
+
+    if (hubView) hubView.style.display = 'none';
+    if (matchesView) matchesView.style.display = 'block';
+
+    if (cat && headerTitle) {
+        headerTitle.innerText = cat.title;
+        const count = (allMatches || []).filter(m => cat.matches(m)).length;
+        if (badge) {
+            badge.innerText = count > 0 ? `${count} Active Match${count > 1 ? 'es' : ''}` : '0 Active Matches';
+        }
+    }
+
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    renderMatches();
+}
+
+function backToCategoryHub() {
+    selectedCategory = null;
+    const hubView = document.getElementById('categoryHubView');
+    const matchesView = document.getElementById('categoryMatchesView');
+    if (matchesView) matchesView.style.display = 'none';
+    if (hubView) hubView.style.display = 'block';
+    updateCategoryCounts();
+}
+
 async function loadMatches() {
     try {
         const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
         const res = await fetch('/api/matches?_t=' + Date.now(), { headers });
         const data = await res.json();
         allMatches = Array.isArray(data) ? data : (data.matches || []);
+        updateCategoryCounts();
         renderMatches();
         renderMyMatches();
         if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'moderator')) {
@@ -904,42 +1312,41 @@ function filterMatches(category, btnElem) {
     if (btnElem) {
         document.querySelectorAll('#tab-matches .filter-pill').forEach(b => b.classList.remove('active'));
         btnElem.classList.add('active');
-    } else {
-        document.querySelectorAll('#tab-matches .filter-pill').forEach(b => {
-            const txt = (b.innerText || '').trim().toLowerCase();
-            const cat = activeCategoryFilter.toLowerCase();
-            if ((cat === 'all' || cat === 'সব ম্যাচ' || cat === 'all matches') && (txt === 'all matches' || txt === 'all' || txt === 'সব ম্যাচ')) {
-                b.classList.add('active');
-            } else if (txt === cat) {
-                b.classList.add('active');
-            } else {
-                b.classList.remove('active');
-            }
-        });
     }
 
     renderMatches();
 }
 
 function renderMatches() {
+    renderCategoryHub();
+
     const grid = document.getElementById('matchesGrid');
     if (!grid) return;
 
     let filtered = allMatches || [];
-    if (activeCategoryFilter && activeCategoryFilter !== 'all' && activeCategoryFilter !== 'all matches' && activeCategoryFilter !== 'সব ম্যাচ') {
+    if (selectedCategory) {
+        const cat = MATCH_CATEGORIES_CONFIG.find(c => c.id === selectedCategory);
+        if (cat) {
+            filtered = (allMatches || []).filter(m => cat.matches(m));
+        }
+    } else if (activeCategoryFilter && activeCategoryFilter !== 'all' && activeCategoryFilter !== 'all matches' && activeCategoryFilter !== 'সব ম্যাচ') {
         filtered = (allMatches || []).filter(m => (m.match_type || '').toLowerCase().trim() === activeCategoryFilter.toLowerCase().trim());
     }
 
     if (!filtered || filtered.length === 0) {
         grid.innerHTML = `
-            <div style="grid-column: 1/-1; text-align: center; padding: 28px 16px; background: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; margin: 10px 0;">
-                <span style="font-size: 1.8rem;">⚡</span>
-                <div style="font-family: 'Rajdhani', sans-serif; font-size: 0.95rem; font-weight: 800; color: #1e293b; margin: 6px 0 2px;">No Active Matches Scheduled</div>
-                <div style="font-size: 0.75rem; color: #64748b;">New tournament matches will be scheduled shortly. Stay tuned!</div>
+            <div style="grid-column: 1/-1; text-align: center; padding: 36px 16px; background: #ffffff; border-radius: 14px; border: 1px solid #e2e8f0; margin: 10px 0; box-shadow: 0 2px 10px rgba(0,0,0,0.03);">
+                <div style="font-size: 2.2rem; margin-bottom: 6px;">🎮</div>
+                <div style="font-family: 'Rajdhani', sans-serif; font-size: 1.15rem; font-weight: 800; color: #1e293b;">No Active Matches in this Category</div>
+                <div style="font-size: 0.78rem; color: #64748b; margin-top: 4px; margin-bottom: 16px;">নতুন টুর্নামেন্ট ম্যাচ শীঘ্রই শিডিউল করা হবে। অনুগ্রহ করে অপেক্ষা করুন।</div>
+                <button type="button" class="btn btn-outline btn-sm" onclick="backToCategoryHub()" style="font-weight: 800; padding: 6px 16px; border-radius: 8px;">
+                    ‹ সব ক্যাটাগরি দেখুন
+                </button>
             </div>
         `;
         return;
     }
+
 
     grid.innerHTML = filtered.map(m => {
         const slotsPercent = Math.min(100, Math.round(((m.joined_count || 0) / (m.total_slots || 48)) * 100));

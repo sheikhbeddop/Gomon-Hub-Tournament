@@ -2156,4 +2156,11 @@ body {
     color: #059669;
     font-weight: 800;
 }
+.refresh-icon.spinning {
+    animation: spinRefreshIcon 0.65s linear infinite;
+}
+@keyframes spinRefreshIcon {
+    100% { transform: rotate(360deg); }
+}
+
 

@@ -4,7 +4,8 @@ import json
 import time
 import sqlite3
 import hashlib
-from datetime import datetime
+from datetime import datetime, timedelta
+
 
 # UTF-8 encoding support
 if sys.platform == "win32":
@@ -309,4 +310,144 @@ def sync_db_async():
     """Instantly pushes database changes to MongoDB in an asynchronous thread."""
     import threading
     threading.Thread(target=push_sqlite_to_mongo, daemon=True).start()
+
+def purge_records_older_than_15_days(db=None):
+    """
+    Permanently purges records older than 15 days from both SQLite and MongoDB Atlas:
+    - Completed matches, their match_results, and participations
+    - Approved/rejected deposits older than 15 days
+    - Approved/rejected withdrawals older than 15 days
+    'Jate r jibone o try korle khuija pawa na jay... mongo thekei dlt hoite Hobe'
+    """
+    cutoff_dt = datetime.utcnow() - timedelta(days=15)
+    cutoff_str = cutoff_dt.strftime("%Y-%m-%d %H:%M:%S")
+    cutoff_iso = cutoff_dt.isoformat()
+
+    conn = sqlite3.connect(DB_PATH, timeout=10.0)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    purged_counts = {"matches": 0, "results": 0, "participations": 0, "deposits": 0, "withdrawals": 0}
+    old_match_ids = []
+    old_dep_ids = []
+    old_wd_ids = []
+
+    try:
+        # 1. Identify old completed matches
+        cursor.execute("""
+            SELECT id FROM matches 
+            WHERE status = 'completed' 
+            AND (
+                (completed_at IS NOT NULL AND completed_at != '' AND completed_at < ?)
+                OR ((completed_at IS NULL OR completed_at = '') AND created_at < ?)
+            )
+        """, (cutoff_str, cutoff_str))
+        old_match_rows = cursor.fetchall()
+        old_match_ids = [int(row["id"]) for row in old_match_rows]
+
+        if old_match_ids:
+            placeholders = ",".join(["?"] * len(old_match_ids))
+            
+            # Delete match_results
+            cursor.execute(f"DELETE FROM match_results WHERE match_id IN ({placeholders})", old_match_ids)
+            purged_counts["results"] = cursor.rowcount
+
+            # Delete participations
+            cursor.execute(f"DELETE FROM participations WHERE match_id IN ({placeholders})", old_match_ids)
+            purged_counts["participations"] = cursor.rowcount
+
+            # Delete matches
+            cursor.execute(f"DELETE FROM matches WHERE id IN ({placeholders})", old_match_ids)
+            purged_counts["matches"] = cursor.rowcount
+
+        # 2. Identify old deposits (approved or rejected)
+        cursor.execute("""
+            SELECT id FROM deposits
+            WHERE status IN ('approved', 'rejected')
+            AND (
+                (reviewed_at IS NOT NULL AND reviewed_at != '' AND reviewed_at < ?)
+                OR ((reviewed_at IS NULL OR reviewed_at = '') AND created_at < ?)
+            )
+        """, (cutoff_str, cutoff_str))
+        old_dep_ids = [int(row["id"]) for row in cursor.fetchall()]
+        if old_dep_ids:
+            placeholders = ",".join(["?"] * len(old_dep_ids))
+            cursor.execute(f"DELETE FROM deposits WHERE id IN ({placeholders})", old_dep_ids)
+            purged_counts["deposits"] = cursor.rowcount
+
+        # 3. Identify old withdrawals (approved or rejected)
+        cursor.execute("""
+            SELECT id FROM withdrawals
+            WHERE status IN ('approved', 'rejected')
+            AND (
+                (reviewed_at IS NOT NULL AND reviewed_at != '' AND reviewed_at < ?)
+                OR ((reviewed_at IS NULL OR reviewed_at = '') AND created_at < ?)
+            )
+        """, (cutoff_str, cutoff_str))
+        old_wd_ids = [int(row["id"]) for row in cursor.fetchall()]
+        if old_wd_ids:
+            placeholders = ",".join(["?"] * len(old_wd_ids))
+            cursor.execute(f"DELETE FROM withdrawals WHERE id IN ({placeholders})", old_wd_ids)
+            purged_counts["withdrawals"] = cursor.rowcount
+
+        conn.commit()
+    except Exception as e:
+        print(f"[Purge Error - SQLite] {e}")
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+    finally:
+        conn.close()
+
+    # Permanently purge from MongoDB Atlas
+    mongo = db if db is not None else get_mongo_database()
+    if mongo is not None:
+        try:
+            if old_match_ids:
+                id_filter = old_match_ids + [str(x) for x in old_match_ids]
+                mongo["matches"].delete_many({"$or": [{"id": {"$in": id_filter}}, {"_id": {"$in": id_filter}}]})
+                mongo["match_results"].delete_many({"$or": [{"match_id": {"$in": id_filter}}, {"match_id": {"$in": old_match_ids}}]})
+                mongo["participations"].delete_many({"$or": [{"match_id": {"$in": id_filter}}, {"match_id": {"$in": old_match_ids}}]})
+
+            if old_dep_ids:
+                id_filter = old_dep_ids + [str(x) for x in old_dep_ids]
+                mongo["deposits"].delete_many({"$or": [{"id": {"$in": id_filter}}, {"_id": {"$in": id_filter}}]})
+
+            if old_wd_ids:
+                id_filter = old_wd_ids + [str(x) for x in old_wd_ids]
+                mongo["withdrawals"].delete_many({"$or": [{"id": {"$in": id_filter}}, {"_id": {"$in": id_filter}}]})
+
+            mongo["matches"].delete_many({
+                "status": "completed",
+                "$or": [
+                    {"completed_at": {"$lt": cutoff_str}},
+                    {"completed_at": {"$lt": cutoff_iso}},
+                    {"created_at": {"$lt": cutoff_str}}
+                ]
+            })
+            mongo["deposits"].delete_many({
+                "status": {"$in": ["approved", "rejected"]},
+                "$or": [
+                    {"reviewed_at": {"$lt": cutoff_str}},
+                    {"reviewed_at": {"$lt": cutoff_iso}},
+                    {"created_at": {"$lt": cutoff_str}}
+                ]
+            })
+            mongo["withdrawals"].delete_many({
+                "status": {"$in": ["approved", "rejected"]},
+                "$or": [
+                    {"reviewed_at": {"$lt": cutoff_str}},
+                    {"reviewed_at": {"$lt": cutoff_iso}},
+                    {"created_at": {"$lt": cutoff_str}}
+                ]
+            })
+        except Exception as e:
+            print(f"[Purge Error - MongoDB] {e}")
+
+    total_purged = sum(purged_counts.values())
+    if total_purged > 0:
+        print(f"[15-Day Auto-Purge] Purged {total_purged} expired records older than 15 days: {purged_counts}")
+    return purged_counts
+
 

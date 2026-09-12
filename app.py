@@ -23,6 +23,7 @@ from fastapi import FastAPI, HTTPException, Depends, Request, WebSocket, WebSock
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from pydantic import BaseModel, Field
 import pywebpush
 
@@ -33,7 +34,8 @@ from db_mongo import (
     push_sqlite_to_mongo,
     pull_mongo_to_sqlite,
     notify_db_change,
-    sync_db_async
+    sync_db_async,
+    purge_records_older_than_15_days
 )
 
 
@@ -538,8 +540,15 @@ app = FastAPI(title="Free Fire Tournament Platform API")
 
 @app.on_event("startup")
 async def on_startup():
+    # Run 15-day auto-purge on startup
+    try:
+        purge_records_older_than_15_days()
+    except Exception as e:
+        print(f"[15-Day Auto-Purge Startup Notice] {e}")
+
     import threading
     def periodic_mongo_sync():
+        last_purge_time = 0
         while True:
             time.sleep(5)
             try:
@@ -547,6 +556,14 @@ async def on_startup():
                     push_sqlite_to_mongo()
             except Exception:
                 pass
+            # Periodic 15-day purge check every 30 minutes
+            now = time.time()
+            if now - last_purge_time > 1800:
+                last_purge_time = now
+                try:
+                    purge_records_older_than_15_days()
+                except Exception:
+                    pass
     t = threading.Thread(target=periodic_mongo_sync, daemon=True)
     t.start()
     if is_mongo_connected():
@@ -571,6 +588,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+# GZip compression middleware: shrinks HTML, JS, CSS, and API responses over the wire for blazing speed
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 @app.middleware("http")
 async def add_no_cache_header(request: Request, call_next):
@@ -2031,6 +2050,11 @@ async def admin_delete_user(target_user_id: int, admin: dict = Depends(verify_ad
         conn.close()
 
     try:
+        sync_db_async()
+    except Exception:
+        pass
+
+    try:
         await manager.send_to_user(target_user_id, {
             "type": "ACCOUNT_DELETED_KICK",
             "message": "আপনার অ্যাকাউন্টটি অ্যাডমিন দ্বারা সম্পূর্ণ ডিলিট করা হয়েছে।"
@@ -2439,6 +2463,12 @@ async def admin_publish_match_results(match_id: int, data: PublishMatchResultsRe
     
     conn.close()
     
+    # Sync match results and completed status instantly to MongoDB Atlas
+    try:
+        sync_db_async()
+    except Exception:
+        pass
+    
     await manager.broadcast({
         "type": "MATCH_RESULTS_PUBLISHED",
         "match_id": match_id,
@@ -2505,7 +2535,124 @@ def admin_delete_match(match_id: int, admin: dict = Depends(verify_admin)):
             conn.execute("UPDATE match_code_sequences SET last_number = ? WHERE category = ?", (rem_max, pfx))
             conn.execute("UPDATE settings SET value = ? WHERE key = ?", (str(rem_max), f"seq_watermark_{pfx}"))
     conn.close()
+    try:
+        sync_db_async()
+    except Exception:
+        pass
     return {"success": True, "message": "Match deleted"}
+
+@app.get("/api/admin/matches/history")
+def admin_get_match_history(category: Optional[str] = None, admin: dict = Depends(verify_moderator_or_admin)):
+    """
+    Returns full record of completed matches from the last 15 days,
+    categorized by the 6 standard categories:
+    - solo_full_map
+    - duo_full_map
+    - br_survival
+    - lone_wolf
+    - bonus_match
+    - cs_4v4
+    Each match includes full participant details (slot, IGN, UID, rank, kills, prizes).
+    Automatically purges expired records older than 15 days.
+    """
+    try:
+        purge_records_older_than_15_days()
+    except Exception as e:
+        print(f"[Purge Notice on History] {e}")
+
+    conn = get_db()
+    
+    # Query completed matches within the last 15 days
+    matches_rows = conn.execute("""
+        SELECT m.*
+        FROM matches m
+        WHERE m.status = 'completed'
+          AND (
+            (m.completed_at IS NOT NULL AND m.completed_at != '' AND m.completed_at >= datetime('now', '-15 days'))
+            OR ((m.completed_at IS NULL OR m.completed_at = '') AND m.created_at >= datetime('now', '-15 days'))
+          )
+        ORDER BY COALESCE(m.completed_at, m.created_at) DESC
+    """).fetchall()
+
+    def classify_category(match_type: str, title: str) -> str:
+        t = (match_type or "").lower()
+        tl = (title or "").lower()
+        if 'survival' in t or 'zone' in t or 'জোন' in t or 'survival' in tl or 'zone' in tl or 'জোন' in tl:
+            return 'br_survival'
+        if 'lone' in t or 'wolf' in t or 'lone' in tl or 'wolf' in tl or '2v2' in t or '2v2' in tl:
+            return 'lone_wolf'
+        if 'bonus' in t or 'bonus' in tl or 'বোনাস' in tl:
+            return 'bonus_match'
+        if 'cs' in t or 'clash' in t or '4v4' in t or ('squad' in t and 'survival' not in tl):
+            return 'cs_4v4'
+        if 'duo full map' in t or t == 'duo':
+            return 'duo_full_map'
+        return 'solo_full_map'
+
+    CATEGORY_NAMES = {
+        'solo_full_map': 'Solo Full Map',
+        'duo_full_map': 'Duo Full Map',
+        'br_survival': 'BR Survival',
+        'lone_wolf': 'Lone Wolf',
+        'bonus_match': 'Bonus Match',
+        'cs_4v4': 'CS 4v4'
+    }
+
+    result = []
+    for m in matches_rows:
+        m_dict = dict(m)
+        cat_key = classify_category(m_dict.get("match_type", ""), m_dict.get("title", ""))
+        m_dict["category_key"] = cat_key
+        m_dict["category_name"] = CATEGORY_NAMES.get(cat_key, "Solo Full Map")
+
+        # Category filter if provided
+        if category and category != 'all' and category != cat_key:
+            continue
+
+        # Full participant details with results
+        part_query = """
+            SELECT 
+                p.slot_number,
+                p.user_id,
+                COALESCE(NULLIF(p.player_ign, ''), u.ff_ign, u.username, 'Player') AS player_ign,
+                COALESCE(NULLIF(p.player_uid, ''), u.ff_uid, '') AS player_uid,
+                u.username,
+                u.phone,
+                u.player_id,
+                COALESCE(r.rank_position, 0) AS rank_position,
+                COALESCE(r.kills, 0) AS kills,
+                COALESCE(r.kill_prize, 0) AS kill_prize,
+                COALESCE(r.rank_prize, 0) AS rank_prize,
+                COALESCE(r.total_prize, 0) AS total_prize,
+                p.joined_at
+            FROM participations p
+            LEFT JOIN users u ON p.user_id = u.id
+            LEFT JOIN match_results r ON p.match_id = r.match_id AND p.user_id = r.user_id
+            WHERE p.match_id = ?
+            ORDER BY 
+                CASE WHEN r.rank_position > 0 THEN r.rank_position ELSE 9999 END ASC,
+                r.kills DESC,
+                p.slot_number ASC
+        """
+        parts = conn.execute(part_query, (m_dict["id"],)).fetchall()
+        m_dict["participants"] = [dict(p) for p in parts]
+        m_dict["total_participants"] = len(m_dict["participants"])
+        m_dict["total_payout"] = sum(p["total_prize"] for p in m_dict["participants"])
+        result.append(m_dict)
+
+    conn.close()
+    return {
+        "success": True,
+        "matches": result,
+        "categories": [
+            {"id": "solo_full_map", "name": "Solo Full Map"},
+            {"id": "duo_full_map", "name": "Duo Full Map"},
+            {"id": "br_survival", "name": "BR Survival"},
+            {"id": "lone_wolf", "name": "Lone Wolf"},
+            {"id": "bonus_match", "name": "Bonus Match"},
+            {"id": "cs_4v4", "name": "CS 4v4"}
+        ]
+    }
 
 @app.post("/api/admin/settings")
 async def admin_update_settings(data: dict, admin: dict = Depends(verify_admin)):
@@ -2527,6 +2674,61 @@ async def admin_update_settings(data: dict, admin: dict = Depends(verify_admin))
     })
 
     return {"success": True, "message": "Settings updated and broadcasted successfully"}
+
+class AdminChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+    confirm_password: str
+
+@app.post("/api/admin/change-password")
+async def admin_change_own_password(data: AdminChangePasswordRequest, admin: dict = Depends(verify_admin)):
+    curr_pass = data.current_password.strip()
+    new_pass = data.new_password.strip()
+    conf_pass = data.confirm_password.strip()
+
+    if not curr_pass:
+        raise HTTPException(status_code=400, detail="বর্তমান পাসওয়ার্ড দেওয়া আবশ্যক")
+    
+    if len(new_pass) < 6:
+        raise HTTPException(status_code=400, detail="নতুন পাসওয়ার্ড কমপক্ষে ৬ অক্ষরের হতে হবে")
+    
+    if new_pass != conf_pass:
+        raise HTTPException(status_code=400, detail="নতুন পাসওয়ার্ড এবং কনফার্ম পাসওয়ার্ড মিলছে না")
+
+    conn = get_db()
+    try:
+        user = conn.execute("SELECT * FROM users WHERE id = ?", (admin["id"],)).fetchone()
+        if not user:
+            raise HTTPException(status_code=404, detail="এডমিন অ্যাকাউন্ট পাওয়া যায়নি")
+
+        # Verify current password
+        if not verify_password(user["password_hash"], curr_pass) and user["plain_password"] != curr_pass:
+            raise HTTPException(status_code=400, detail="বর্তমান পাসওয়ার্ডটি সঠিক নয়!")
+
+        new_hash = hash_password(new_pass)
+        with conn:
+            conn.execute("UPDATE users SET password_hash = ?, plain_password = ? WHERE id = ?", (new_hash, new_pass, admin["id"]))
+            conn.execute("""
+                INSERT INTO audit_logs (admin_id, target_user_id, action, amount, reason)
+                VALUES (?, ?, 'ADMIN_CHANGED_OWN_PASSWORD', 0, 'Master Admin changed their password successfully')
+            """, (admin["id"], admin["id"]))
+    finally:
+        conn.close()
+
+    # Sync instantly to MongoDB Atlas so the new password is permanently saved in cloud
+    try:
+        sync_db_async()
+    except Exception:
+        pass
+
+    # Generate a new permanent token with the updated session
+    new_token = generate_token(admin["id"], admin["username"], admin["role"])
+
+    return {
+        "success": True,
+        "message": "এডমিন পাসওয়ার্ড সফলভাবে পরিবর্তিত হয়েছে এবং ক্লাউড ডাটাবেজে সেভ হয়েছে!",
+        "token": new_token
+    }
 
 @app.post("/api/admin/broadcast")
 async def admin_broadcast_notice(data: AdminNoticeRequest, admin: dict = Depends(verify_admin)):

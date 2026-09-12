@@ -939,17 +939,30 @@ function renderMatches() {
         const slotsPercent = Math.min(100, Math.round(((m.joined_count || 0) / (m.total_slots || 48)) * 100));
         const isFull = (m.joined_count || 0) >= (m.total_slots || 48);
         const hasJoined = m.has_joined;
+        const isAdminOrMod = (currentUser && (currentUser.role === 'admin' || currentUser.role === 'moderator'));
 
         let actionHtml = '';
         if (hasJoined) {
             actionHtml = `
                 <div style="display: flex; flex-direction: column; gap: 6px;">
-                    <div style="display: flex; align-items: center; justify-content: space-between; background: rgba(0, 245, 155, 0.08); border: 1px solid rgba(0, 245, 155, 0.25); border-radius: 8px; padding: 6px 10px;">
-                        <span style="font-size: 0.8rem; color: #a7f3d0; font-weight: 700;">✅ You are Registered</span>
-                        <span style="font-family: 'Rajdhani', sans-serif; font-size: 0.95rem; font-weight: 800; color: #00f59b;">Slot #${m.my_slot || 1}</span>
+                    <div style="display: flex; align-items: center; justify-content: space-between; background: #ecfdf5; border: 1px solid #86efac; border-radius: 8px; padding: 6px 10px;">
+                        <span style="font-size: 0.8rem; color: #166534; font-weight: 800;">✅ You are Registered</span>
+                        <span style="font-family: 'Rajdhani', sans-serif; font-size: 0.95rem; font-weight: 800; color: #047857;">Slot #${m.my_slot || 1}</span>
                     </div>
                     <button class="btn btn-neon" style="width: 100%; padding: 8px 12px; font-size: 0.86rem; font-weight: 800; border-radius: 8px;" onclick="openMatchInnerPortal(${m.id})">
                         🔑 View Room & Players
+                    </button>
+                </div>
+            `;
+        } else if (isAdminOrMod) {
+            actionHtml = `
+                <div style="display: flex; flex-direction: column; gap: 6px;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; background: #e0f2fe; border: 1px solid #7dd3fc; border-radius: 8px; padding: 5px 10px;">
+                        <span style="font-size: 0.78rem; color: #0369a1; font-weight: 700;">🛡️ Admin/Mod Access</span>
+                        <span style="font-size: 0.75rem; color: #0284c7; font-weight: 800;">${m.joined_count || 0}/${m.total_slots || 48} Players</span>
+                    </div>
+                    <button class="btn btn-neon" style="width: 100%; padding: 8px 12px; font-size: 0.86rem; font-weight: 800; border-radius: 8px; background: linear-gradient(135deg, #0284c7, #0369a1);" onclick="openMatchInnerPortal(${m.id})">
+                        👥 View Room & Players (UID)
                     </button>
                 </div>
             `;
@@ -960,10 +973,7 @@ function renderMatches() {
                         <span style="font-size: 0.78rem; color: #94a3b8; font-weight: 600;">⭕ Not Joined</span>
                         <span style="font-size: 0.75rem; color: #ef4444; font-weight: 700;">Registration Closed</span>
                     </div>
-                    <div style="display: flex; gap: 6px;">
-                        <button class="btn btn-outline" style="flex: 1; opacity: 0.75; cursor: not-allowed; border-color: #ef4444; color: #ef4444; font-size: 0.8rem; font-weight: 700;" disabled>🔒 Registration Closed</button>
-                        <button class="btn btn-outline" style="flex: 1; padding: 8px 6px; font-size: 0.8rem; font-weight: 700; border-radius: 8px; border-color: #cbd5e1; color: #64748b;" onclick="openMatchInnerPortal(${m.id})">🔒 Room Details</button>
-                    </div>
+                    <button class="btn btn-outline" style="width: 100%; opacity: 0.75; cursor: not-allowed; border-color: #ef4444; color: #ef4444; font-size: 0.8rem; font-weight: 700;" disabled>🔒 Registration Closed (Join Required to View)</button>
                 </div>
             `;
         } else if (m.status === 'completed') {
@@ -983,10 +993,7 @@ function renderMatches() {
                         <span style="font-size: 0.78rem; color: #94a3b8; font-weight: 600;">⭕ Not Joined</span>
                         <span style="font-size: 0.75rem; color: #ef4444; font-weight: 700;">Slots Full</span>
                     </div>
-                    <div style="display: flex; gap: 6px;">
-                        <button class="btn btn-outline" style="flex: 1; opacity: 0.6; cursor: not-allowed; font-size: 0.8rem;" disabled>🔒 All Slots Full</button>
-                        <button class="btn btn-outline" style="flex: 1; padding: 8px 6px; font-size: 0.8rem; font-weight: 700; border-radius: 8px; border-color: #cbd5e1; color: #64748b;" onclick="openMatchInnerPortal(${m.id})">🔒 Room Details</button>
-                    </div>
+                    <button class="btn btn-outline" style="width: 100%; opacity: 0.6; cursor: not-allowed; font-size: 0.8rem; font-weight: 700;" disabled>🔒 All Slots Full (Join Required to View)</button>
                 </div>
             `;
         } else {
@@ -996,17 +1003,13 @@ function renderMatches() {
                         <span style="font-size: 0.78rem; color: #64748b; font-weight: 600;">⭕ You have not joined yet</span>
                         <span style="font-size: 0.75rem; color: #0284c7; font-weight: 700;">Fee: ${m.entry_fee} Digits</span>
                     </div>
-                    <div style="display: flex; gap: 6px;">
-                        <button class="btn btn-neon" style="flex: 1.2; padding: 8px 6px; font-size: 0.82rem; font-weight: 800; border-radius: 8px;" onclick="openJoinMatchModal(${m.id}, '${escapeHtml(m.title)}', ${m.entry_fee})">
-                            🎮 Join Match (${m.entry_fee} 🪙)
-                        </button>
-                        <button class="btn btn-outline" style="flex: 1; padding: 8px 6px; font-size: 0.8rem; font-weight: 700; border-radius: 8px; border-color: #cbd5e1; color: #475569;" onclick="openMatchInnerPortal(${m.id})">
-                            🔒 Room Details
-                        </button>
-                    </div>
+                    <button class="btn btn-neon" style="width: 100%; padding: 8px 6px; font-size: 0.86rem; font-weight: 800; border-radius: 8px;" onclick="openJoinMatchModal(${m.id}, '${escapeHtml(m.title)}', ${m.entry_fee})">
+                        🎮 Join Match (${m.entry_fee} 🪙)
+                    </button>
                 </div>
             `;
         }
+
 
         return `
             <div class="match-card">
@@ -1197,16 +1200,18 @@ async function openMatchInnerPortal(matchId) {
         return;
     }
 
-    // STRICT ACCESS CONTROL: Player CANNOT enter inside if they have not joined!
-    if (!m.has_joined) {
-        showToast('🔒 Please register for this match to access room credentials and participant roster!', 'warning');
+    const isAdminOrMod = (currentUser.role === 'admin' || currentUser.role === 'moderator');
+
+    // STRICT ACCESS CONTROL: Only joined players or Admin/Moderator can access!
+    if (!m.has_joined && !isAdminOrMod) {
+        showToast('🔒 Only players who have joined this match, or Admins/Moderators, can view registered players and credentials!', 'warning');
         if (m.status === 'open' && (m.joined_count || 0) < (m.total_slots || 48)) {
             openJoinMatchModal(m.id, m.title, m.entry_fee);
         }
         return;
     }
 
-    // Player is joined: populate inner details and open modal
+    // Populate inner details and open modal
     const titleEl = document.getElementById('portalModalTitle');
     if (titleEl) titleEl.innerText = `${m.match_code ? `[#${m.match_code}] ` : ''}${m.title || 'Match Details'}`;
 
@@ -1214,7 +1219,15 @@ async function openMatchInnerPortal(matchId) {
     if (subEl) subEl.innerText = `Match Code: #${m.match_code || ('MATCH-' + m.id)} • Type: ${m.match_type || 'Solo'} • Time: ${m.match_time || 'Upcoming'}`;
 
     const slotEl = document.getElementById('portalModalSlot');
-    if (slotEl) slotEl.innerText = `#${m.my_slot || 1} (Fixed)`;
+    if (slotEl) {
+        if (m.has_joined) {
+            slotEl.innerText = `#${m.my_slot || 1} (Fixed)`;
+        } else if (isAdminOrMod) {
+            slotEl.innerText = currentUser.role === 'admin' ? '🛡️ Admin' : '🛡️ Moderator';
+        } else {
+            slotEl.innerText = '#1 (Fixed)';
+        }
+    }
 
     const prizeEl = document.getElementById('portalModalPrize');
     if (prizeEl) prizeEl.innerText = `৳${m.prize_pool || 0}`;
@@ -1237,12 +1250,22 @@ async function openMatchInnerPortal(matchId) {
 
     const isReleased = (m.room_id && m.room_id !== 'JOIN TO VIEW' && m.room_id !== 'NOT RELEASED YET' && !m.room_id.includes('দেওয়া হবে'));
     if (rIdEl) {
-        rIdEl.innerText = isReleased ? m.room_id : 'Credentials release 10-15 minutes before match';
-        rIdEl.style.color = isReleased ? '#38bdf8' : '#94a3b8';
+        if (isAdminOrMod) {
+            rIdEl.innerText = m.room_id && m.room_id !== 'JOIN TO VIEW' ? m.room_id : 'Not set yet (Set in Admin Panel)';
+            rIdEl.style.color = '#38bdf8';
+        } else {
+            rIdEl.innerText = isReleased ? m.room_id : 'Credentials release 10-15 minutes before match';
+            rIdEl.style.color = isReleased ? '#38bdf8' : '#94a3b8';
+        }
     }
     if (rPassEl) {
-        rPassEl.innerText = isReleased ? m.room_pass : 'Credentials release 10-15 minutes before match';
-        rPassEl.style.color = isReleased ? '#00f59b' : '#94a3b8';
+        if (isAdminOrMod) {
+            rPassEl.innerText = m.room_pass && m.room_pass !== 'JOIN TO VIEW' ? m.room_pass : 'Not set yet (Set in Admin Panel)';
+            rPassEl.style.color = '#00f59b';
+        } else {
+            rPassEl.innerText = isReleased ? m.room_pass : 'Credentials release 10-15 minutes before match';
+            rPassEl.style.color = isReleased ? '#00f59b' : '#94a3b8';
+        }
     }
 
     openModal('matchInnerPortalModal');
@@ -1279,7 +1302,7 @@ async function openMatchInnerPortal(matchId) {
             if (tbody) {
                 tbody.innerHTML = `
                     <tr>
-                        <td colspan="3" style="text-align: center; padding: 20px; color: var(--text-muted);">
+                        <td colspan="3" style="text-align: center; padding: 24px; color: #64748b; font-weight: 600;">
                             No players have joined this match yet
                         </td>
                     </tr>
@@ -1290,20 +1313,22 @@ async function openMatchInnerPortal(matchId) {
                 tbody.innerHTML = data.participants.map(p => {
                     const isSelf = p.is_self;
                     return `
-                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.06); ${isSelf ? 'background: rgba(0, 245, 155, 0.08);' : ''}">
-                            <td style="padding: 10px 6px;">
-                                <span style="font-family: 'Rajdhani', sans-serif; font-weight: 800; font-size: 1.05rem; color: ${isSelf ? 'var(--neon-green)' : '#f8fafc'};">
+                        <tr style="border-bottom: 1px solid #f1f5f9; ${isSelf ? 'background: #f0fdf4;' : 'background: #ffffff;'}">
+                            <td style="padding: 10px 8px; vertical-align: middle;">
+                                <span style="font-family: 'Rajdhani', sans-serif; font-weight: 800; font-size: 1rem; background: ${isSelf ? '#dcfce7' : '#f1f5f9'}; color: ${isSelf ? '#15803d' : '#0f172a'}; padding: 3px 8px; border-radius: 6px; border: 1px solid ${isSelf ? '#86efac' : '#cbd5e1'}; display: inline-block;">
                                     #${p.slot_number}
                                 </span>
                             </td>
-                            <td style="padding: 10px 6px;">
-                                <span style="font-weight: 700; color: ${isSelf ? '#00f59b' : '#e2e8f0'};">
-                                    ${escapeHtml(p.player_ign || 'Anonymous')}
-                                </span>
-                                ${isSelf ? '<span style="font-size: 0.72rem; background: rgba(0, 245, 155, 0.2); color: #00f59b; padding: 2px 6px; border-radius: 4px; font-weight: 800; margin-left: 6px;">👑 You</span>' : ''}
+                            <td style="padding: 10px 8px; vertical-align: middle;">
+                                <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                                    <span style="font-weight: 800; font-size: 0.92rem; color: #0f172a;">
+                                        ${escapeHtml(p.player_ign || 'Anonymous')}
+                                    </span>
+                                    ${isSelf ? '<span style="font-size: 0.7rem; background: #dcfce7; color: #166534; border: 1px solid #86efac; padding: 2px 7px; border-radius: 99px; font-weight: 800;">👑 You</span>' : ''}
+                                </div>
                             </td>
-                            <td style="padding: 10px 6px; text-align: right;">
-                                <span class="protected-uid" oncopy="return false;" oncontextmenu="return false;" ondragstart="return false;" onselectstart="return false;" title="Protected UID - Copying disabled">
+                            <td style="padding: 10px 8px; text-align: right; vertical-align: middle;">
+                                <span class="protected-uid" style="font-family: monospace; font-size: 0.92rem; font-weight: 800; background: #ecfdf5; border: 1px solid #a7f3d0; color: #047857; padding: 3px 10px; border-radius: 6px; letter-spacing: 0.5px; display: inline-block;" oncopy="return false;" oncontextmenu="return false;" ondragstart="return false;" onselectstart="return false;" title="Protected UID - Copying disabled">
                                     ${escapeHtml(p.player_uid || '------')}
                                 </span>
                             </td>
@@ -1323,6 +1348,7 @@ async function openMatchInnerPortal(matchId) {
         }
     }
 }
+
 
 // Backward-compatibility alias
 function viewMatchParticipants(matchId) {
@@ -2379,9 +2405,13 @@ function renderAdminMatches() {
             <td>${updaterInfo}</td>
             <td>
                 <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                    <button class="btn btn-outline btn-sm" onclick="openMatchInnerPortal(${m.id})" style="color: #059669; border-color: #10b981; font-weight: 700; background: #ecfdf5;" title="View Registered Players & UIDs">
+                        👥 Players (${m.joined_count})
+                    </button>
                     <button class="btn btn-neon btn-sm" onclick="openSetRoomModal(${m.id}, '${escapeHtml(m.room_id || '')}', '${escapeHtml(m.room_pass || '')}')">
                         🔑 Room ID
                     </button>
+
                     ${!isCompleted ? `
                         <button class="btn btn-outline btn-sm" onclick="completeMatch(${m.id}, '${escapeHtml(m.title)}')" style="color: var(--neon-green); border-color: var(--neon-green);" title="Conclude Match">
                             🏁 Conclude

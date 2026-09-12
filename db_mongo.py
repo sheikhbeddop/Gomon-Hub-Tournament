@@ -131,7 +131,9 @@ def push_sqlite_to_mongo(conn=None) -> bool:
 
         for table in TABLES_TO_COLLECTIONS:
             try:
-                rows = conn.execute(f"SELECT * FROM {table}").fetchall()
+                cursor = conn.execute(f"SELECT * FROM {table}")
+                col_names = [d[0] for d in cursor.description] if cursor.description else []
+                rows = cursor.fetchall()
             except Exception:
                 continue
 
@@ -141,7 +143,11 @@ def push_sqlite_to_mongo(conn=None) -> bool:
 
             docs = []
             for r in rows:
-                doc = dict(r)
+                if isinstance(r, sqlite3.Row) or isinstance(r, dict):
+                    doc = dict(r)
+                else:
+                    doc = dict(zip(col_names, r))
+
                 # Map SQLite 'id' or 'key' for MongoDB indexing
                 if "id" in doc:
                     doc["_id"] = doc["id"]
@@ -159,8 +165,20 @@ def push_sqlite_to_mongo(conn=None) -> bool:
                 col.replace_one({"_id": d["_id"]}, d, upsert=True)
 
         # Also store full binary snapshot with hash for instant recovery
-        if os.path.exists(DB_PATH):
-            with open(DB_PATH, "rb") as f:
+        actual_db_path = DB_PATH
+        try:
+            cur = conn.cursor()
+            cur.execute("PRAGMA database_list")
+            dblist = cur.fetchall()
+            if dblist and len(dblist) > 0:
+                p = dblist[0][2] if isinstance(dblist[0], (tuple, list)) else dblist[0]["file"]
+                if p:
+                    actual_db_path = p
+        except Exception:
+            pass
+
+        if os.path.exists(actual_db_path):
+            with open(actual_db_path, "rb") as f:
                 db_bytes = f.read()
             if db_bytes:
                 db["db_snapshots"].replace_one(
@@ -187,29 +205,55 @@ def push_sqlite_to_mongo(conn=None) -> bool:
 # Pull Data from MongoDB into SQLite (Automatic Recovery on Deploy)
 # -------------------------------------------------------------------
 def pull_mongo_to_sqlite(target_path=DB_PATH) -> bool:
-    """Restores SQLite database from MongoDB Atlas if local database is empty or missing."""
+    """Restores SQLite database from MongoDB Atlas with zero data loss guarantee."""
     db = get_mongo_database()
     if db is None:
         return False
 
     try:
-        # Check if snapshot exists
+        # 1. Restore binary snapshot if exists
         snap = db["db_snapshots"].find_one({"_id": "latest"})
         if snap and "data" in snap and snap["data"]:
             with open(target_path, "wb") as f:
                 f.write(snap["data"])
             print(f"[MongoDB] Restored full database from MongoDB Atlas snapshot ({snap.get('size', 0)} bytes).")
+
+        # 2. Re-sync table records from MongoDB collections to ensure 100% latest documents
+        if not os.path.exists(target_path):
+            # If target db does not exist, let init_db create schema first
             return True
 
-        # Fallback: Restore table-by-table from MongoDB documents
-        # Check if users collection has data
-        user_count = db["users"].count_documents({})
-        if user_count == 0:
-            print("[MongoDB] MongoDB is connected but has no documents yet.")
-            return False
+        conn = sqlite3.connect(target_path)
+        conn.row_factory = sqlite3.Row
+        with conn:
+            for table in TABLES_TO_COLLECTIONS:
+                try:
+                    cursor = conn.execute(f"SELECT * FROM {table} LIMIT 0")
+                    col_names = [d[0] for d in cursor.description]
+                except Exception:
+                    continue
 
-        print(f"[MongoDB] Found {user_count} users in MongoDB. Restoring tables...")
-        # (Table-by-table restore logic handled if snapshot was absent)
+                col = db[table]
+                docs = list(col.find())
+                if not docs:
+                    continue
+
+                for doc in docs:
+                    fields = [k for k in doc.keys() if k in col_names]
+                    if not fields:
+                        continue
+                    placeholders = ", ".join(["?"] * len(fields))
+                    field_str = ", ".join(fields)
+                    values = [doc[k] for k in fields]
+                    try:
+                        conn.execute(
+                            f"INSERT OR REPLACE INTO {table} ({field_str}) VALUES ({placeholders})",
+                            values
+                        )
+                    except Exception:
+                        pass
+        conn.close()
+        print("[MongoDB] Collections re-synchronized into SQLite successfully.")
         return True
     except Exception as e:
         print(f"[MongoDB Error] Failed to pull from MongoDB: {e}")

@@ -20,8 +20,10 @@ CONFIG_FILE = os.path.join(BASE_DIR, "mongo_config.json")
 # -------------------------------------------------------------------
 # MongoDB Connection Configuration
 # -------------------------------------------------------------------
+DEFAULT_MONGO_URI = "mongodb+srv://sheikhmeraj042_db_user:9GMp9zBzHaKUwb9u@mytournament.ochkb49.mongodb.net/tournamentDB?appName=mytournament"
+
 def get_mongo_uri() -> str:
-    """Retrieve MongoDB URI from environment variable or mongo_config.json."""
+    """Retrieve MongoDB URI from environment variable, mongo_config.json, or fallback."""
     uri = os.environ.get("MONGO_URI", "").strip()
     if uri:
         return uri
@@ -34,7 +36,7 @@ def get_mongo_uri() -> str:
                     return val
         except Exception:
             pass
-    return ""
+    return DEFAULT_MONGO_URI
 
 _mongo_client = None
 _mongo_db = None
@@ -112,6 +114,21 @@ def push_sqlite_to_mongo(conn=None) -> bool:
         should_close = True
 
     try:
+        # SAFETY GUARD: Never wipe MongoDB if local SQLite has 0 users but MongoDB has users!
+        try:
+            sqlite_user_cnt = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+            if sqlite_user_cnt == 0:
+                mongo_user_cnt = db["users"].count_documents({})
+                if mongo_user_cnt > 0:
+                    print(f"[MongoDB Guard] SQLite has 0 users but MongoDB has {mongo_user_cnt} users! Auto-recovering from MongoDB...")
+                    if should_close:
+                        conn.close()
+                        should_close = False
+                    pull_mongo_to_sqlite()
+                    return True
+        except Exception:
+            pass
+
         for table in TABLES_TO_COLLECTIONS:
             try:
                 rows = conn.execute(f"SELECT * FROM {table}").fetchall()

@@ -1253,6 +1253,61 @@ function updateCategoryCounts() {
     });
 }
 
+async function refreshCategory(event, catId, btn) {
+    if (event) {
+        event.stopPropagation();
+        event.preventDefault();
+    }
+    if (btn) {
+        btn.classList.add('refreshing');
+        const icon = btn.querySelector('svg');
+        if (icon) icon.classList.add('spinning');
+    }
+    try {
+        await loadMatches();
+        const cat = MATCH_CATEGORIES_CONFIG.find(c => c.id === catId);
+        const count = (allMatches || []).filter(m => cat && cat.matches(m)).length;
+        showToast(count > 0 ? `${cat ? cat.shortName : 'ক্যাটাগরি'} রিফ্রেশ হয়েছে (${count} ম্যাচ)` : `${cat ? cat.shortName : 'ক্যাটাগরি'} রিফ্রেশ হয়েছে (০ ম্যাচ)`, 'info');
+    } catch (e) {
+        console.error('Refresh category failed', e);
+        showToast('রিফ্রেশ ব্যর্থ হয়েছে, আবার চেষ্টা করুন', 'error');
+    } finally {
+        if (btn) {
+            setTimeout(() => {
+                btn.classList.remove('refreshing');
+                const icon = btn.querySelector('svg');
+                if (icon) icon.classList.remove('spinning');
+            }, 600);
+        }
+    }
+}
+
+async function refreshActiveCategory(btn) {
+    if (btn) {
+        btn.disabled = true;
+        const icon = btn.querySelector('svg');
+        if (icon) icon.classList.add('spinning');
+    }
+    try {
+        await loadMatches();
+        if (selectedCategory) {
+            selectMatchCategory(selectedCategory);
+        }
+        showToast('ম্যাচ তালিকা সফলভাবে রিফ্রেশ হয়েছে!', 'success');
+    } catch (e) {
+        console.error('Refresh active category failed', e);
+        showToast('ম্যাচ রিফ্রেশ হতে সমস্যা হয়েছে', 'error');
+    } finally {
+        if (btn) {
+            setTimeout(() => {
+                btn.disabled = false;
+                const icon = btn.querySelector('svg');
+                if (icon) icon.classList.remove('spinning');
+            }, 600);
+        }
+    }
+}
+
 function selectMatchCategory(catId) {
     selectedCategory = catId;
     const cat = MATCH_CATEGORIES_CONFIG.find(c => c.id === catId);
@@ -1338,10 +1393,18 @@ function renderMatches() {
             <div style="grid-column: 1/-1; text-align: center; padding: 36px 16px; background: #ffffff; border-radius: 14px; border: 1px solid #e2e8f0; margin: 10px 0; box-shadow: 0 2px 10px rgba(0,0,0,0.03);">
                 <div style="font-size: 2.2rem; margin-bottom: 6px;">🎮</div>
                 <div style="font-family: 'Rajdhani', sans-serif; font-size: 1.15rem; font-weight: 800; color: #1e293b;">No Active Matches in this Category</div>
-                <div style="font-size: 0.78rem; color: #64748b; margin-top: 4px; margin-bottom: 16px;">নতুন টুর্নামেন্ট ম্যাচ শীঘ্রই শিডিউল করা হবে। অনুগ্রহ করে অপেক্ষা করুন।</div>
-                <button type="button" class="btn btn-outline btn-sm" onclick="backToCategoryHub()" style="font-weight: 800; padding: 6px 16px; border-radius: 8px;">
-                    ‹ সব ক্যাটাগরি দেখুন
-                </button>
+                <div style="font-size: 0.78rem; color: #64748b; margin-top: 4px; margin-bottom: 16px;">নতুন টুর্নামেন্ট ম্যাচ শীঘ্রই শিডিউল করা হবে। নতুন ম্যাচ দেখতে রিফ্রেশ করুন।</div>
+                <div style="display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap;">
+                    <button type="button" class="btn btn-outline btn-sm" onclick="refreshActiveCategory(this)" style="font-weight: 800; padding: 7px 16px; border-radius: 8px; display: inline-flex; align-items: center; gap: 6px; border-color: #059669; color: #059669; background: #ecfdf5;">
+                        <svg class="refresh-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+                        </svg>
+                        ম্যাচ রিফ্রেশ করুন
+                    </button>
+                    <button type="button" class="btn btn-outline btn-sm" onclick="backToCategoryHub()" style="font-weight: 800; padding: 7px 16px; border-radius: 8px;">
+                        ‹ সব ক্যাটাগরি দেখুন
+                    </button>
+                </div>
             </div>
         `;
         return;

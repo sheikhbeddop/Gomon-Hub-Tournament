@@ -3187,6 +3187,54 @@ async function handleSettingsSubmit(e) {
     }
 }
 
+async function handleAdminChangePassword(e) {
+    if (e) e.preventDefault();
+    const currPass = document.getElementById('adminCurrentPassword').value.trim();
+    const newPass = document.getElementById('adminNewPassword').value.trim();
+    const confPass = document.getElementById('adminConfirmPassword').value.trim();
+
+    if (!currPass) {
+        showToast('অনুগ্রহ করে বর্তমান পাসওয়ার্ড দিন', 'warning');
+        return;
+    }
+    if (newPass.length < 6) {
+        showToast('নতুন পাসওয়ার্ড কমপক্ষে ৬ অক্ষরের হতে হবে', 'warning');
+        return;
+    }
+    if (newPass !== confPass) {
+        showToast('নতুন পাসওয়ার্ড এবং কনফার্ম পাসওয়ার্ড মিলছে না!', 'error');
+        return;
+    }
+
+    const btn = document.getElementById('btnAdminChangePass');
+    if (btn) btn.disabled = true;
+
+    try {
+        const res = await apiRequest('/api/admin/change-password', 'POST', {
+            current_password: currPass,
+            new_password: newPass,
+            confirm_password: confPass
+        });
+
+        if (res && res.success) {
+            showToast(res.message || 'এডমিন পাসওয়ার্ড সফলভাবে পরিবর্তিত হয়েছে!', 'success');
+            if (res.token) {
+                token = res.token;
+                localStorage.setItem('token', res.token);
+            }
+            const form = document.getElementById('adminChangePasswordForm');
+            if (form) form.reset();
+        } else {
+            showToast((res && res.detail) || 'পাসওয়ার্ড পরিবর্তন ব্যর্থ হয়েছে', 'error');
+        }
+    } catch (e) {
+        console.error('Admin password change error', e);
+        showToast(e.message || 'পাসওয়ার্ড পরিবর্তন করতে সমস্যা হয়েছে', 'error');
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+
 // -------------------------------------------------------------
 // Real-Time WebSockets Engine
 // -------------------------------------------------------------
@@ -3493,7 +3541,269 @@ function switchAdminSection(sectionId) {
         }
     } else if (sectionId === 'moderators') {
         if (currentUser && currentUser.role === 'admin') loadModeratorScoreboard();
+    } else if (sectionId === 'history') {
+        loadAdminMatchHistory();
     }
+}
+
+// -------------------------------------------------------------
+// Admin Match History Management (15 Days Auto-Purge & 6 Categories)
+// -------------------------------------------------------------
+let adminMatchHistoryData = [];
+let activeHistoryCatFilter = 'all';
+
+async function loadAdminMatchHistory(btn) {
+    if (btn) {
+        btn.disabled = true;
+        const icon = btn.querySelector('.refresh-icon') || btn.querySelector('svg');
+        if (icon) icon.classList.add('spinning');
+    }
+
+    const container = document.getElementById('adminMatchHistoryContainer');
+    if (container && (!adminMatchHistoryData || adminMatchHistoryData.length === 0)) {
+        container.innerHTML = `
+            <div style="text-align: center; padding: 40px 16px; color: var(--text-muted);">
+                <div class="spinner" style="margin: 0 auto 12px auto;"></div>
+                ১৫ দিনের ম্যাচ হিস্টোরি লোড হচ্ছে...
+            </div>
+        `;
+    }
+
+    try {
+        const res = await apiRequest('/api/admin/matches/history');
+        if (res && res.success && Array.isArray(res.matches)) {
+            adminMatchHistoryData = res.matches;
+            updateHistoryCategoryCounters();
+            renderAdminMatchHistory();
+            if (btn) showToast(`ম্যাচ হিস্টোরি সফলভাবে আপডেট হয়েছে (${adminMatchHistoryData.length} রেকর্ড)`, 'info');
+        } else {
+            throw new Error((res && res.detail) || 'Failed to load history');
+        }
+    } catch (e) {
+        console.error('Failed to load admin match history', e);
+        if (container) {
+            container.innerHTML = `
+                <div style="text-align: center; padding: 36px 16px; background: rgba(239, 68, 68, 0.08); border-radius: 12px; border: 1px solid rgba(239, 68, 68, 0.2);">
+                    <div style="font-size: 1.5rem; margin-bottom: 8px;">⚠️</div>
+                    <div style="color: #f87171; font-weight: 700; margin-bottom: 8px;">ম্যাচ হিস্টোরি লোড করতে সমস্যা হয়েছে</div>
+                    <button class="btn btn-outline btn-sm" onclick="loadAdminMatchHistory(this)">🔄 পুনরায় চেষ্টা করুন</button>
+                </div>
+            `;
+        }
+    } finally {
+        if (btn) {
+            setTimeout(() => {
+                btn.disabled = false;
+                const icon = btn.querySelector('.refresh-icon') || btn.querySelector('svg');
+                if (icon) icon.classList.remove('spinning');
+            }, 600);
+        }
+    }
+}
+
+function updateHistoryCategoryCounters() {
+    const counts = {
+        all: adminMatchHistoryData.length,
+        solo_full_map: 0,
+        duo_full_map: 0,
+        br_survival: 0,
+        lone_wolf: 0,
+        bonus_match: 0,
+        cs_4v4: 0
+    };
+
+    adminMatchHistoryData.forEach(m => {
+        const k = m.category_key || 'solo_full_map';
+        if (counts[k] !== undefined) {
+            counts[k]++;
+        }
+    });
+
+    Object.keys(counts).forEach(k => {
+        const el = document.getElementById('histCount-' + k);
+        if (el) el.innerText = counts[k];
+    });
+}
+
+function filterAdminHistoryCategory(catKey) {
+    activeHistoryCatFilter = catKey;
+    document.querySelectorAll('.admin-cat-pill').forEach(btn => btn.classList.remove('active'));
+    const activeBtn = document.getElementById('histCat-' + catKey);
+    if (activeBtn) activeBtn.classList.add('active');
+    renderAdminMatchHistory();
+}
+
+function renderAdminMatchHistory() {
+    const container = document.getElementById('adminMatchHistoryContainer');
+    if (!container) return;
+
+    let filtered = adminMatchHistoryData;
+    if (activeHistoryCatFilter && activeHistoryCatFilter !== 'all') {
+        filtered = adminMatchHistoryData.filter(m => m.category_key === activeHistoryCatFilter);
+    }
+
+    if (!filtered || filtered.length === 0) {
+        const catLabels = {
+            all: 'সব ক্যাটাগরি',
+            solo_full_map: 'Solo Full Map',
+            duo_full_map: 'Duo Full Map',
+            br_survival: 'BR Survival',
+            lone_wolf: 'Lone Wolf',
+            bonus_match: 'Bonus Match',
+            cs_4v4: 'CS 4v4'
+        };
+        const curLabel = catLabels[activeHistoryCatFilter] || 'এই ক্যাটাগরি';
+
+        container.innerHTML = `
+            <div style="text-align: center; padding: 48px 16px; background: rgba(255, 255, 255, 0.02); border-radius: 12px; border: 1px dashed rgba(255, 255, 255, 0.1); margin: 10px 0;">
+                <div style="font-size: 2.4rem; margin-bottom: 10px;">📜</div>
+                <div style="font-family: 'Rajdhani', sans-serif; font-size: 1.25rem; font-weight: 800; color: #ffffff;">
+                    ${curLabel}-তে বিগত ১৫ দিনে কোনো সমাপ্ত ম্যাচ রেকর্ড নেই
+                </div>
+                <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 6px; margin-bottom: 18px; max-width: 480px; margin-left: auto; margin-right: auto;">
+                    ম্যাচের রেজাল্ট পাবলিশ করার সাথে সাথে সম্পূর্ণ রেকর্ড এখানে চলে আসবে। এবং প্রতিটি রেকর্ড ১৫ দিন পর ডাটাবেজ থেকে স্থায়ীভাবে স্বয়ংক্রিয়ভাবে মুছে যাবে।
+                </div>
+                <button type="button" class="btn btn-outline btn-sm" onclick="loadAdminMatchHistory(this)" style="display: inline-flex; align-items: center; gap: 6px;">
+                    🔄 হিস্টোরি রিফ্রেশ করুন
+                </button>
+            </div>
+        `;
+        return;
+    }
+
+    container.innerHTML = filtered.map(m => {
+        const catBadges = {
+            solo_full_map: '<span class="admin-history-badge admin-history-badge-solo">⚔️ Solo Full Map</span>',
+            duo_full_map: '<span class="admin-history-badge admin-history-badge-duo">👥 Duo Full Map</span>',
+            br_survival: '<span class="admin-history-badge admin-history-badge-survival">🛡️ BR Survival</span>',
+            lone_wolf: '<span class="admin-history-badge admin-history-badge-lone">🐺 Lone Wolf</span>',
+            bonus_match: '<span class="admin-history-badge admin-history-badge-bonus">🎁 Bonus Match</span>',
+            cs_4v4: '<span class="admin-history-badge admin-history-badge-cs">🔥 CS 4v4</span>'
+        };
+        const badgeHtml = catBadges[m.category_key] || `<span class="admin-history-badge admin-history-badge-solo">${escapeHtml(m.category_name || m.match_type)}</span>`;
+
+        // Calculate 15-day auto purge deadline
+        const completedTime = m.completed_at || m.created_at;
+        let retentionText = '১৫ দিনের জন্য সংরক্ষিত';
+        if (completedTime) {
+            try {
+                const compDate = new Date(completedTime.replace(' ', 'T') + 'Z');
+                const purgeDate = new Date(compDate.getTime() + (15 * 24 * 60 * 60 * 1000));
+                const now = new Date();
+                const daysLeft = Math.max(0, Math.ceil((purgeDate - now) / (1000 * 60 * 60 * 24)));
+                retentionText = `অটো ডিলিট হবে: ${daysLeft} দিন পর (${purgeDate.toLocaleDateString('bn-BD', { day: 'numeric', month: 'short' })})`;
+            } catch (e) {
+                retentionText = '১৫ দিন পর অটো ডিলিট';
+            }
+        }
+
+        const participants = m.participants || [];
+        let rowsHtml = '';
+        if (participants.length === 0) {
+            rowsHtml = `<tr><td colspan="9" style="text-align: center; padding: 20px; color: var(--text-muted);">কোনো খেলোয়াড় জয়েন রেকর্ড পাওয়া যায়নি</td></tr>`;
+        } else {
+            rowsHtml = participants.map((p, idx) => {
+                const rankDisplay = p.rank_position === 1 ? '🥇 1st' :
+                                    p.rank_position === 2 ? '🥈 2nd' :
+                                    p.rank_position === 3 ? '🥉 3rd' :
+                                    (p.rank_position > 0 ? `#${p.rank_position}` : '-');
+
+                return `
+                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.04);">
+                        <td style="font-weight: 800; color: ${p.rank_position <= 3 && p.rank_position > 0 ? 'var(--neon-green)' : 'var(--text-secondary)'};">
+                            ${rankDisplay}
+                        </td>
+                        <td style="font-weight: 700; color: #fff;">#${p.slot_number || (idx + 1)}</td>
+                        <td>
+                            <div style="font-weight: 800; color: #ffffff;">${escapeHtml(p.player_ign || 'Player')}</div>
+                            <div style="font-size: 0.72rem; color: var(--neon-cyan);">UID: ${escapeHtml(p.player_uid || 'N/A')}</div>
+                        </td>
+                        <td>
+                            <div style="font-size: 0.78rem; color: var(--text-secondary);">${escapeHtml(p.username || '')}</div>
+                            <div style="font-size: 0.72rem; color: var(--text-muted);">${escapeHtml(p.phone || '')}</div>
+                        </td>
+                        <td style="text-align: center; font-weight: 800; color: #fff;">${p.kills || 0}</td>
+                        <td style="text-align: right; color: var(--neon-cyan);">৳${p.kill_prize || 0}</td>
+                        <td style="text-align: right; color: var(--neon-cyan);">৳${p.rank_prize || 0}</td>
+                        <td style="text-align: right; font-weight: 800; color: var(--neon-green);">৳${p.total_prize || 0}</td>
+                        <td style="text-align: center;">
+                            <span style="font-size: 0.72rem; font-weight: 800; color: #00f59b; background: rgba(0, 245, 155, 0.1); padding: 2px 7px; border-radius: 4px;">
+                                ✅ প্রাইজ পেইড
+                            </span>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        return `
+            <div class="admin-history-card">
+                <div class="admin-history-card-header">
+                    <div class="admin-history-card-title">
+                        <span>#${escapeHtml(m.match_code || ('MATCH-' + m.id))}</span>
+                        <span style="color: rgba(255,255,255,0.85); font-size: 1.05rem;">${escapeHtml(m.title)}</span>
+                        ${badgeHtml}
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                        <span class="admin-history-retention-notice">
+                            ⏳ ${retentionText}
+                        </span>
+                        <span style="font-size: 0.76rem; color: var(--text-muted);">
+                            সম্পন্ন: ${m.completed_at ? m.completed_at.substring(0, 16) : (m.created_at ? m.created_at.substring(0, 16) : '')}
+                        </span>
+                    </div>
+                </div>
+
+                <div class="admin-history-meta-grid">
+                    <div class="admin-history-meta-item">
+                        ম্যাপ ও টাইপ
+                        <b>🗺️ ${escapeHtml(m.map_name || 'Bermuda')} (${escapeHtml(m.match_type || 'Solo')})</b>
+                    </div>
+                    <div class="admin-history-meta-item">
+                        এন্ট্রি ফি / প্রাইজ পুল
+                        <b>৳${m.entry_fee} / ৳${m.prize_pool}</b>
+                    </div>
+                    <div class="admin-history-meta-item">
+                        প্রতি কিল প্রাইজ
+                        <b>৳${m.per_kill || 0}</b>
+                    </div>
+                    <div class="admin-history-meta-item">
+                        প্লেয়ার জয়েন
+                        <b style="color: var(--neon-cyan);">${participants.length} / ${m.total_slots || 48} খেলোয়াড়</b>
+                    </div>
+                    <div class="admin-history-meta-item">
+                        মোট প্রদানকৃত প্রাইজ
+                        <b style="color: var(--neon-green);">৳${m.total_payout || 0}</b>
+                    </div>
+                    <div class="admin-history-meta-item">
+                        রুম ক্রেডেনশিয়াল
+                        <b style="font-family: monospace; font-size: 0.82rem; color: #cbd5e1;">ID: ${escapeHtml(m.room_id || 'N/A')}</b>
+                    </div>
+                </div>
+
+                <div class="table-wrapper" style="margin: 0; border: none; border-radius: 0;">
+                    <table class="custom-table" style="font-size: 0.8rem;">
+                        <thead>
+                            <tr style="background: rgba(0,0,0,0.25);">
+                                <th style="width: 70px;">র‍্যাংক</th>
+                                <th style="width: 60px;">স্লট</th>
+                                <th>খেলোয়াড় (IGN / UID)</th>
+                                <th>ইউজার / ফোন</th>
+                                <th style="text-align: center; width: 60px;">কিল</th>
+                                <th style="text-align: right; width: 85px;">কিল প্রাইজ</th>
+                                <th style="text-align: right; width: 85px;">র‍্যাংক প্রাইজ</th>
+                                <th style="text-align: right; width: 95px;">মোট জয়ী</th>
+                                <th style="text-align: center; width: 100px;">স্ট্যাটাস</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${rowsHtml}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+    }).join('');
 }
 
 // -------------------------------------------------------------

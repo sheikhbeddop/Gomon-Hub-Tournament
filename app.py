@@ -157,12 +157,18 @@ def verify_token(token: str) -> Optional[dict]:
 
 def get_match_code_prefix(match_type: str) -> str:
     mt = (match_type or "").strip().lower()
-    if "solo" in mt:
+    if "survival" in mt or "zone" in mt or "br" in mt:
+        return "BR"
+    elif "lone" in mt or "wolf" in mt:
+        return "WOLF"
+    elif "bonus" in mt:
+        return "BONUS"
+    elif "solo" in mt:
         return "SOLO"
     elif "duo" in mt:
         return "DUO"
     elif "squad" in mt or "clash" in mt or "cs" in mt:
-        return "SQUAD"
+        return "CS"
     else:
         cleaned = re.sub(r'[^A-Za-z0-9]', '', mt).upper()
         return cleaned if cleaned else "MATCH"

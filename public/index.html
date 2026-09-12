@@ -2802,52 +2802,52 @@
     <!-- MODAL: MATCH INNER DETAILS & ROOM PORTAL (ONLY ACCESSIBLE TO JOINED PLAYERS) -->
     <div class="modal-overlay" id="matchInnerPortalModal" style="z-index: 999999;">
         <div class="modal-box" style="max-width: 560px; max-height: 92vh; display: flex; flex-direction: column;">
-            <div class="modal-header" style="flex-shrink: 0; padding: 14px 18px; border-bottom: 1px solid rgba(255,255,255,0.08);">
+            <div class="modal-header" style="flex-shrink: 0; padding: 14px 18px; border-bottom: 1px solid #e2e8f0; background: #ffffff;">
                 <div>
                     <div style="display: flex; align-items: center; gap: 8px;">
                         <span style="font-size: 1.2rem;">🎮</span>
-                        <h3 id="portalModalTitle" style="font-family: 'Rajdhani', sans-serif; font-size: 1.25rem; font-weight: 800; color: var(--neon-green); margin: 0;">
+                        <h3 id="portalModalTitle" style="font-family: 'Rajdhani', sans-serif; font-size: 1.25rem; font-weight: 800; color: #0f172a; margin: 0;">
                             Match & Room Credentials
                         </h3>
                     </div>
-                    <div id="portalModalSubtitle" style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 3px;">
+                    <div id="portalModalSubtitle" style="font-size: 0.8rem; color: #475569; margin-top: 3px; font-weight: 600;">
                         Confidential room details and participant roster
                     </div>
                 </div>
-                <button class="modal-close" onclick="closeModal('matchInnerPortalModal')">&times;</button>
+                <button class="modal-close" onclick="closeModal('matchInnerPortalModal')" style="color: #475569;">&times;</button>
             </div>
 
-            <div class="modal-body" style="overflow-y: auto; flex: 1; padding: 14px 16px;">
+            <div class="modal-body" style="overflow-y: auto; flex: 1; padding: 14px 16px; background: #ffffff;">
                 <!-- Fixed Slot Announcement -->
-                <div style="background: linear-gradient(135deg, rgba(0, 245, 155, 0.12), rgba(56, 189, 248, 0.08)); border: 1px solid rgba(0, 245, 155, 0.3); border-radius: 10px; padding: 10px 14px; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between;">
+                <div style="background: #f0fdf4; border: 1px solid #86efac; border-radius: 10px; padding: 10px 14px; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between;">
                     <div>
-                        <div style="font-size: 0.8rem; color: #a7f3d0; font-weight: 700;">🎯 Your Assigned Slot #</div>
-                        <div style="font-size: 0.72rem; color: #94a3b8;">You must sit in this slot inside the custom room (Permanent)</div>
+                        <div style="font-size: 0.82rem; color: #166534; font-weight: 800;">🎯 Your Assigned Slot #</div>
+                        <div style="font-size: 0.72rem; color: #475569; font-weight: 600;">You must sit in this slot inside the custom room (Permanent)</div>
                     </div>
-                    <div id="portalModalSlot" style="font-family: 'Rajdhani', sans-serif; font-size: 1.35rem; font-weight: 900; color: #00f59b; text-shadow: 0 0 10px rgba(0,245,155,0.4);">
+                    <div id="portalModalSlot" style="font-family: 'Rajdhani', sans-serif; font-size: 1.3rem; font-weight: 900; background: #dcfce7; color: #15803d; border: 1.5px solid #86efac; padding: 3px 12px; border-radius: 8px;">
                         #1 (Fixed)
                     </div>
                 </div>
 
                 <!-- Custom Room ID & Password Card -->
-                <div style="background: #0f172a; border: 1px solid rgba(56, 189, 248, 0.35); border-radius: 10px; padding: 12px 14px; margin-bottom: 12px;">
-                    <div style="display: flex; align-items: center; justify-content: space-between; padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.06); margin-bottom: 8px;">
+                <div style="background: #0f172a; border: 1px solid #334155; border-radius: 10px; padding: 12px 14px; margin-bottom: 12px;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.08); margin-bottom: 8px;">
                         <div>
                             <span style="font-size: 0.76rem; color: #94a3b8; font-weight: 600;">Custom Room ID:</span>
-                            <div id="portalModalRoomId" style="font-family: 'Rajdhani', monospace; font-size: 1.15rem; font-weight: 800; color: #38bdf8; letter-spacing: 1px;">-</div>
+                            <div id="portalModalRoomId" style="font-family: 'Rajdhani', monospace; font-size: 1.18rem; font-weight: 800; color: #38bdf8; letter-spacing: 1px;">-</div>
                         </div>
                         <button type="button" class="btn btn-outline" style="padding: 4px 10px; font-size: 0.75rem; font-weight: 700; border-color: #38bdf8; color: #38bdf8; border-radius: 6px;" onclick="copyInnerRoomInfo('id')">📋 Copy ID</button>
                     </div>
 
-                    <div style="display: flex; align-items: center; justify-content: space-between; padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.06); margin-bottom: 8px;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.08); margin-bottom: 8px;">
                         <div>
                             <span style="font-size: 0.76rem; color: #94a3b8; font-weight: 600;">Room Password:</span>
-                            <div id="portalModalRoomPass" style="font-family: 'Rajdhani', monospace; font-size: 1.15rem; font-weight: 800; color: #00f59b; letter-spacing: 1px;">-</div>
+                            <div id="portalModalRoomPass" style="font-family: 'Rajdhani', monospace; font-size: 1.18rem; font-weight: 800; color: #00f59b; letter-spacing: 1px;">-</div>
                         </div>
                         <button type="button" class="btn btn-outline" style="padding: 4px 10px; font-size: 0.75rem; font-weight: 700; border-color: #00f59b; color: #00f59b; border-radius: 6px;" onclick="copyInnerRoomInfo('pass')">📋 Copy Pass</button>
                     </div>
 
-                    <div style="font-size: 0.72rem; color: #94a3b8; display: flex; align-items: center; gap: 6px;">
+                    <div style="font-size: 0.72rem; color: #cbd5e1; display: flex; align-items: center; gap: 6px;">
                         <span>💡</span>
                         <span>Room ID and Password are released 10-15 minutes prior to match start. Join immediately once credentials appear.</span>
                     </div>
@@ -2855,45 +2855,45 @@
 
                 <!-- Match Overview stats -->
                 <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 14px; text-align: center;">
-                    <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 6px 2px;">
-                        <div style="font-size: 0.68rem; color: #94a3b8;">Prize Pool</div>
-                        <div id="portalModalPrize" style="font-size: 0.9rem; font-weight: 800; color: #f59e0b;">৳0</div>
+                    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 6px 2px;">
+                        <div style="font-size: 0.68rem; color: #64748b; font-weight: 700;">Prize Pool</div>
+                        <div id="portalModalPrize" style="font-size: 0.92rem; font-weight: 800; color: #d97706;">৳0</div>
                     </div>
-                    <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 6px 2px;">
-                        <div style="font-size: 0.68rem; color: #94a3b8;">Per Kill</div>
-                        <div id="portalModalKill" style="font-size: 0.9rem; font-weight: 800; color: #ef4444;">৳0</div>
+                    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 6px 2px;">
+                        <div style="font-size: 0.68rem; color: #64748b; font-weight: 700;">Per Kill</div>
+                        <div id="portalModalKill" style="font-size: 0.92rem; font-weight: 800; color: #dc2626;">৳0</div>
                     </div>
-                    <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 6px 2px;">
-                        <div style="font-size: 0.68rem; color: #94a3b8;">Entry Fee</div>
-                        <div id="portalModalFee" style="font-size: 0.9rem; font-weight: 800; color: #38bdf8;">0🪙</div>
+                    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 6px 2px;">
+                        <div style="font-size: 0.68rem; color: #64748b; font-weight: 700;">Entry Fee</div>
+                        <div id="portalModalFee" style="font-size: 0.92rem; font-weight: 800; color: #0284c7;">0🪙</div>
                     </div>
-                    <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 6px 2px;">
-                        <div style="font-size: 0.68rem; color: #94a3b8;">Map</div>
-                        <div id="portalModalMap" style="font-size: 0.85rem; font-weight: 800; color: #e2e8f0;">Bermuda</div>
+                    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 6px 2px;">
+                        <div style="font-size: 0.68rem; color: #64748b; font-weight: 700;">Map</div>
+                        <div id="portalModalMap" style="font-size: 0.88rem; font-weight: 800; color: #0f172a;">Bermuda</div>
                     </div>
                 </div>
 
                 <!-- Participants Section Header & Anti-copy Notice -->
-                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
-                    <div style="font-family: 'Rajdhani', sans-serif; font-size: 0.95rem; font-weight: 800; color: #f8fafc;">
-                        👥 Registered Players (<span id="portalModalPartCount">0</span> players)
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                    <div style="font-family: 'Rajdhani', sans-serif; font-size: 1.05rem; font-weight: 800; color: #0f172a;">
+                        👥 Registered Players (<span id="portalModalPartCount" style="color: #059669;">0</span> players)
                     </div>
-                    <div style="font-size: 0.72rem; color: #ef4444; font-weight: 600;">
+                    <div style="font-size: 0.72rem; color: #dc2626; font-weight: 800; background: #fef2f2; border: 1px solid #fecaca; padding: 2px 8px; border-radius: 6px;">
                         🔒 UID Copy Prohibited
                     </div>
                 </div>
 
-                <div id="portalModalLoading" style="text-align: center; padding: 24px; color: var(--text-muted); font-size: 0.85rem;">
+                <div id="portalModalLoading" style="text-align: center; padding: 24px; color: #64748b; font-size: 0.85rem; font-weight: 600;">
                     Loading players list...
                 </div>
                 
-                <div id="portalModalList" style="display: none;">
+                <div id="portalModalList" style="display: none; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
                     <table class="participants-table" style="width: 100%; border-collapse: collapse; font-size: 0.84rem;" oncopy="return false;" oncontextmenu="return false;">
                         <thead>
-                            <tr style="border-bottom: 1px solid rgba(255,255,255,0.1); color: var(--text-muted); text-align: left;">
-                                <th style="padding: 8px 6px; width: 70px;">Slot #</th>
-                                <th style="padding: 8px 6px;">In-Game Name (IGN)</th>
-                                <th style="padding: 8px 6px; text-align: right;">Free Fire UID</th>
+                            <tr style="background: #f8fafc; border-bottom: 2px solid #cbd5e1; color: #0f172a; text-align: left; font-weight: 800;">
+                                <th style="padding: 10px 8px; width: 75px; color: #0f172a;">Slot #</th>
+                                <th style="padding: 10px 8px; color: #0f172a;">In-Game Name (IGN)</th>
+                                <th style="padding: 10px 8px; text-align: right; color: #0f172a;">Free Fire UID</th>
                             </tr>
                         </thead>
                         <tbody id="portalModalTableBody">
@@ -2903,11 +2903,12 @@
                 </div>
             </div>
             
-            <div class="modal-footer" style="padding: 10px 16px; border-top: 1px solid rgba(255,255,255,0.06); display: flex; justify-content: flex-end;">
-                <button type="button" class="btn btn-outline" style="padding: 6px 16px; font-size: 0.82rem;" onclick="closeModal('matchInnerPortalModal')">Close</button>
+            <div class="modal-footer" style="padding: 12px 18px; border-top: 1px solid #e2e8f0; background: #f8fafc; display: flex; justify-content: flex-end;">
+                <button type="button" class="btn btn-outline" style="padding: 6px 18px; font-size: 0.84rem; font-weight: 700; color: #0f172a; border-color: #cbd5e1;" onclick="closeModal('matchInnerPortalModal')">Close</button>
             </div>
         </div>
     </div>
+
 
     <!-- MODAL: IMPORTANT NOTICE POPUP (WELCOME MODAL) -->
     <div class="modal-overlay welcome-notice-overlay" id="welcomeNoticeModal" onclick="closeWelcomeNoticeOnBackdrop(event)" style="align-items: center !important; justify-content: center !important;">
@@ -2962,7 +2963,8 @@
     <!-- Toast Notification Container -->
     <div class="toast-container" id="toastContainer"></div>
 
-    <script src="/static/js/app.js?v=4.7.0"></script>
+    <script src="/static/js/app.js?v=4.8.0"></script>
+
 </body>
 </html>
 

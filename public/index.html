@@ -1153,10 +1153,11 @@
                     </h2>
                     <p id="adminPanelSubtitle" style="color: var(--text-secondary); font-size: 0.85rem;">Complete management of matches, player accounts, finances, and system settings.</p>
                 </div>
-                <div id="adminMasterActionBtns" class="admin-only-card" style="display: flex; gap: 10px;">
-                    <button class="btn btn-neon btn-sm" onclick="openPublishResultModal()">🏆 Publish Results</button>
-                    <button class="btn btn-neon btn-sm" onclick="openModal('createMatchModal')">➕ Create Match</button>
-                    <button class="btn btn-crimson btn-sm" onclick="openModal('broadcastModal')">📢 Broadcast Notice</button>
+                <div id="adminMasterActionBtns" style="display: flex; align-items: center; gap: 8px;">
+                    <span class="badge-status approved" style="font-size: 0.8rem; padding: 6px 14px; font-weight: 700; display: inline-flex; align-items: center; gap: 6px;">
+                        <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #10b981;"></span>
+                        System Active
+                    </span>
                 </div>
             </div>
 
@@ -1264,14 +1265,12 @@
                             <p style="font-size: 0.88rem; color: var(--text-secondary); margin-bottom: 16px;">
                                 Manage all platform features quickly using the sidebar navigation.
                             </p>
-                            <div style="display: flex; gap: 12px; flex-wrap: wrap;">
-                                <button class="btn btn-outline btn-sm" onclick="switchAdminSection('payments')">⏳ View Pending Deposits</button>
-                                <button class="btn btn-outline btn-sm" onclick="switchAdminSection('withdrawals')">💸 View Withdraw Requests</button>
+                            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                                <button class="btn btn-outline btn-sm" onclick="switchAdminSection('payments')">⏳ Pending Deposits</button>
+                                <button class="btn btn-outline btn-sm" onclick="switchAdminSection('withdrawals')">💸 Withdraw Requests</button>
                                 <button class="btn btn-outline btn-sm" onclick="switchAdminSection('players')">👥 Player List</button>
                                 <button class="btn btn-outline btn-sm" onclick="switchAdminSection('matches')">🎮 Match Rooms</button>
-                                <button class="btn btn-neon btn-sm" onclick="openPublishResultModal()">🏆 Publish Results</button>
-                    <button class="btn btn-neon btn-sm" onclick="openModal('createMatchModal')">➕ Create Match</button>
-                                <button class="btn btn-crimson btn-sm" onclick="openModal('broadcastModal')">📢 Broadcast Notice</button>
+                                <button class="btn btn-outline btn-sm" onclick="switchAdminSection('settings')">⚙️ System Settings</button>
                             </div>
                         </div>
                     </div>
@@ -1381,8 +1380,9 @@
                                 <div class="admin-card-title">
                                     <span>🎯 Tournament Matches & Room Credentials</span>
                                 </div>
-                                <div style="display: flex; gap: 8px;">
+                                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                                     <button class="btn btn-neon btn-sm admin-only-card" onclick="openModal('createMatchModal')">➕ Create Match</button>
+                                    <button class="btn btn-neon btn-sm" onclick="openPublishResultModal()">🏆 Publish Results</button>
                                     <button class="btn btn-outline btn-sm" onclick="loadMatches()">🔄 Refresh</button>
                                 </div>
                             </div>

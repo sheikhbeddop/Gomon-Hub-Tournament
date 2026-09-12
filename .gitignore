@@ -12,3 +12,7 @@ scratch/
 verify_*.py
 check_js_syntax.py
 *.bat
+mongo_config.json
+.env
+secret.key
+

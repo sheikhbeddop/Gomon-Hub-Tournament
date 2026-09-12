@@ -26,6 +26,16 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 import pywebpush
 
+from db_mongo import (
+    get_mongo_uri,
+    get_mongo_database,
+    is_mongo_connected,
+    push_sqlite_to_mongo,
+    pull_mongo_to_sqlite,
+    notify_db_change
+)
+
+
 # -------------------------------------------------------------
 # Configuration & Security Secrets
 # -------------------------------------------------------------
@@ -213,8 +223,29 @@ def get_next_match_code(conn, match_type: str) -> str:
     return code
 
 def init_db():
+    # If MongoDB is connected and local database is empty or new (e.g. fresh Render deploy),
+    # automatically restore all users and matches from MongoDB Atlas!
+    if is_mongo_connected():
+        try:
+            has_users = False
+            if os.path.exists(DB_PATH):
+                try:
+                    chk = sqlite3.connect(DB_PATH)
+                    cnt = chk.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+                    chk.close()
+                    if cnt > 0:
+                        has_users = True
+                except Exception:
+                    pass
+            if not has_users:
+                print("[MongoDB] Local database is empty. Restoring latest state from MongoDB Atlas...")
+                pull_mongo_to_sqlite()
+        except Exception as e:
+            print(f"[MongoDB Auto-Restore Notice] {e}")
+
     conn = get_db()
     with conn:
+
         conn.executescript("""
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -480,28 +511,41 @@ def init_db():
             except Exception:
                 pass
 
-        # One-time migration: Clean legacy test users on deployment so everyone can re-register with their phone numbers
+        # Mark legacy cleanup as permanently done - NEVER delete user accounts
         try:
-            cleaned_flag = conn.execute("SELECT value FROM settings WHERE key = 'legacy_users_cleaned_v4'").fetchone()
-            if not cleaned_flag:
-                conn.execute("DELETE FROM participations WHERE user_id IN (SELECT id FROM users WHERE role != 'admin')")
-                conn.execute("DELETE FROM deposits WHERE user_id IN (SELECT id FROM users WHERE role != 'admin')")
-                conn.execute("DELETE FROM withdrawals WHERE user_id IN (SELECT id FROM users WHERE role != 'admin')")
-                conn.execute("DELETE FROM banned_records")
-                conn.execute("DELETE FROM users WHERE role != 'admin'")
-                conn.execute("INSERT INTO settings (key, value) VALUES ('legacy_users_cleaned_v4', 'done')")
-                print("[INFO] Cleaned legacy non-admin users so everyone can re-register fresh with their phone numbers.")
+            conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('legacy_users_cleaned_v4', 'done')")
         except Exception:
             pass
+
 
     conn.close()
 
 init_db()
 
+
 # -------------------------------------------------------------
 # FastAPI App & WebSocket Connection Manager
 # -------------------------------------------------------------
 app = FastAPI(title="Free Fire Tournament Platform API")
+
+@app.on_event("startup")
+async def on_startup():
+    import threading
+    def periodic_mongo_sync():
+        while True:
+            time.sleep(30)
+            try:
+                if is_mongo_connected():
+                    push_sqlite_to_mongo()
+            except Exception:
+                pass
+    t = threading.Thread(target=periodic_mongo_sync, daemon=True)
+    t.start()
+    if is_mongo_connected():
+        print("[MongoDB] Cloud persistence active! Auto-sync daemon running.")
+    else:
+        print("[*] Running in local SQLite mode. Configure MONGO_URI in mongo_config.json to activate MongoDB Atlas Cloud Persistence.")
+
 
 app.add_middleware(
     CORSMiddleware,

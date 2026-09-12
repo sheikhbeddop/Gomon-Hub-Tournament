@@ -4,3 +4,11 @@ __pycache__/
 backups/
 .git/
 cloudflared.exe
+tournament.db
+*.db
+*.sqlite
+*.sqlite3
+scratch/
+verify_*.py
+check_js_syntax.py
+*.bat

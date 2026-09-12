@@ -1215,62 +1215,72 @@
 
                     <!-- CATEGORY 1: DASHBOARD -->
                     <div class="admin-section active" id="adminSection-dashboard">
-                        <!-- Stats Overview Cards -->
-                        <div class="admin-grid-stats admin-only-card" id="adminStatsGrid">
-                            <div class="admin-stat-card">
+                        <!-- High-Definition Clean Interactive Control Hub -->
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding: 4px 2px;">
+                            <span style="font-size: 0.95rem; font-weight: 800; color: #0f172a; text-transform: uppercase; letter-spacing: 0.5px;">⚡ Platform Overview & Controls</span>
+                            <button type="button" class="btn btn-outline btn-xs" onclick="loadAdminOverview()" style="font-size: 0.78rem; font-weight: 700; padding: 5px 12px; border-radius: 6px; display: inline-flex; align-items: center; gap: 5px;">
+                                🔄 Refresh
+                            </button>
+                        </div>
+
+                        <div class="admin-grid-stats admin-only-card" id="adminStatsGrid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-bottom: 20px;">
+                            <!-- 1. Total Players -->
+                            <div class="admin-stat-card" style="cursor: pointer; transition: all 0.2s ease;" onclick="switchAdminSection('players')" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 12px rgba(0,0,0,0.08)';" onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='var(--shadow-card)';">
                                 <div class="admin-stat-icon" style="background: rgba(0, 245, 155, 0.15); color: var(--neon-green);">👥</div>
-                                <div>
-                                    <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase;">Total Players</div>
+                                <div style="flex: 1;">
+                                    <div style="font-size: 0.74rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 700;">Total Players</div>
                                     <div style="font-size: 1.5rem; font-weight: 800; font-family: 'Rajdhani';" id="adminStatTotalUsers">0</div>
                                 </div>
+                                <span style="font-size: 0.8rem; color: #10b981; font-weight: 700;">➔</span>
                             </div>
-                            <div class="admin-stat-card" style="cursor: pointer;" onclick="switchAdminSection('payments')">
+
+                            <!-- 2. Pending Deposits -->
+                            <div class="admin-stat-card" style="cursor: pointer; transition: all 0.2s ease;" onclick="switchAdminSection('payments')" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 12px rgba(0,0,0,0.08)';" onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='var(--shadow-card)';">
                                 <div class="admin-stat-icon" style="background: rgba(255, 183, 3, 0.15); color: var(--neon-amber);">⏳</div>
-                                <div>
-                                    <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase;">Pending Deposits</div>
+                                <div style="flex: 1;">
+                                    <div style="font-size: 0.74rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 700;">Pending Deposits</div>
                                     <div style="font-size: 1.5rem; font-weight: 800; font-family: 'Rajdhani';" id="adminStatPendingDep">0</div>
                                 </div>
+                                <span style="font-size: 0.8rem; color: #f59e0b; font-weight: 700;">➔</span>
                             </div>
-                            <div class="admin-stat-card" style="cursor: pointer;" onclick="switchAdminSection('withdrawals')">
+
+                            <!-- 3. Pending Withdrawals -->
+                            <div class="admin-stat-card" style="cursor: pointer; transition: all 0.2s ease;" onclick="switchAdminSection('withdrawals')" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 12px rgba(0,0,0,0.08)';" onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='var(--shadow-card)';">
                                 <div class="admin-stat-icon" style="background: rgba(239, 68, 68, 0.15); color: #ef4444;">💸</div>
-                                <div>
-                                    <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase;">Pending Withdrawals</div>
+                                <div style="flex: 1;">
+                                    <div style="font-size: 0.74rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 700;">Pending Withdrawals</div>
                                     <div style="font-size: 1.5rem; font-weight: 800; font-family: 'Rajdhani';" id="adminStatPendingWithdrawals">0</div>
                                 </div>
+                                <span style="font-size: 0.8rem; color: #ef4444; font-weight: 700;">➔</span>
                             </div>
-                            <div class="admin-stat-card" style="cursor: pointer;" onclick="switchAdminSection('matches')">
+
+                            <!-- 4. Tournament Matches -->
+                            <div class="admin-stat-card" style="cursor: pointer; transition: all 0.2s ease;" onclick="switchAdminSection('matches')" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 12px rgba(0,0,0,0.08)';" onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='var(--shadow-card)';">
                                 <div class="admin-stat-icon" style="background: rgba(0, 210, 255, 0.15); color: var(--neon-cyan);">🎮</div>
-                                <div>
-                                    <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase;">Total Matches</div>
+                                <div style="flex: 1;">
+                                    <div style="font-size: 0.74rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 700;">Tournament Matches</div>
                                     <div style="font-size: 1.5rem; font-weight: 800; font-family: 'Rajdhani';" id="adminStatTotalMatches">0</div>
                                 </div>
+                                <span style="font-size: 0.8rem; color: #00d2ff; font-weight: 700;">➔</span>
                             </div>
+
+                            <!-- 5. Circulating Balance -->
                             <div class="admin-stat-card">
                                 <div class="admin-stat-icon" style="background: rgba(255, 42, 95, 0.15); color: var(--neon-crimson);">🪙</div>
-                                <div>
-                                    <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase;">Circulating Balance</div>
+                                <div style="flex: 1;">
+                                    <div style="font-size: 0.74rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 700;">Circulating Balance</div>
                                     <div style="font-size: 1.5rem; font-weight: 800; font-family: 'Rajdhani';" id="adminStatCirculatingDigits">0</div>
                                 </div>
                             </div>
-                        </div>
 
-                        <!-- Quick Overview / Action Shortcuts Card -->
-                        <div class="admin-panel-card admin-only-card">
-                            <div class="admin-card-header">
-                                <div class="admin-card-title">
-                                    <span>⚡ Quick Actions & Overview</span>
+                            <!-- 6. System Settings -->
+                            <div class="admin-stat-card" style="cursor: pointer; transition: all 0.2s ease;" onclick="switchAdminSection('settings')" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 12px rgba(0,0,0,0.08)';" onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='var(--shadow-card)';">
+                                <div class="admin-stat-icon" style="background: rgba(99, 102, 241, 0.15); color: #6366f1;">⚙️</div>
+                                <div style="flex: 1;">
+                                    <div style="font-size: 0.74rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 700;">System Settings</div>
+                                    <div style="font-size: 1rem; font-weight: 800; color: #0f172a; margin-top: 4px;">Config & Notice</div>
                                 </div>
-                                <button class="btn btn-outline btn-sm" onclick="loadAdminOverview()">🔄 Refresh</button>
-                            </div>
-                            <p style="font-size: 0.88rem; color: var(--text-secondary); margin-bottom: 16px;">
-                                Manage all platform features quickly using the sidebar navigation.
-                            </p>
-                            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                                <button class="btn btn-outline btn-sm" onclick="switchAdminSection('payments')">⏳ Pending Deposits</button>
-                                <button class="btn btn-outline btn-sm" onclick="switchAdminSection('withdrawals')">💸 Withdraw Requests</button>
-                                <button class="btn btn-outline btn-sm" onclick="switchAdminSection('players')">👥 Player List</button>
-                                <button class="btn btn-outline btn-sm" onclick="switchAdminSection('matches')">🎮 Match Rooms</button>
-                                <button class="btn btn-outline btn-sm" onclick="switchAdminSection('settings')">⚙️ System Settings</button>
+                                <span style="font-size: 0.8rem; color: #6366f1; font-weight: 700;">➔</span>
                             </div>
                         </div>
                     </div>

@@ -2163,4 +2163,111 @@ body {
     100% { transform: rotate(360deg); }
 }
 
+/* -------------------------------------------------------------
+   Admin Match History Styles (15 Days Record & 6 Categories)
+   ------------------------------------------------------------- */
+.admin-cat-pill {
+    padding: 7px 15px;
+    border-radius: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text-secondary, #94a3b8);
+    font-size: 0.82rem;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+.admin-cat-pill:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
+    border-color: rgba(255, 255, 255, 0.25);
+}
+.admin-cat-pill.active {
+    background: linear-gradient(135deg, rgba(0, 245, 155, 0.2), rgba(0, 210, 255, 0.2));
+    border-color: var(--neon-cyan, #00d2ff);
+    color: #ffffff;
+    box-shadow: 0 0 12px rgba(0, 210, 255, 0.25);
+}
+.admin-history-card {
+    background: rgba(15, 23, 42, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 14px;
+    margin-bottom: 22px;
+    overflow: hidden;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+.admin-history-card:hover {
+    border-color: rgba(0, 245, 155, 0.35);
+    box-shadow: 0 4px 22px rgba(0, 0, 0, 0.4);
+}
+.admin-history-card-header {
+    padding: 15px 20px;
+    background: rgba(255, 255, 255, 0.025);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+.admin-history-card-title {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.admin-history-badge {
+    display: inline-block;
+    padding: 3px 9px;
+    border-radius: 6px;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+.admin-history-badge-solo { background: rgba(0, 245, 155, 0.15); color: #00f59b; border: 1px solid rgba(0, 245, 155, 0.4); }
+.admin-history-badge-duo { background: rgba(0, 210, 255, 0.15); color: #00d2ff; border: 1px solid rgba(0, 210, 255, 0.4); }
+.admin-history-badge-survival { background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.4); }
+.admin-history-badge-lone { background: rgba(168, 85, 247, 0.15); color: #a855f7; border: 1px solid rgba(168, 85, 247, 0.4); }
+.admin-history-badge-bonus { background: rgba(236, 72, 153, 0.15); color: #ec4899; border: 1px solid rgba(236, 72, 153, 0.4); }
+.admin-history-badge-cs { background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.4); }
+
+.admin-history-meta-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 12px;
+    padding: 14px 20px;
+    background: rgba(0, 0, 0, 0.15);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+.admin-history-meta-item {
+    font-size: 0.74rem;
+    color: var(--text-muted, #94a3b8);
+}
+.admin-history-meta-item b {
+    display: block;
+    font-size: 0.92rem;
+    color: #f1f5f9;
+    margin-top: 2px;
+}
+.admin-history-retention-notice {
+    font-size: 0.72rem;
+    color: #f59e0b;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: rgba(245, 158, 11, 0.08);
+    padding: 3px 8px;
+    border-radius: 4px;
+    border: 1px dashed rgba(245, 158, 11, 0.3);
+}
+
+
 

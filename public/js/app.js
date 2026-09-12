@@ -1509,10 +1509,13 @@ async function loadAdminOverview() {
             const data = await res.json();
             document.getElementById('adminStatTotalUsers').innerText = data.total_users;
             document.getElementById('adminStatPendingDep').innerText = data.pending_deposits;
+            const statPendingWith = document.getElementById('adminStatPendingWithdrawals');
+            if (statPendingWith) statPendingWith.innerText = data.pending_withdrawals || 0;
             document.getElementById('adminStatTotalMatches').innerText = data.total_matches;
             document.getElementById('adminStatCirculatingDigits').innerText = data.total_digits_circulating;
 
             renderPendingDeposits(data.pending_deposits_list);
+            renderPendingWithdrawals(data.pending_withdrawals_list);
             loadAdminUsers();
         }
     } catch (e) {
@@ -1549,6 +1552,35 @@ function renderPendingDeposits(list) {
     `).join('');
 }
 
+function renderPendingWithdrawals(list) {
+    const tbody = document.getElementById('adminPendingWithdrawalsBody');
+    if (!tbody) return;
+
+    if (!list || list.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 16px;">No pending withdrawal requests 🎉</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = list.map(w => `
+        <tr>
+            <td>
+                <b>${escapeHtml(w.username || 'User #' + w.user_id)}</b>
+                <div style="font-size: 0.72rem; color: var(--text-muted);">${w.player_id || ''}</div>
+            </td>
+            <td style="font-family: monospace; font-weight: 700; color: #0284c7;">${escapeHtml(w.bkash_number)}</td>
+            <td style="font-weight: 800; color: #ef4444;">BDT ${w.amount}</td>
+            <td>${w.created_at || '-'}</td>
+            <td><span class="badge-status pending">Pending</span></td>
+            <td>
+                <div style="display: flex; gap: 6px;">
+                    <button class="btn btn-neon btn-sm" onclick="reviewWithdrawal(${w.id}, 'approve')">✅ Approve</button>
+                    <button class="btn btn-crimson btn-sm" onclick="reviewWithdrawal(${w.id}, 'reject')">❌ Reject</button>
+                </div>
+            </td>
+        </tr>
+    `).join('');
+}
+
 async function reviewDeposit(depId, action) {
     try {
         const res = await fetch(`/api/admin/deposits/${depId}/review?action=${action}`, {
@@ -1558,6 +1590,24 @@ async function reviewDeposit(depId, action) {
         const data = await res.json();
         if (res.ok) {
             showToast(`Deposit #${depId} ${action === 'approve' ? 'approved' : 'rejected'} successfully`, 'success');
+            loadAdminOverview();
+        } else {
+            showToast(data.detail || 'An error occurred', 'error');
+        }
+    } catch (e) {
+        showToast('Unable to connect to server', 'error');
+    }
+}
+
+async function reviewWithdrawal(withdrawId, action) {
+    try {
+        const res = await fetch(`/api/admin/withdrawals/${withdrawId}/review?action=${action}`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await res.json();
+        if (res.ok) {
+            showToast(`Withdrawal #${withdrawId} ${action === 'approve' ? 'approved' : 'rejected'} successfully`, 'success');
             loadAdminOverview();
         } else {
             showToast(data.detail || 'An error occurred', 'error');
@@ -2909,6 +2959,8 @@ function switchAdminSection(sectionId) {
         if (currentUser && currentUser.role === 'admin') loadAdminOverview();
     } else if (sectionId === 'payments') {
         if (currentUser && currentUser.role === 'admin') loadAdminOverview();
+    } else if (sectionId === 'withdrawals') {
+        if (currentUser && currentUser.role === 'admin') loadAdminOverview();
     } else if (sectionId === 'players') {
         if (currentUser && currentUser.role === 'admin') loadAdminUsers();
     } else if (sectionId === 'matches') {
@@ -3125,8 +3177,8 @@ async function submitWithdrawForm(e) {
         showToast('Please enter a valid 11-digit bKash number', 'error');
         return;
     }
-    if (!amount || amount <= 0) {
-        showToast('Please specify the withdrawal amount', 'error');
+    if (!amount || amount < 50) {
+        showToast('উইথড্র করার জন্য সর্বনিম্ন ৫০ টাকা প্রয়োজন (Minimum withdrawal amount is 50 BDT)', 'error');
         return;
     }
     if (amount > (currentUser.digits_balance || 0)) {

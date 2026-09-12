@@ -1108,28 +1108,95 @@
         <!-- Fallback invisible anchor for tab-recharge references -->
         <div id="tab-recharge" style="display: none;"></div>
 
-        <!-- TAB 2: MATCHES LOBBY -->
+        <!-- TAB 2: MATCHES LOBBY (EXACT 6 CATEGORY GRID AS REQUESTED) -->
         <section class="tab-content active" id="tab-matches">
-            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 12px;">
-                <div>
-                    <h1 style="font-size: 1.15rem; font-weight: 800; font-family: 'Rajdhani', sans-serif; margin: 0; line-height: 1.25;">🔥 Free Fire Upcoming Matches</h1>
-                    <p style="color: var(--text-secondary); font-size: 0.76rem; margin: 2px 0 0 0;">Secure your slot before tournament registration closes.</p>
+            
+            <!-- VIEW 1: 6 CATEGORIES SELECTION HUB -->
+            <div id="categoryHubView">
+                <!-- Top Notice Strip (Matches User Reference Image) -->
+                <div style="background: rgba(254, 240, 138, 0.25); border: 1px solid #facc15; border-radius: 10px; padding: 7px 12px; margin-bottom: 16px; font-size: 0.78rem; color: #b45309; font-weight: 700; text-align: center; display: flex; align-items: center; justify-content: center; gap: 6px;">
+                    <span>⚠️</span>
+                    <span>মেসেজটি বিস্তারিত লিখবেন এবং ধৈর্য ধরে এডমিনের জন্য অপেক্ষা করবেন !</span>
                 </div>
-                <div style="display: flex; gap: 6px; flex-wrap: wrap;">
-                    <button class="filter-pill active" onclick="filterMatches('all', this)">All Matches</button>
-                    <button class="filter-pill" onclick="filterMatches('Solo', this)">Solo</button>
-                    <button class="filter-pill" onclick="filterMatches('Duo', this)">Duo</button>
-                    <button class="filter-pill" onclick="filterMatches('Squad', this)">Squad</button>
+
+                <!-- Group 1: Full Map Matches -->
+                <div class="category-group-wrapper">
+                    <h2 class="category-group-title">Full Map Matches</h2>
+                    <div class="category-cards-grid">
+                        <!-- Card 1: SOLO FULL MAP MATCH -->
+                        <div class="cat-card" onclick="selectMatchCategory('solo_full_map')" title="Solo Full Map Tournament Matches">
+                            <div class="cat-banner-box" id="banner_solo_full_map"></div>
+                            <div class="cat-count-footer" id="count_solo_full_map">Loading...</div>
+                        </div>
+                        <!-- Card 2: DUO - FULL MAP MATCH -->
+                        <div class="cat-card" onclick="selectMatchCategory('duo_full_map')" title="Duo Full Map Tournament Matches">
+                            <div class="cat-banner-box" id="banner_duo_full_map"></div>
+                            <div class="cat-count-footer" id="count_duo_full_map">Loading...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Group 2: Lone Wolf Matches -->
+                <div class="category-group-wrapper">
+                    <h2 class="category-group-title">Lone Wolf Matches</h2>
+                    <div class="category-cards-grid">
+                        <!-- Card 3: BR SURVIVAL - MATCH (জোন পুশ ম্যাচ) -->
+                        <div class="cat-card" onclick="selectMatchCategory('br_survival')" title="BR Survival - জোন পুশ ম্যাচ">
+                            <div class="cat-banner-box" id="banner_br_survival"></div>
+                            <div class="cat-count-footer" id="count_br_survival">Loading...</div>
+                        </div>
+                        <!-- Card 4: 2 VS 2 LONE WOLF - MATCH -->
+                        <div class="cat-card" onclick="selectMatchCategory('lone_wolf')" title="2 vs 2 Lone Wolf Tournament Matches">
+                            <div class="cat-banner-box" id="banner_lone_wolf"></div>
+                            <div class="cat-count-footer" id="count_lone_wolf">Loading...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Group 3: BONUS and Clash Squad Matches -->
+                <div class="category-group-wrapper">
+                    <h2 class="category-group-title">BONUS and Clash Squad Matches</h2>
+                    <div class="category-cards-grid">
+                        <!-- Card 5: BONUS MATCH -->
+                        <div class="cat-card" onclick="selectMatchCategory('bonus_match')" title="Bonus Special Tournament Matches">
+                            <div class="cat-banner-box" id="banner_bonus_match"></div>
+                            <div class="cat-count-footer" id="count_bonus_match">Loading...</div>
+                        </div>
+                        <!-- Card 6: 4 VS 4 CS 4V4 - MATCH -->
+                        <div class="cat-card" onclick="selectMatchCategory('cs_4v4')" title="4 vs 4 Clash Squad Matches">
+                            <div class="cat-banner-box" id="banner_cs_4v4"></div>
+                            <div class="cat-count-footer" id="count_cs_4v4">Loading...</div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            <!-- Matches List Grid -->
-            <div class="matches-grid" id="matchesGrid">
-                <!-- Dynamically populated -->
-                <div style="grid-column: 1/-1; text-align: center; padding: 40px; color: var(--text-muted);">
-                    Loading matches...
+            <!-- VIEW 2: CATEGORY MATCHES VIEW (Active when player clicks any category) -->
+            <div id="categoryMatchesView" style="display: none;">
+                <!-- Header with Back Button and Selected Category Title -->
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 14px; background: #ffffff; padding: 10px 14px; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 2px 8px rgba(0,0,0,0.04);">
+                    <button type="button" class="btn btn-outline btn-sm" onclick="backToCategoryHub()" style="display: inline-flex; align-items: center; gap: 6px; font-weight: 800; font-size: 0.82rem; padding: 6px 12px; border-radius: 8px;">
+                        ‹ সব ক্যাটাগরি
+                    </button>
+                    <div style="text-align: right;">
+                        <div id="selectedCatHeaderTitle" style="font-family: 'Rajdhani', sans-serif; font-size: 1.05rem; font-weight: 800; color: #0f172a;">
+                            SOLO FULL MAP MATCH
+                        </div>
+                        <span id="selectedCatMatchCountBadge" style="font-size: 0.72rem; color: #059669; font-weight: 700;">
+                            1 Active Match
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Matches List Grid for Selected Category -->
+                <div class="matches-grid" id="matchesGrid">
+                    <!-- Populated dynamically -->
+                    <div style="grid-column: 1/-1; text-align: center; padding: 40px; color: var(--text-muted);">
+                        Loading matches...
+                    </div>
                 </div>
             </div>
+
         </section>
 
         <!-- TAB 3: MY MATCHES & ROOM CREDENTIALS -->
@@ -2593,10 +2660,16 @@
                         <div class="form-group">
                             <label class="form-label">Match Type</label>
                             <select class="form-select" id="matchType">
-                                <option value="Solo">Solo (1 Player)</option>
-                                <option value="Duo">Duo (2 Players)</option>
-                                <option value="Squad">Squad (4 Players)</option>
-                                <option value="Clash Squad">Clash Squad (4v4)</option>
+                                <option value="Solo Full Map">Solo Full Map (1 Player)</option>
+                                <option value="Duo Full Map">Duo Full Map (2 Players)</option>
+                                <option value="BR Survival">BR Survival (জোন পুশ ম্যাচ)</option>
+                                <option value="Lone Wolf">Lone Wolf (2 vs 2)</option>
+                                <option value="Bonus Match">Bonus Match (Special)</option>
+                                <option value="CS 4v4">CS 4v4 (Clash Squad 4 vs 4)</option>
+                                <option value="Solo">Solo (Classic)</option>
+                                <option value="Duo">Duo (Classic)</option>
+                                <option value="Squad">Squad (Classic)</option>
+                                <option value="Clash Squad">Clash Squad (Classic)</option>
                             </select>
                         </div>
                         <div class="form-group">

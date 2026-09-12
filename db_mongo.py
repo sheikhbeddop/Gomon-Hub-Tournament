@@ -101,6 +101,12 @@ TABLES_TO_COLLECTIONS = [
 # -------------------------------------------------------------------
 def push_sqlite_to_mongo(conn=None) -> bool:
     """Reads all records from SQLite and saves them into MongoDB collections."""
+    # STRICT PRODUCTION GUARD: Only Render (Live Web) can push to production MongoDB Atlas!
+    # Local development on PC is strictly BLOCKED from pushing test users to live Atlas.
+    if not (os.environ.get("RENDER") or os.environ.get("PRODUCTION") or os.environ.get("FORCE_MONGO_PUSH")):
+        print("[MongoDB Guard] Local development: Push to production Atlas blocked to protect live client data.")
+        return False
+
     db = get_mongo_database()
     if db is None:
         return False

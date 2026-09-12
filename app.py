@@ -533,7 +533,7 @@ async def on_startup():
     import threading
     def periodic_mongo_sync():
         while True:
-            time.sleep(30)
+            time.sleep(5)
             try:
                 if is_mongo_connected():
                     push_sqlite_to_mongo()
@@ -542,9 +542,18 @@ async def on_startup():
     t = threading.Thread(target=periodic_mongo_sync, daemon=True)
     t.start()
     if is_mongo_connected():
-        print("[MongoDB] Cloud persistence active! Auto-sync daemon running.")
+        print("[MongoDB] Cloud persistence active! Auto-sync daemon running (5-sec interval).")
     else:
         print("[*] Running in local SQLite mode. Configure MONGO_URI in mongo_config.json to activate MongoDB Atlas Cloud Persistence.")
+
+@app.on_event("shutdown")
+def on_shutdown():
+    try:
+        if is_mongo_connected():
+            print("[MongoDB] Graceful shutdown: Saving latest database to MongoDB Atlas before update...")
+            push_sqlite_to_mongo()
+    except Exception as e:
+        print(f"[MongoDB Shutdown Save Notice] {e}")
 
 
 app.add_middleware(

@@ -170,6 +170,13 @@ def push_sqlite_to_mongo(conn=None) -> bool:
             for d in docs:
                 col.replace_one({"_id": d["_id"]}, d, upsert=True)
 
+            # Purge deleted records from MongoDB collections so deleted ghosts never return
+            if docs:
+                current_ids = [d["_id"] for d in docs]
+                col.delete_many({"_id": {"$nin": current_ids}})
+            elif table not in ["users", "settings"]:
+                col.delete_many({})
+
         # Also store full binary snapshot with hash for instant recovery
         actual_db_path = DB_PATH
         try:
@@ -297,3 +304,9 @@ def notify_db_change(table_name: str, doc_data: dict = None):
             threading.Thread(target=push_sqlite_to_mongo, daemon=True).start()
     except Exception as e:
         print(f"[MongoDB Sync Notice] {e}")
+
+def sync_db_async():
+    """Instantly pushes database changes to MongoDB in an asynchronous thread."""
+    import threading
+    threading.Thread(target=push_sqlite_to_mongo, daemon=True).start()
+

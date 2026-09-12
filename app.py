@@ -32,7 +32,8 @@ from db_mongo import (
     is_mongo_connected,
     push_sqlite_to_mongo,
     pull_mongo_to_sqlite,
-    notify_db_change
+    notify_db_change,
+    sync_db_async
 )
 
 
@@ -223,23 +224,11 @@ def get_next_match_code(conn, match_type: str) -> str:
     return code
 
 def init_db():
-    # If MongoDB is connected and local database is empty or new (e.g. fresh Render deploy),
-    # automatically restore all users and matches from MongoDB Atlas!
+    # Always restore latest database state from MongoDB Atlas on startup (ensures 100% persistence across Render deploys)
     if is_mongo_connected():
         try:
-            has_users = False
-            if os.path.exists(DB_PATH):
-                try:
-                    chk = sqlite3.connect(DB_PATH)
-                    cnt = chk.execute("SELECT COUNT(*) FROM users").fetchone()[0]
-                    chk.close()
-                    if cnt > 0:
-                        has_users = True
-                except Exception:
-                    pass
-            if not has_users:
-                print("[MongoDB] Local database is empty. Restoring latest state from MongoDB Atlas...")
-                pull_mongo_to_sqlite()
+            print("[MongoDB] Startup: Synchronizing latest database from MongoDB Atlas...")
+            pull_mongo_to_sqlite()
         except Exception as e:
             print(f"[MongoDB Auto-Restore Notice] {e}")
 
@@ -511,9 +500,22 @@ def init_db():
             except Exception:
                 pass
 
-        # Mark legacy cleanup as permanently done - NEVER delete user accounts
+        # Purge legacy fake test accounts permanently so they never reappear
         try:
-            conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('legacy_users_cleaned_v4', 'done')")
+            conn.execute("""
+            DELETE FROM users 
+            WHERE username LIKE 'aud_%' 
+               OR username LIKE 'min50_%' 
+               OR username LIKE 'with_user_%' 
+               OR username LIKE 'p1_joined_%' 
+               OR username LIKE 'p2_outsider_%' 
+               OR username LIKE 'mod_%'
+            """)
+            conn.execute("""
+            DELETE FROM matches 
+            WHERE title LIKE 'Audit%' 
+               OR title LIKE 'Security%'
+            """)
         except Exception:
             pass
 
@@ -1014,6 +1016,7 @@ def register(data: RegisterRequest):
 
     token = generate_token(user_id, username, "player")
     conn.close()
+    sync_db_async()
     return {
         "success": True,
         "token": token,

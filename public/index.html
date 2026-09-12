@@ -1178,6 +1178,11 @@
                         <span class="admin-nav-text">Deposit Requests</span>
                     </button>
 
+                    <button type="button" class="admin-nav-item admin-only-nav" id="adminNav-withdrawals" onclick="switchAdminSection('withdrawals')">
+                        <span class="admin-nav-icon">💸</span>
+                        <span class="admin-nav-text">Withdraw Requests</span>
+                    </button>
+
                     <button type="button" class="admin-nav-item admin-only-nav" id="adminNav-players" onclick="switchAdminSection('players')">
                         <span class="admin-nav-icon">👥</span>
                         <span class="admin-nav-text">Player Management</span>
@@ -1225,6 +1230,13 @@
                                     <div style="font-size: 1.5rem; font-weight: 800; font-family: 'Rajdhani';" id="adminStatPendingDep">0</div>
                                 </div>
                             </div>
+                            <div class="admin-stat-card" style="cursor: pointer;" onclick="switchAdminSection('withdrawals')">
+                                <div class="admin-stat-icon" style="background: rgba(239, 68, 68, 0.15); color: #ef4444;">💸</div>
+                                <div>
+                                    <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase;">Pending Withdrawals</div>
+                                    <div style="font-size: 1.5rem; font-weight: 800; font-family: 'Rajdhani';" id="adminStatPendingWithdrawals">0</div>
+                                </div>
+                            </div>
                             <div class="admin-stat-card" style="cursor: pointer;" onclick="switchAdminSection('matches')">
                                 <div class="admin-stat-icon" style="background: rgba(0, 210, 255, 0.15); color: var(--neon-cyan);">🎮</div>
                                 <div>
@@ -1254,6 +1266,7 @@
                             </p>
                             <div style="display: flex; gap: 12px; flex-wrap: wrap;">
                                 <button class="btn btn-outline btn-sm" onclick="switchAdminSection('payments')">⏳ View Pending Deposits</button>
+                                <button class="btn btn-outline btn-sm" onclick="switchAdminSection('withdrawals')">💸 View Withdraw Requests</button>
                                 <button class="btn btn-outline btn-sm" onclick="switchAdminSection('players')">👥 Player List</button>
                                 <button class="btn btn-outline btn-sm" onclick="switchAdminSection('matches')">🎮 Match Rooms</button>
                                 <button class="btn btn-neon btn-sm" onclick="openPublishResultModal()">🏆 Publish Results</button>
@@ -1286,6 +1299,35 @@
                                     </thead>
                                     <tbody id="adminPendingDepositsBody">
                                         <tr><td colspan="6" style="text-align: center; color: var(--text-muted);">No pending deposits found</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- CATEGORY: WITHDRAWAL REQUESTS -->
+                    <div class="admin-section" id="adminSection-withdrawals" style="display: none;">
+                        <div class="admin-panel-card admin-only-card">
+                            <div class="admin-card-header">
+                                <div class="admin-card-title">
+                                    <span>💸 Pending Withdrawal Requests & Approvals</span>
+                                </div>
+                                <button class="btn btn-outline btn-sm" onclick="loadAdminOverview()">🔄 Refresh</button>
+                            </div>
+                            <div class="table-wrapper">
+                                <table class="custom-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Player</th>
+                                            <th>bKash Number</th>
+                                            <th>Amount (BDT)</th>
+                                            <th>Date</th>
+                                            <th>Status</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="adminPendingWithdrawalsBody">
+                                        <tr><td colspan="6" style="text-align: center; color: var(--text-muted);">No pending withdrawal requests 🎉</td></tr>
                                     </tbody>
                                 </table>
                             </div>
@@ -1816,8 +1858,8 @@
                         <input type="text" id="withdrawPhone" class="input-glow" placeholder="01XXXXXXXXX" maxlength="11" required style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #cbd5e1;">
                     </div>
                     <div style="margin-bottom: 18px;">
-                        <label style="display: block; font-size: 0.85rem; font-weight: 700; color: #334155; margin-bottom: 6px;">Withdraw Amount (BDT) [Minimum 50 BDT]</label>
-                        <input type="number" id="withdrawAmount" class="input-glow" placeholder="e.g. 100" min="50" required style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #cbd5e1;">
+                        <label style="display: block; font-size: 0.85rem; font-weight: 700; color: #334155; margin-bottom: 6px;">Withdraw Amount (BDT) [Minimum 50 BDT / সর্বনিম্ন ৫০ টাকা]</label>
+                        <input type="number" id="withdrawAmount" class="input-glow" placeholder="e.g. 100 (Min: 50 BDT)" min="50" required style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #cbd5e1;">
                     </div>
                     <button type="submit" id="btnSubmitWithdraw" class="btn btn-neon" style="width: 100%; padding: 14px; font-weight: 800; font-size: 1rem;">
                         💸 Submit Withdrawal Request
@@ -2920,7 +2962,7 @@
     <!-- Toast Notification Container -->
     <div class="toast-container" id="toastContainer"></div>
 
-    <script src="/static/js/app.js?v=4.6.0"></script>
+    <script src="/static/js/app.js?v=4.7.0"></script>
 </body>
 </html>
 

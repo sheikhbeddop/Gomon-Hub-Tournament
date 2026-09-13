@@ -290,10 +290,10 @@ async function initAuth() {
         document.body.classList.add('not-authenticated');
         document.body.classList.remove('authenticated');
         const mainApp = document.getElementById('mainAppWrapper');
-        if (mainApp) mainApp.style.display = 'none';
+        if (mainApp) mainApp.style.display = 'block';
         renderLoggedOutNav();
-        setAuthMode('login');
-        openModal('authModal');
+        renderUserProfile();
+        loadMatches();
         dismissSplashScreen();
         return;
     }
@@ -503,8 +503,10 @@ function logout(manual = true) {
     document.body.classList.remove('authenticated');
     document.body.classList.add('not-authenticated');
     const mainApp = document.getElementById('mainAppWrapper');
-    if (mainApp) mainApp.style.display = 'none';
+    if (mainApp) mainApp.style.display = 'block';
     renderLoggedOutNav();
+    renderUserProfile();
+    loadMatches();
     setAuthMode('login');
     openModal('authModal');
     const saved = localStorage.getItem('saved_login_user');
@@ -4849,18 +4851,12 @@ function openModal(id) {
 }
 
 function closeModal(id) {
-    if (id === 'authModal' && !currentUser) {
-        return; // Prevent bypassing login screen without authentication
-    }
     const modal = document.getElementById(id);
     if (modal) modal.classList.remove('show');
 }
 
 window.onclick = (e) => {
     if (e.target.classList.contains('modal-overlay')) {
-        if (e.target.id === 'authModal' && !currentUser) {
-            return; // Cannot dismiss login modal by clicking background
-        }
         e.target.classList.remove('show');
     }
 };

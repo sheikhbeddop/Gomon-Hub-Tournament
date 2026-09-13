@@ -987,10 +987,10 @@
                         <div>
                             <div style="font-size: 0.8rem; text-transform: uppercase; font-weight: 700; letter-spacing: 0.8px; color: #fecdd3;">অফিসিয়াল বিকাশ পার্সোনাল নাম্বার</div>
                             <div style="font-family: 'Rajdhani', sans-serif; font-size: 1.5rem; font-weight: 900; letter-spacing: 1px; margin-top: 2px;">
-                                <span id="displayBkashNumber">01988279285 (Personal)</span>
+                                <span id="displayBkashNumber" class="displayBkashNumber">01988279285 (Personal)</span>
                             </div>
                         </div>
-                        <button type="button" class="btn btn-sm" onclick="navigator.clipboard.writeText('01988279285'); showToast('বিকাশ নাম্বার কপি করা হয়েছে: 01988279285', 'success');" style="background: white; color: #be123c; font-weight: 800; padding: 6px 14px;">
+                        <button type="button" class="btn btn-sm" onclick="copyAdminBkash()" style="background: white; color: #be123c; font-weight: 800; padding: 6px 14px;">
                             📋 নাম্বার কপি করুন
                         </button>
                     </div>
@@ -1238,7 +1238,7 @@
                         <span class="admin-nav-text">Withdraw Requests</span>
                     </button>
 
-                    <button type="button" class="admin-nav-item admin-only-nav" id="adminNav-players" onclick="switchAdminSection('players')">
+                    <button type="button" class="admin-nav-item" id="adminNav-players" onclick="switchAdminSection('players')">
                         <span class="admin-nav-icon">👥</span>
                         <span class="admin-nav-text">Player Management</span>
                     </button>
@@ -1404,15 +1404,15 @@
 
                     <!-- CATEGORY 3: PLAYER MANAGEMENT -->
                     <div class="admin-section" id="adminSection-players" style="display: none;">
-                        <div class="admin-panel-card admin-only-card">
+                        <div class="admin-panel-card">
                             <div class="admin-card-header">
                                 <div class="admin-card-title">
-                                    <span>👥 Player Management & Control</span>
+                                    <span>👥 Player Management & Search</span>
                                 </div>
                                 <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
-                                    <input type="text" id="adminUserSearchInput" placeholder="Search username or player ID..." class="form-input" style="padding: 6px 12px; font-size: 0.85rem; max-width: 220px;" onkeyup="handleUserSearch(event)">
+                                    <input type="text" id="adminUserSearchInput" placeholder="ID Number, Username, Phone, FF-UID..." class="form-input" style="padding: 6px 12px; font-size: 0.85rem; max-width: 250px;" onkeyup="handleUserSearch(event)">
                                     <button class="btn btn-neon btn-sm" onclick="searchUsers()">🔍 Search</button>
-                                    <button type="button" class="btn btn-sm" onclick="openCreateUserModal()" style="background: linear-gradient(135deg, #10b981, #059669); color: #fff; font-weight: 700; border: none; border-radius: 6px; padding: 6px 14px; display: inline-flex; align-items: center; gap: 6px; cursor: pointer;">
+                                    <button type="button" class="btn btn-sm admin-only-card" onclick="openCreateUserModal()" style="background: linear-gradient(135deg, #10b981, #059669); color: #fff; font-weight: 700; border: none; border-radius: 6px; padding: 6px 14px; display: inline-flex; align-items: center; gap: 6px; cursor: pointer;">
                                         ➕ Create New Player
                                     </button>
                                 </div>
@@ -1592,19 +1592,39 @@
                             <form id="adminSettingsForm" onsubmit="handleSettingsSubmit(event)">
                                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;">
                                     <div class="form-group">
-                                        <label class="form-label">Admin bKash Number (Deposit Receiving Number)</label>
-                                        <input type="text" class="form-input" id="settingAdminBkash" required>
+                                        <label class="form-label" style="font-weight: 700;">Admin bKash Number (Deposit Receiving Number)</label>
+                                        <div style="display: flex; gap: 8px;">
+                                            <input type="text" class="form-input" id="settingAdminBkash" placeholder="017XXXXXXXX (Personal)" required style="flex: 1;">
+                                            <button type="button" class="btn btn-neon btn-sm" onclick="quickUpdateDepositNumber()" style="white-space: nowrap; font-weight: 700;">
+                                                ⚡ ডিপোজিট আপডেট
+                                            </button>
+                                        </div>
                                     </div>
                                     <div class="form-group">
-                                        <label class="form-label">Platform Title</label>
-                                        <input type="text" class="form-input" id="settingSiteTitle" required>
+                                        <label class="form-label" style="font-weight: 700;">Admin Withdraw Number (Payout / Helpline)</label>
+                                        <div style="display: flex; gap: 8px;">
+                                            <input type="text" class="form-input" id="settingAdminWithdraw" placeholder="017XXXXXXXX (Personal)" required style="flex: 1;">
+                                            <button type="button" class="btn btn-crimson btn-sm" onclick="quickUpdateWithdrawNumber()" style="white-space: nowrap; font-weight: 700;">
+                                                ⚡ উইথড্র আপডেট
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
-                                <div class="form-group">
-                                    <label class="form-label">Live Banner Announcement / Marquee</label>
-                                    <input type="text" class="form-input" id="settingNotice">
+                                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-top: 14px;">
+                                    <div class="form-group">
+                                        <label class="form-label" style="font-weight: 700;">Platform Title</label>
+                                        <input type="text" class="form-input" id="settingSiteTitle" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label" style="font-weight: 700;">Live Banner Announcement / Marquee</label>
+                                        <input type="text" class="form-input" id="settingNotice">
+                                    </div>
                                 </div>
-                                <button type="submit" class="btn btn-neon btn-sm">Save Settings</button>
+                                <div style="margin-top: 14px;">
+                                    <button type="submit" class="btn btn-neon btn-sm" style="font-weight: 800; padding: 8px 18px;">
+                                        💾 Save All Settings (সব সেটিংস সেভ করুন)
+                                    </button>
+                                </div>
                             </form>
                         </div>
 
@@ -1619,21 +1639,21 @@
                                 </span>
                             </div>
                             <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px; margin-bottom: 16px;">
-                                আপনার এডমিন অ্যাকাউন্টের বর্তমান পাসওয়ার্ডটি ভেরিফাই করে নতুন শক্তিশালী পাসওয়ার্ড সেট করুন। পরিবর্তনের সাথে সাথে এটি ক্লাউড ডাটাবেজে স্থায়ীভাবে সেভ হয়ে যাবে।
+                                আপনার এডমিন অ্যাকাউন্টের নতুন শক্তিশালী পাসওয়ার্ড সেট করুন। পরিবর্তনের সাথে সাথে এটি ক্লাউড ডাটাবেজে স্থায়ীভাবে সেভ হয়ে যাবে।
                             </p>
                             <form id="adminChangePasswordForm" onsubmit="handleAdminChangePassword(event)">
                                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px;">
                                     <div class="form-group">
-                                        <label class="form-label">বর্তমান পাসওয়ার্ড (Current Password)</label>
-                                        <input type="password" class="form-input" id="adminCurrentPassword" placeholder="বর্তমান পাসওয়ার্ড দিন" required>
+                                        <label class="form-label">বর্তমান পাসওয়ার্ড (Current Password - ঐচ্ছিক)</label>
+                                        <input type="password" class="form-input" id="adminCurrentPassword" placeholder="বর্তমান পাসওয়ার্ড (যদি মনে থাকে)">
                                     </div>
                                     <div class="form-group">
                                         <label class="form-label">নতুন পাসওয়ার্ড (New Password)</label>
-                                        <input type="password" class="form-input" id="adminNewPassword" placeholder="কমপক্ষে ৬ অক্ষর" minlength="6" required>
+                                        <input type="password" class="form-input" id="adminNewPassword" placeholder="কমপক্ষে ৪ অক্ষর" minlength="4" required>
                                     </div>
                                     <div class="form-group">
                                         <label class="form-label">কনফার্ম পাসওয়ার্ড (Confirm Password)</label>
-                                        <input type="password" class="form-input" id="adminConfirmPassword" placeholder="পুনরায় নতুন পাসওয়ার্ড দিন" minlength="6" required>
+                                        <input type="password" class="form-input" id="adminConfirmPassword" placeholder="পুনরায় নতুন পাসওয়ার্ড দিন" minlength="4" required>
                                     </div>
                                 </div>
                                 <div style="display: flex; justify-content: flex-end; margin-top: 14px;">
@@ -1939,10 +1959,10 @@
                         <div>
                             <div style="font-size: 0.68rem; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px; color: #fecdd3;">বিকাশ পার্সোনাল নাম্বার (Send Money)</div>
                             <div style="font-family: 'Rajdhani', sans-serif; font-size: 1.22rem; font-weight: 900; letter-spacing: 1px; margin-top: 1px;">
-                                <span id="displayBkashNumber">01988279285</span>
+                                <span id="displayBkashNumber" class="displayBkashNumber">01988279285</span>
                             </div>
                         </div>
-                        <button type="button" class="btn btn-sm" onclick="navigator.clipboard.writeText('01988279285'); showToast('বিকাশ নাম্বার (01988279285) কপি করা হয়েছে!', 'success');" style="background: white; color: #be123c; font-weight: 800; padding: 4px 10px; font-size: 0.74rem; border-radius: 6px; border: none; cursor: pointer;">
+                        <button type="button" class="btn btn-sm" onclick="copyAdminBkash()" style="background: white; color: #be123c; font-weight: 800; padding: 4px 10px; font-size: 0.74rem; border-radius: 6px; border: none; cursor: pointer;">
                             📋 নাম্বার কপি
                         </button>
                     </div>
@@ -2012,6 +2032,24 @@
                 <div style="background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 10px; padding: 12px 14px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center;">
                     <span style="font-size: 0.85rem; color: #0369a1; font-weight: 600;">Withdrawable Balance:</span>
                     <b id="withdrawUserBalance" style="font-family: 'Rajdhani', sans-serif; font-size: 1.3rem; color: #0284c7;">BDT 0</b>
+                </div>
+
+                <!-- Official Withdraw Helpline Banner -->
+                <div style="background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%); color: white; border-radius: 12px; padding: 12px 14px; margin-bottom: 16px; box-shadow: 0 3px 12px rgba(2, 132, 199, 0.2);">
+                    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+                        <div>
+                            <div style="font-size: 0.68rem; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px; color: #bae6fd;">অফিসিয়াল উইথড্র / হেল্পলাইন নাম্বার</div>
+                            <div style="font-family: 'Rajdhani', sans-serif; font-size: 1.22rem; font-weight: 900; letter-spacing: 1px; margin-top: 1px;">
+                                <span id="displayWithdrawNumber" class="displayWithdrawNumber">01988279285 (Personal)</span>
+                            </div>
+                        </div>
+                        <button type="button" class="btn btn-sm" onclick="copyAdminWithdraw()" style="background: white; color: #0369a1; font-weight: 800; padding: 4px 10px; font-size: 0.74rem; border-radius: 6px; border: none; cursor: pointer;">
+                            📋 নাম্বার কপি
+                        </button>
+                    </div>
+                    <div style="font-size: 0.72rem; color: #e0f2fe; margin-top: 6px; line-height: 1.35;">
+                        ℹ️ উইথড্র বা ক্যাশআউট সংক্রান্ত যে কোনো তথ্যের জন্য এই নাম্বারে যোগাযোগ করতে পারেন।
+                    </div>
                 </div>
 
                 <form id="withdrawForm" onsubmit="submitWithdrawForm(event)">

@@ -1468,6 +1468,93 @@ function filterMatches(category, btnElem) {
     renderMatches();
 }
 
+// -------------------------------------------------------------
+// DYNAMIC MATCH FORMAT & CATEGORY DISPLAY HELPERS (FORMAT MONITOR)
+// -------------------------------------------------------------
+function getMatchFormatInfo(m) {
+    if (!m) return { label: '1 VS 1', icon: '⚔️', cssClass: 'match-format-1v1', slotColor: '#b45309' };
+    const slots = parseInt(m.total_slots, 10) || 0;
+    const mt = String(m.match_type || '').trim();
+    const tl = String(m.title || '').trim();
+    const combined = (mt + ' ' + tl).toLowerCase();
+    const titleLower = tl.toLowerCase();
+
+    // 1. Explicit format tag in title (if admin explicitly wrote 1v1, 2v2 etc. in title)
+    if (/\b1\s*(?:v|vs)\s*1\b/i.test(titleLower) || titleLower.includes('1v1')) {
+        return { label: '1 VS 1', icon: '⚔️', cssClass: 'match-format-1v1', slotColor: '#b45309' };
+    }
+    if (/\b2\s*(?:v|vs)\s*2\b/i.test(titleLower) || titleLower.includes('2v2')) {
+        return { label: '2 VS 2', icon: '⚔️', cssClass: 'match-format-2v2', slotColor: '#4338ca' };
+    }
+    if (/\b3\s*(?:v|vs)\s*3\b/i.test(titleLower) || titleLower.includes('3v3')) {
+        return { label: '3 VS 3', icon: '⚔️', cssClass: 'match-format-3v3', slotColor: '#be185d' };
+    }
+    if (/\b4\s*(?:v|vs)\s*4\b/i.test(titleLower) || titleLower.includes('4v4')) {
+        return { label: '4 VS 4', icon: '⚔️', cssClass: 'match-format-4v4', slotColor: '#c2410c' };
+    }
+
+    const isCs = combined.includes('cs') || combined.includes('clash');
+    const isLoneWolf = combined.includes('lone') || combined.includes('wolf');
+
+    // 2. Slot-based identification for Clash Squad / Lone Wolf / Custom Rooms
+    if (slots === 2) {
+        return { label: '1 VS 1', icon: '⚔️', cssClass: 'match-format-1v1', slotColor: '#b45309' };
+    }
+    if (slots === 4) {
+        if (isCs || isLoneWolf || combined.includes('2v2')) {
+            return { label: '2 VS 2', icon: '⚔️', cssClass: 'match-format-2v2', slotColor: '#4338ca' };
+        }
+        if (combined.includes('duo')) {
+            return { label: 'DUO', icon: '👥', cssClass: 'match-format-duo', slotColor: '#0369a1' };
+        }
+        return { label: '2 VS 2', icon: '⚔️', cssClass: 'match-format-2v2', slotColor: '#4338ca' };
+    }
+    if (slots === 6) {
+        return { label: '3 VS 3', icon: '⚔️', cssClass: 'match-format-3v3', slotColor: '#be185d' };
+    }
+    if (slots === 8) {
+        return { label: '4 VS 4', icon: '⚔️', cssClass: 'match-format-4v4', slotColor: '#c2410c' };
+    }
+
+    // 3. For Clash Squad with default/unusual slots
+    if (isCs) {
+        if (slots <= 2) return { label: '1 VS 1', icon: '⚔️', cssClass: 'match-format-1v1', slotColor: '#b45309' };
+        if (slots <= 4) return { label: '2 VS 2', icon: '⚔️', cssClass: 'match-format-2v2', slotColor: '#4338ca' };
+        if (slots <= 6) return { label: '3 VS 3', icon: '⚔️', cssClass: 'match-format-3v3', slotColor: '#be185d' };
+        return { label: '4 VS 4', icon: '⚔️', cssClass: 'match-format-4v4', slotColor: '#c2410c' };
+    }
+
+    // 4. Survival / Full Map modes
+    if (combined.includes('survival') || combined.includes('zone') || combined.includes('জোন')) {
+        return { label: 'SURVIVAL', icon: '🏆', cssClass: 'match-format-survival', slotColor: '#047857' };
+    }
+    if (combined.includes('duo')) {
+        return { label: 'DUO', icon: '👥', cssClass: 'match-format-duo', slotColor: '#0369a1' };
+    }
+    if (combined.includes('squad')) {
+        return { label: 'SQUAD', icon: '🛡️', cssClass: 'match-format-squad', slotColor: '#6d28d9' };
+    }
+    if (combined.includes('solo') || slots <= 1) {
+        return { label: 'SOLO', icon: '👤', cssClass: 'match-format-solo', slotColor: '#15803d' };
+    }
+
+    // 5. Fallback for larger lobbies
+    if (slots >= 12) {
+        return { label: 'SOLO', icon: '👤', cssClass: 'match-format-solo', slotColor: '#15803d' };
+    }
+    return { label: 'SOLO', icon: '👤', cssClass: 'match-format-solo', slotColor: '#15803d' };
+}
+
+function getMatchCategoryDisplay(matchType) {
+    const mt = (matchType || '').trim();
+    if (!mt) return 'Clash Squad';
+    const lower = mt.toLowerCase();
+    if (lower === 'cs 4v4' || lower === 'clash squad' || lower.includes('clash') || lower.includes('cs')) {
+        return 'Clash Squad';
+    }
+    return mt;
+}
+
 function renderMatches() {
     renderCategoryHub();
 
@@ -1516,6 +1603,8 @@ function renderMatches() {
         const isFull = (m.joined_count || 0) >= (m.total_slots || 48);
         const hasJoined = m.has_joined;
         const isAdminOrMod = (currentUser && (currentUser.role === 'admin' || currentUser.role === 'moderator'));
+        const fmt = getMatchFormatInfo(m);
+        const catName = getMatchCategoryDisplay(m.match_type);
 
         let actionHtml = '';
         if (hasJoined) {
@@ -1593,7 +1682,8 @@ function renderMatches() {
                     <div>
                         <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 4px;">
                             <span class="match-code-badge">#${escapeHtml(m.match_code || ('MATCH-' + m.id))}</span>
-                            <span class="match-category" style="margin-bottom: 0;">🔥 ${escapeHtml(m.match_type || 'Solo')}</span>
+                            <span class="match-category" style="margin-bottom: 0;">🔥 ${escapeHtml(catName)}</span>
+                            <span class="match-format-monitor ${fmt.cssClass}">${fmt.icon} ${fmt.label}</span>
                         </div>
                         <div class="match-title">${escapeHtml(m.title)}</div>
                         <div class="match-time-badge">⏰ ${escapeHtml(m.match_time || '')}</div>
@@ -1618,7 +1708,7 @@ function renderMatches() {
 
                 <div class="slot-progress-wrapper">
                     <div class="slot-text-row">
-                        <span>Slot Booking</span>
+                        <span>Slot Booking <span style="font-weight: 800; color: ${fmt.slotColor}; font-size: 0.78rem; margin-left: 2px;">(${fmt.label})</span></span>
                         <span><b>${m.joined_count || 0}</b> / ${m.total_slots || 48} players</span>
                     </div>
                     <div class="slot-bar-bg">
@@ -1653,8 +1743,9 @@ function openJoinMatchModal(matchId, matchTitle, entryFee) {
     
     const m = (allMatches || []).find(x => x.id === matchId);
     const codePrefix = (m && m.match_code) ? `[#${m.match_code}] ` : '';
+    const fmt = getMatchFormatInfo(m);
     const titleEl = document.getElementById('joinModalMatchTitle');
-    if (titleEl) titleEl.innerText = `${codePrefix}${matchTitle || 'Free Fire Match'}`;
+    if (titleEl) titleEl.innerText = `${codePrefix}${matchTitle || 'Free Fire Match'} • [${fmt.label}]`;
 
     const feeEl = document.getElementById('joinModalMatchFee');
     if (feeEl) feeEl.innerText = `${entryFee} Digits`;
@@ -1957,6 +2048,7 @@ function renderMyMatches() {
 
     grid.innerHTML = joinedMatches.map(m => {
         const slotsPercent = Math.min(100, Math.round(((m.joined_count || 0) / (m.total_slots || 48)) * 100));
+        const fmt = getMatchFormatInfo(m);
 
         return `
             <div class="match-card" style="border: 1px solid rgba(0, 245, 155, 0.35); box-shadow: 0 4px 20px rgba(0, 245, 155, 0.08);">
@@ -1965,6 +2057,7 @@ function renderMyMatches() {
                         <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 4px;">
                             <span class="match-code-badge">#${escapeHtml(m.match_code || ('MATCH-' + m.id))}</span>
                             <span class="match-category" style="background: rgba(0, 245, 155, 0.15); color: #00f59b; margin-bottom: 0;">✅ Registered</span>
+                            <span class="match-format-monitor ${fmt.cssClass}">${fmt.icon} ${fmt.label}</span>
                         </div>
                         <div class="match-title">${escapeHtml(m.title)}</div>
                         <div class="match-time-badge">⏰ ${escapeHtml(m.match_time || '')}</div>
@@ -1989,7 +2082,7 @@ function renderMyMatches() {
 
                 <div class="slot-progress-wrapper" style="margin-bottom: 10px;">
                     <div class="slot-text-row">
-                        <span>Slot Booking</span>
+                        <span>Slot Booking <span style="font-weight: 800; color: ${fmt.slotColor}; font-size: 0.78rem; margin-left: 2px;">(${fmt.label})</span></span>
                         <span><b>${m.joined_count || 0}</b> / ${m.total_slots || 48} players</span>
                     </div>
                     <div class="slot-bar-bg">
@@ -3044,6 +3137,8 @@ function renderAdminMatches() {
 
     tbody.innerHTML = allMatches.map(m => {
         const isCompleted = (m.status === 'completed');
+        const fmt = getMatchFormatInfo(m);
+        const catName = getMatchCategoryDisplay(m.match_type);
         const updaterInfo = m.room_updated_by_name ? `
             <div style="font-size: 0.78rem; color: var(--neon-cyan);">
                 <b>🛡️ ${escapeHtml(m.room_updated_by_name)}</b>
@@ -3061,7 +3156,12 @@ function renderAdminMatches() {
                     ${isCompleted ? '<span class="badge-status approved" style="margin-left: 4px; font-size: 0.65rem;">Concluded</span>' : ''}
                 </div>
             </td>
-            <td>${m.match_type} (${m.map_name})</td>
+            <td>
+                <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                    <span>${escapeHtml(catName)} (${escapeHtml(m.map_name || 'Bermuda')})</span>
+                    <span class="match-format-monitor ${fmt.cssClass}" style="font-size: 0.68rem; padding: 1px 6px;">${fmt.icon} ${fmt.label}</span>
+                </div>
+            </td>
             <td style="font-size: 0.8rem;">${m.match_time}</td>
             <td>${m.entry_fee} 🪙 / ৳${m.prize_pool}</td>
             <td>${m.joined_count} / ${m.total_slots}</td>
@@ -4451,12 +4551,16 @@ async function loadCompletedResults(category, btnElem) {
             return;
         }
 
-        container.innerHTML = results.map(m => `
+        container.innerHTML = results.map(m => {
+            const fmt = getMatchFormatInfo(m);
+            const catName = getMatchCategoryDisplay(m.match_type);
+            return `
             <div class="results-card" style="background:#ffffff; border:1px solid #e2e8f0; border-radius:12px; padding:12px 14px; margin-bottom:12px; box-shadow:0 2px 8px rgba(0,0,0,0.03);">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                    <div style="display:flex; align-items:center; gap:6px;">
+                    <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
                         <span class="match-code-badge" style="font-size:0.7rem; padding:1px 6px;">#${escapeHtml(m.match_code || ('MATCH-' + m.id))}</span>
-                        <span class="filter-pill" style="background:#e0f2fe; color:#0369a1; border:none; padding:2px 8px; font-size:0.68rem; font-weight:700;">🔥 ${escapeHtml(m.match_type || 'Solo')}</span>
+                        <span class="filter-pill" style="background:#e0f2fe; color:#0369a1; border:none; padding:2px 8px; font-size:0.68rem; font-weight:700;">🔥 ${escapeHtml(catName)}</span>
+                        <span class="match-format-monitor ${fmt.cssClass}" style="font-size:0.68rem; padding:1px 6px;">${fmt.icon} ${fmt.label}</span>
                     </div>
                     <span style="font-size:0.72rem; color:#64748b;">Concluded: ${(m.completed_at || m.match_time || '').split(' ')[0]}</span>
                 </div>

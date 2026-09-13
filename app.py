@@ -521,6 +521,8 @@ def init_db():
             WHERE title LIKE 'Audit%' 
                OR title LIKE 'Security%'
             """)
+            conn.execute("DELETE FROM withdrawals WHERE user_id NOT IN (SELECT id FROM users)")
+            conn.execute("DELETE FROM deposits WHERE user_id NOT IN (SELECT id FROM users)")
         except Exception:
             pass
 
@@ -1662,8 +1664,18 @@ def admin_overview(admin: dict = Depends(verify_moderator_or_admin)):
     conn = get_db()
     total_users = conn.execute("SELECT COUNT(*) FROM users WHERE role != 'admin'").fetchone()[0]
     total_matches = conn.execute("SELECT COUNT(*) FROM matches").fetchone()[0]
-    pending_deposits = conn.execute("SELECT COUNT(*) FROM deposits WHERE status = 'pending'").fetchone()[0]
-    pending_withdrawals = conn.execute("SELECT COUNT(*) FROM withdrawals WHERE status = 'pending'").fetchone()[0]
+    pending_deposits = conn.execute("""
+        SELECT COUNT(*) 
+        FROM deposits d
+        JOIN users u ON d.user_id = u.id
+        WHERE d.status = 'pending'
+    """).fetchone()[0]
+    pending_withdrawals = conn.execute("""
+        SELECT COUNT(*) 
+        FROM withdrawals w
+        JOIN users u ON w.user_id = u.id
+        WHERE w.status = 'pending'
+    """).fetchone()[0]
     total_digits_circulating = conn.execute("SELECT COALESCE(SUM(digits_balance), 0) FROM users WHERE role != 'admin'").fetchone()[0] or 0
     total_moderators = conn.execute("SELECT COUNT(*) FROM users WHERE role = 'moderator'").fetchone()[0]
     
@@ -2075,6 +2087,7 @@ async def admin_delete_user(target_user_id: int, admin: dict = Depends(verify_ad
         with conn:
             conn.execute("DELETE FROM participations WHERE user_id = ?", (target_user_id,))
             conn.execute("DELETE FROM deposits WHERE user_id = ?", (target_user_id,))
+            conn.execute("DELETE FROM withdrawals WHERE user_id = ?", (target_user_id,))
             conn.execute("DELETE FROM push_subscriptions WHERE user_id = ?", (target_user_id,))
             conn.execute("DELETE FROM audit_logs WHERE target_user_id = ?", (target_user_id,))
             conn.execute("DELETE FROM users WHERE id = ?", (target_user_id,))

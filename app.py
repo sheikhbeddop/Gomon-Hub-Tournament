@@ -488,7 +488,7 @@ def init_db():
             user_id INTEGER NOT NULL,
             bkash_number TEXT NOT NULL,
             amount INTEGER NOT NULL,
-            trx_id TEXT UNIQUE NOT NULL,
+            trx_id TEXT NOT NULL,
             status TEXT DEFAULT 'pending',
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             reviewed_at DATETIME,
@@ -565,7 +565,6 @@ def init_db():
             number INTEGER NOT NULL
         );
 
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_deposits_trx_id_unique ON deposits(trx_id);
         CREATE INDEX IF NOT EXISTS idx_used_trx_ids_trx ON used_trx_ids(trx_id);
 
         CREATE TRIGGER IF NOT EXISTS trg_prevent_negative_balance_update
@@ -584,6 +583,23 @@ def init_db():
             SELECT RAISE(ABORT, 'Transaction rejected: User digits balance cannot be negative');
         END;
         """)
+
+        # Safely auto-deduplicate any legacy test trx_ids before creating unique index
+        try:
+            conn.execute("""
+            UPDATE deposits 
+            SET trx_id = trx_id || '_' || id 
+            WHERE id IN (
+                SELECT id FROM deposits WHERE trx_id IN (
+                    SELECT trx_id FROM deposits GROUP BY trx_id HAVING COUNT(*) > 1
+                ) AND id NOT IN (
+                    SELECT MIN(id) FROM deposits GROUP BY trx_id HAVING COUNT(*) > 1
+                )
+            );
+            """)
+            conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_deposits_trx_id_unique ON deposits(trx_id);")
+        except Exception as e:
+            print(f"[Deposits Index Notice] {e}")
 
         # Migration: Ensure all historical deposit TrxIDs are permanently preserved in used_trx_ids
         try:

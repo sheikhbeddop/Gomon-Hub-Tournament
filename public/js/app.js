@@ -1556,6 +1556,120 @@ function getMatchCategoryDisplay(matchType) {
     return mt;
 }
 
+// -------------------------------------------------------------
+// Live Real-Time Match Countdown Ticker & Formatter
+// -------------------------------------------------------------
+let matchCountdownTimerId = null;
+
+function parseMatchTimestamp(timeStr) {
+    if (!timeStr) return null;
+    const str = String(timeStr).trim();
+    // 1. Manual regex parse for YYYY-MM-DD HH:mm(:ss)? to guarantee local time in all browsers
+    const match = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})[ T](\d{1,2}):(\d{1,2})(?::(\d{1,2}))?/);
+    if (match) {
+        const year = parseInt(match[1], 10);
+        const month = parseInt(match[2], 10) - 1;
+        const day = parseInt(match[3], 10);
+        const hour = parseInt(match[4], 10);
+        const min = parseInt(match[5], 10);
+        const sec = match[6] ? parseInt(match[6], 10) : 0;
+        const d = new Date(year, month, day, hour, min, sec);
+        if (!isNaN(d.getTime())) return d.getTime();
+    }
+    // 2. Fallback to standard ISO
+    const isoStr = str.replace(' ', 'T');
+    const d = new Date(isoStr);
+    return isNaN(d.getTime()) ? null : d.getTime();
+}
+
+function formatCountdown(targetTime, status) {
+    const s = String(status || '').toLowerCase();
+    if (s === 'completed' || s === 'concluded') {
+        return {
+            text: '🏁 Match Concluded',
+            state: 'completed'
+        };
+    }
+    if (s === 'cancelled') {
+        return {
+            text: '❌ Match Cancelled',
+            state: 'completed'
+        };
+    }
+    if (!targetTime) {
+        return {
+            text: '⏰ Upcoming Match',
+            state: 'upcoming'
+        };
+    }
+
+    const now = Date.now();
+    const diff = targetTime - now;
+
+    if (diff <= 0) {
+        return {
+            text: '🔴 Match Live / Started',
+            state: 'live'
+        };
+    }
+
+    const totalSecs = Math.floor(diff / 1000);
+    const days = Math.floor(totalSecs / 86400);
+    const hours = Math.floor((totalSecs % 86400) / 3600);
+    const minutes = Math.floor((totalSecs % 3600) / 60);
+    const seconds = totalSecs % 60;
+
+    const pad = (n) => String(n).padStart(2, '0');
+
+    let timeFormatted = '';
+    if (days > 0) {
+        timeFormatted = `${days}d ${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+    } else {
+        timeFormatted = `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+    }
+
+    const isUrgent = diff <= 15 * 60 * 1000; // 15 mins or less
+    return {
+        text: `⏰ Starts in: ${timeFormatted}`,
+        state: isUrgent ? 'urgent' : 'upcoming'
+    };
+}
+
+function updateAllMatchCountdowns() {
+    const pills = document.querySelectorAll('.match-countdown-pill');
+    if (!pills || pills.length === 0) return;
+
+    pills.forEach(pill => {
+        const timeStr = pill.getAttribute('data-match-time');
+        const status = pill.getAttribute('data-match-status') || 'upcoming';
+        const targetTime = parseMatchTimestamp(timeStr);
+        const result = formatCountdown(targetTime, status);
+
+        const textEl = pill.querySelector('.countdown-timer-text');
+        if (textEl && textEl.textContent !== result.text) {
+            textEl.textContent = result.text;
+        }
+
+        const validClasses = ['state-upcoming', 'state-urgent', 'state-live', 'state-completed'];
+        validClasses.forEach(cls => {
+            if (cls === `state-${result.state}`) {
+                if (!pill.classList.contains(cls)) pill.classList.add(cls);
+            } else {
+                if (pill.classList.contains(cls)) pill.classList.remove(cls);
+            }
+        });
+    });
+}
+
+function startMatchCountdownTicker() {
+    if (matchCountdownTimerId) {
+        clearInterval(matchCountdownTimerId);
+        matchCountdownTimerId = null;
+    }
+    updateAllMatchCountdowns();
+    matchCountdownTimerId = setInterval(updateAllMatchCountdowns, 1000);
+}
+
 function renderMatches() {
     renderCategoryHub();
 
@@ -1717,12 +1831,18 @@ function renderMatches() {
                     </div>
                 </div>
 
-                <div class="match-card-footer" style="margin-top: 10px;">
+                <div class="match-card-footer" style="margin-top: 10px; display: flex; flex-direction: column; gap: 6px;">
                     ${actionHtml}
+                    <div class="match-countdown-pill" data-match-time="${escapeHtml(m.match_time || '')}" data-match-status="${escapeHtml(m.status || '')}">
+                        <span class="countdown-pulse-dot"></span>
+                        <span class="countdown-timer-text">⏰ Starts in: calculating...</span>
+                    </div>
                 </div>
             </div>
         `;
     }).join('');
+
+    startMatchCountdownTicker();
 }
 
 let currentJoinMatch = null;
@@ -2424,7 +2544,7 @@ function renderMyMatches() {
                     </div>
                 </div>
 
-                <div class="match-card-footer">
+                <div class="match-card-footer" style="display: flex; flex-direction: column; gap: 6px;">
                     <div style="display: flex; flex-direction: column; gap: 6px;">
                         <div style="display: flex; align-items: center; justify-content: space-between; background: rgba(0, 245, 155, 0.08); border: 1px solid rgba(0, 245, 155, 0.25); border-radius: 8px; padding: 6px 10px;">
                             <span style="font-size: 0.8rem; color: #a7f3d0; font-weight: 700;">🎯 Your Assigned Slot:</span>
@@ -2434,10 +2554,16 @@ function renderMyMatches() {
                             🔑 View Room & Players
                         </button>
                     </div>
+                    <div class="match-countdown-pill" data-match-time="${escapeHtml(m.match_time || '')}" data-match-status="${escapeHtml(m.status || '')}">
+                        <span class="countdown-pulse-dot"></span>
+                        <span class="countdown-timer-text">⏰ Starts in: calculating...</span>
+                    </div>
                 </div>
             </div>
         `;
     }).join('');
+
+    startMatchCountdownTicker();
 }
 
 // Backward-compatibility wrapper for joinMatch

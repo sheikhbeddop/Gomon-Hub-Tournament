@@ -440,6 +440,7 @@ def init_db():
 
         try:
             conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_matches_match_code ON matches(match_code)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_deposits_trx_id ON deposits(trx_id)")
         except Exception:
             pass
 
@@ -1430,19 +1431,57 @@ async def join_match(data: Optional[JoinMatchRequest] = None, match_id: Optional
 # -------------------------------------------------------------
 @app.post("/api/wallet/deposit")
 async def submit_deposit(data: DepositRequest, user: dict = Depends(get_current_user)):
-    if data.amount <= 0:
-        raise HTTPException(status_code=400, detail="Amount must be greater than 0")
-    if len(data.bkash_number.strip()) < 11:
-        raise HTTPException(status_code=400, detail="Valid 11-digit bKash number required")
-    if len(data.trx_id.strip()) < 4:
-        raise HTTPException(status_code=400, detail="Valid bKash Transaction ID (TrxID) is required")
+    # 1. Clean inputs
+    phone = data.bkash_number.strip().replace(" ", "").replace("-", "")
+    if phone.startswith("+88"):
+        phone = phone[3:]
+
+    try:
+        amount = int(data.amount)
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="টাকার পরিমাণ সঠিক সংখ্যা হতে হবে")
+
+    clean_trx = data.trx_id.strip().upper().replace(" ", "")
+
+    # 2. Validate Amount
+    if amount < 10:
+        raise HTTPException(status_code=400, detail="ডিপোজিট করার জন্য সর্বনিম্ন পরিমাণ ১০ টাকা (Minimum deposit is 10 BDT)")
+    if amount > 25000:
+        raise HTTPException(status_code=400, detail="একবারে সর্বোচ্চ ডিপোজিট পরিমাণ ২৫,০০০ টাকা")
+
+    # 3. Validate bKash Phone Number (11 digits starting with 013-019)
+    if not re.match(r"^01[3-9]\d{8}$", phone):
+        raise HTTPException(status_code=400, detail="সঠিক ১১ ডিজিটের বিকাশ নাম্বার দিন (যেমন: 017XXXXXXXX)")
+
+    # 4. Validate Transaction ID (TrxID) format
+    # bKash TrxIDs are alphanumeric, typically 8 to 14 characters (standard 10 characters e.g. BLA491J3KP)
+    if len(clean_trx) < 8 or len(clean_trx) > 16:
+        raise HTTPException(status_code=400, detail="সঠিক বিকাশ ট্রানজেকশন আইডি (TrxID) দিন। TrxID সাধারণত ৮ থেকে ১২ ক্যারেক্টারের হয় (যেমন: BLA491J3KP)")
+
+    if not re.match(r"^[A-Z0-9]{8,16}$", clean_trx):
+        raise HTTPException(status_code=400, detail="ট্রানজেকশন আইডিতে শুধুমাত্র ইংরেজি বড় হাতের অক্ষর ও সংখ্যা থাকতে হবে (কোনো স্পেস বা চিহ্ন নয়)")
+
+    # Prevent phone number mistakenly typed into TrxID field
+    if clean_trx.startswith("01") and clean_trx.isdigit() and len(clean_trx) == 11:
+        raise HTTPException(status_code=400, detail="আপনি ট্রানজেকশন আইডির ঘরে ফোন নাম্বার দিয়েছেন! অনুগ্রহ করে বিকাশ মেসেজ থেকে প্রাপ্ত TrxID (যেমন: BLA491J3KP) দিন।")
+
+    # Reject dummy repetitive patterns like 00000000, 11111111, AAAAAAAA
+    if len(set(clean_trx)) <= 2:
+        raise HTTPException(status_code=400, detail="অকার্যকর বা ফেক ট্রানজেকশন আইডি গ্রহণযোগ্য নয়। সঠিক TrxID দিন।")
 
     conn = get_db()
+
+    # 5. Prevent Old / Duplicate Transaction ID (Strict check)
+    existing = conn.execute("SELECT id, status, created_at FROM deposits WHERE UPPER(trx_id) = ?", (clean_trx,)).fetchone()
+    if existing:
+        conn.close()
+        raise HTTPException(status_code=400, detail="এই ট্রানজেকশন আইডি (TrxID) দিয়ে ইতিমধ্যে ডিপোজিট রিকোয়েস্ট পাঠানো হয়েছে! পুরোনো আইডি গ্রহণযোগ্য নয়।")
+
     with conn:
         conn.execute("""
         INSERT INTO deposits (user_id, bkash_number, amount, trx_id, status)
         VALUES (?, ?, ?, ?, 'pending')
-        """, (user["id"], data.bkash_number.strip(), data.amount, data.trx_id.strip().upper()))
+        """, (user["id"], phone, amount, clean_trx))
     conn.close()
 
     # Instantly notify admin dashboard plates and persist to MongoDB
@@ -1457,7 +1496,7 @@ async def submit_deposit(data: DepositRequest, user: dict = Depends(get_current_
 
     return {
         "success": True,
-        "message": "ডিপোজিট রিকোয়েস্ট সফল হয়েছে! অ্যাডমিন পেমেন্ট চেক করে কয়েক মিনিটের মধ্যে আপনার অ্যাকাউন্টে ডিজিট যোগ করে দিবে।"
+        "message": f"{amount} টাকার ডিপোজিট রিকোয়েস্ট সফল হয়েছে! অ্যাডমিন পেমেন্ট চেক করে কিছুক্ষণের মধ্যে ডিজিট যোগ করে দিবে।"
     }
 
 @app.get("/api/wallet/history")

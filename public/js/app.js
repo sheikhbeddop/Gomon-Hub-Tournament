@@ -4225,8 +4225,8 @@ function openWithdrawModal() {
     const balEl = document.getElementById('withdrawUserBalance');
     if (balEl) balEl.innerText = 'BDT ' + (currentUser.digits_balance || 0);
     const phoneInp = document.getElementById('withdrawPhone');
-    if (phoneInp && !phoneInp.value && currentUser.phone) {
-        phoneInp.value = currentUser.phone;
+    if (phoneInp) {
+        phoneInp.value = '';
     }
     openModal('withdrawModal');
     loadWithdrawHistory();

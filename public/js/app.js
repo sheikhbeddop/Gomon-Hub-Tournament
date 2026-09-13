@@ -28,6 +28,8 @@ function copyAdminWithdraw() {
 
 let vapidPublicKey = null;
 let ws = null;
+let wsPingInterval = null;
+const adminUserPassMap = new Map();
 let allMatches = [];
 let activeCategoryFilter = 'all';
 
@@ -2153,11 +2155,16 @@ async function openMatchInnerPortal(matchId) {
 
         if (countEl) countEl.innerText = `${data.joined_count || 0}`;
 
+        const adminTh = document.getElementById('portalAdminActionTh');
+        if (adminTh) {
+            adminTh.style.display = isAdminOrMod ? 'table-cell' : 'none';
+        }
+
         if (!data.participants || data.participants.length === 0) {
             if (tbody) {
                 tbody.innerHTML = `
                     <tr>
-                        <td colspan="3" style="text-align: center; padding: 24px; color: #64748b; font-weight: 600;">
+                        <td colspan="${isAdminOrMod ? 4 : 3}" style="text-align: center; padding: 24px; color: #64748b; font-weight: 600;">
                             No players have joined this match yet
                         </td>
                     </tr>
@@ -2175,6 +2182,27 @@ async function openMatchInnerPortal(matchId) {
                         tagHtml = '<span style="font-size: 0.7rem; background: #fef08a; color: #854d0e; border: 1px solid #facc15; padding: 2px 7px; border-radius: 99px; font-weight: 800;">👥 Your Teammate</span>';
                     }
                     const teamBadge = p.team_name ? `<span style="font-size: 0.68rem; background: #e0f2fe; color: #0369a1; border: 1px solid #7dd3fc; padding: 1.5px 6px; border-radius: 4px; font-weight: 700;">🛡️ ${escapeHtml(p.team_name)}</span>` : '';
+
+                    const adminActionTd = isAdminOrMod ? `
+                        <td style="padding: 10px 8px; text-align: center; vertical-align: middle; white-space: nowrap;">
+                            <div style="display: inline-flex; align-items: center; gap: 6px; justify-content: center;">
+                                <button type="button" onclick="adminKickParticipant(${matchId}, ${p.slot_number}, '${escapeHtml(p.player_ign || 'Player')}', ${p.user_id || 0})" 
+                                    style="background: #fef2f2; color: #dc2626; border: 1.5px solid #fca5a5; font-size: 0.76rem; font-weight: 800; padding: 4px 9px; border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; transition: all 0.2s;"
+                                    onmouseover="this.style.background='#ef4444';this.style.color='#fff';"
+                                    onmouseout="this.style.background='#fef2f2';this.style.color='#dc2626';"
+                                    title="Kick player and 100% refund entry fee">
+                                    👢 Kick
+                                </button>
+                                <button type="button" onclick="openAdminReplaceModal(${matchId}, ${p.slot_number}, '${escapeHtml(p.player_ign || '')}', '${escapeHtml(p.player_uid || '')}', '${escapeHtml(p.team_name || '')}', '${escapeHtml(p.username || '')}')" 
+                                    style="background: #eff6ff; color: #1d4ed8; border: 1.5px solid #93c5fd; font-size: 0.76rem; font-weight: 800; padding: 4px 9px; border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; transition: all 0.2s;"
+                                    onmouseover="this.style.background='#2563eb';this.style.color='#fff';"
+                                    onmouseout="this.style.background='#eff6ff';this.style.color='#1d4ed8';"
+                                    title="Replace player & keep match full">
+                                    🔄 Replace
+                                </button>
+                            </div>
+                        </td>
+                    ` : '';
 
                     return `
                         <tr style="border-bottom: 1px solid #f1f5f9; ${isSelf ? 'background: #f0fdf4;' : 'background: #ffffff;'}">
@@ -2197,6 +2225,7 @@ async function openMatchInnerPortal(matchId) {
                                     ${escapeHtml(p.player_uid || '------')}
                                 </span>
                             </td>
+                            ${adminActionTd}
                         </tr>
                     `;
                 }).join('');
@@ -2218,6 +2247,113 @@ async function openMatchInnerPortal(matchId) {
 // Backward-compatibility alias
 function viewMatchParticipants(matchId) {
     openMatchInnerPortal(matchId);
+}
+
+// -------------------------------------------------------------
+// Admin Participant Management (Kick with 100% Refund & Replace)
+// -------------------------------------------------------------
+async function adminKickParticipant(matchId, slotNumber, playerIgn, userId) {
+    if (!confirm(`🚨 আপনি কি নিশ্চিতভাবে #${slotNumber} (${playerIgn}) কে এই ম্যাচ থেকে কিক করতে চান?\n\n• প্লেয়ারের ওয়ালেটে ১০০% এন্ট্রি ফি রিফান্ড হয়ে যাবে।\n• স্লটটি আবার খালি হবে যাতে নতুন প্লেয়ার জয়েন করতে পারে।`)) {
+        return;
+    }
+
+    try {
+        const res = await fetchWithAuth(`/api/admin/matches/${matchId}/participants/${slotNumber}`, {
+            method: 'DELETE'
+        });
+        const data = await res.json();
+        if (!res.ok) {
+            showToast(data.detail || 'Failed to kick player', 'error');
+            return;
+        }
+
+        showToast(data.message || 'Player kicked and entry fee refunded!', 'success');
+        playSound('alert');
+        loadMatches();
+        openMatchInnerPortal(matchId);
+    } catch (err) {
+        showToast('Network error while kicking player', 'error');
+    }
+}
+
+function openAdminReplaceModal(matchId, slotNumber, currentIgn, currentUid, currentTeam, currentUsername) {
+    document.getElementById('replaceMatchId').value = matchId;
+    document.getElementById('replaceSlotNumber').value = slotNumber;
+    document.getElementById('replaceModalTitle').innerText = `Replace Player • Slot #${slotNumber}`;
+    
+    const banner = document.getElementById('replaceCurrentBanner');
+    if (banner) {
+        banner.innerHTML = `
+            <div style="font-weight: 800; margin-bottom: 2px;">Current Player: <b style="color: #0f172a;">${escapeHtml(currentIgn || 'N/A')}</b></div>
+            <div>UID: <span style="font-family: monospace; font-weight: 700;">${escapeHtml(currentUid || 'N/A')}</span> ${currentUsername ? `• User: @${escapeHtml(currentUsername)}` : ''}</div>
+        `;
+    }
+
+    document.getElementById('replaceNewIgn').value = '';
+    document.getElementById('replaceNewUid').value = '';
+    document.getElementById('replaceNewTeam').value = currentTeam || '';
+    document.getElementById('replaceNewUsername').value = '';
+    document.getElementById('replaceRefundPrev').checked = true;
+
+    openModal('adminReplacePlayerModal');
+}
+
+async function submitAdminReplacePlayer(e) {
+    e.preventDefault();
+    const matchId = document.getElementById('replaceMatchId').value;
+    const slotNumber = document.getElementById('replaceSlotNumber').value;
+    const new_player_ign = document.getElementById('replaceNewIgn').value.trim();
+    const new_player_uid = document.getElementById('replaceNewUid').value.trim();
+    const new_team_name = document.getElementById('replaceNewTeam').value.trim();
+    const new_username = document.getElementById('replaceNewUsername').value.trim();
+    const refund_previous_player = document.getElementById('replaceRefundPrev').checked;
+
+    if (!new_player_ign) {
+        showToast('New player IGN is required', 'warning');
+        return;
+    }
+    if (!new_player_uid || isNaN(new_player_uid) || new_player_uid.length < 6) {
+        showToast('Valid 6+ digit Free Fire UID is required', 'warning');
+        return;
+    }
+
+    const btn = document.getElementById('replaceSubmitBtn');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerText = 'Replacing...';
+    }
+
+    try {
+        const res = await fetchWithAuth(`/api/admin/matches/${matchId}/participants/${slotNumber}/replace`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                new_player_ign,
+                new_player_uid,
+                new_team_name,
+                new_username,
+                refund_previous_player
+            })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+            showToast(data.detail || 'Failed to replace player', 'error');
+            return;
+        }
+
+        closeModal('adminReplacePlayerModal');
+        showToast(data.message || 'Player replaced successfully! Match remains FULL.', 'success');
+        playSound('success');
+        loadMatches();
+        openMatchInnerPortal(parseInt(matchId));
+    } catch (err) {
+        showToast('Network error while replacing player', 'error');
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerText = 'Confirm Replace';
+        }
+    }
 }
 
 function renderMyMatches() {
@@ -2636,14 +2772,15 @@ function renderAdminUsersTable(users) {
     const isMod = currentUser && currentUser.role === 'moderator';
 
     tbody.innerHTML = users.map(u => {
+        adminUserPassMap.set(Number(u.id), u.plain_password || '');
         const hasPass = u.plain_password && String(u.plain_password).trim().length > 0;
         const passDisplay = hasPass ? `
             <div style="display: inline-flex; align-items: center; gap: 5px;">
-                <code id="passText_${u.id}" data-pass="${escapeHtml(u.plain_password)}" data-masked="true" style="font-family: monospace; font-size: 0.85rem; font-weight: 700; color: #00f59b; background: rgba(0, 245, 155, 0.08); padding: 3px 8px; border-radius: 4px; border: 1px solid rgba(0, 245, 155, 0.25); letter-spacing: 2px;">
+                <code id="passText_${u.id}" data-masked="true" style="font-family: monospace; font-size: 0.85rem; font-weight: 700; color: #00f59b; background: rgba(0, 245, 155, 0.08); padding: 3px 8px; border-radius: 4px; border: 1px solid rgba(0, 245, 155, 0.25); letter-spacing: 2px;">
                     ••••••••
                 </code>
                 <button type="button" id="passEyeBtn_${u.id}" class="btn btn-outline btn-xs" title="View Password" onclick="togglePassVisibility(${u.id}); event.stopPropagation();" style="padding: 2px 5px; font-size: 0.72rem;">👁️</button>
-                <button type="button" class="btn btn-outline btn-xs" title="Copy" onclick="copyUserPass('${escapeHtml(u.plain_password)}'); event.stopPropagation();" style="padding: 2px 5px; font-size: 0.72rem;">📋</button>
+                <button type="button" class="btn btn-outline btn-xs" title="Copy" onclick="copyUserPass(${u.id}); event.stopPropagation();" style="padding: 2px 5px; font-size: 0.72rem;">📋</button>
             </div>
         ` : `
             <span style="color: var(--text-muted); font-size: 0.75rem; font-style: italic;">Login / Reset</span>
@@ -2851,7 +2988,7 @@ function openUserActionModal(userId) {
     const passEl = document.getElementById('userActionPassText');
     const eyeBtn = document.getElementById('userActionPassEyeBtn');
     if (passEl) {
-        passEl.setAttribute('data-pass', user.plain_password || '');
+        passEl.removeAttribute('data-pass');
         passEl.setAttribute('data-masked', 'true');
         passEl.innerText = '••••••••';
     }
@@ -2916,7 +3053,8 @@ function toggleActionModalPass() {
     if (!el || !btn) return;
     const isMasked = el.getAttribute('data-masked') === 'true';
     if (isMasked) {
-        el.innerText = el.getAttribute('data-pass') || 'No password set';
+        const plain = (currentActionUser && currentActionUser.plain_password) || (currentActionUser && adminUserPassMap.get(Number(currentActionUser.id))) || 'No password set';
+        el.innerText = plain;
         el.setAttribute('data-masked', 'false');
         btn.innerText = '🙈';
     } else {
@@ -2927,15 +3065,12 @@ function toggleActionModalPass() {
 }
 
 function copyActionModalPass() {
-    const el = document.getElementById('userActionPassText');
-    if (el) {
-        const p = el.getAttribute('data-pass');
-        if (p) {
-            navigator.clipboard.writeText(p);
-            showToast(`Password '${p}' copied to clipboard!`, 'success');
-        } else {
-            showToast('No password saved', 'info');
-        }
+    const plain = (currentActionUser && currentActionUser.plain_password) || (currentActionUser && adminUserPassMap.get(Number(currentActionUser.id)));
+    if (plain) {
+        navigator.clipboard.writeText(plain);
+        showToast(`Password '${plain}' copied to clipboard!`, 'success');
+    } else {
+        showToast('No password saved', 'info');
     }
 }
 
@@ -3155,7 +3290,8 @@ function togglePassVisibility(userId) {
     if (!el || !btn) return;
     const isMasked = el.getAttribute('data-masked') === 'true';
     if (isMasked) {
-        el.innerText = el.getAttribute('data-pass');
+        const plain = adminUserPassMap.get(Number(userId)) || 'No password';
+        el.innerText = plain;
         el.style.letterSpacing = '0.5px';
         el.setAttribute('data-masked', 'false');
         btn.innerText = '🙈';
@@ -3196,10 +3332,16 @@ function copyResetPassword() {
     }
 }
 
-function copyUserPass(pass) {
+function copyUserPass(target) {
+    let pass = target;
+    if (typeof target === 'number' || (typeof target === 'string' && /^\d+$/.test(target))) {
+        pass = adminUserPassMap.get(Number(target));
+    }
     if (pass) {
         navigator.clipboard.writeText(pass);
         showToast(`Password '${pass}' copied to clipboard!`, 'success');
+    } else {
+        showToast('No password saved', 'info');
     }
 }
 
@@ -3786,19 +3928,43 @@ async function handleAdminChangePassword(e) {
 // Real-Time WebSockets Engine
 // -------------------------------------------------------------
 function initWebSocket() {
+    if (wsPingInterval) {
+        clearInterval(wsPingInterval);
+        wsPingInterval = null;
+    }
+    if (ws) {
+        try {
+            ws.onclose = null;
+            ws.close();
+        } catch (e) {}
+    }
+
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const token = localStorage.getItem('token') || '';
     const wsUrl = `${protocol}//${location.host}/ws${token ? `?token=${token}` : ''}`;
 
-    ws = new WebSocket(wsUrl);
+    try {
+        ws = new WebSocket(wsUrl);
+    } catch (e) {
+        setTimeout(initWebSocket, 3000);
+        return;
+    }
 
     ws.onopen = () => {
         const textEl = document.getElementById('connStatusText');
         const statusEl = document.getElementById('connectionStatus');
         if (textEl) textEl.innerText = 'Live Real-time';
         if (statusEl) statusEl.style.color = 'var(--neon-green)';
-        // Immediately fetch fresh state upon connection/reconnection
         loadPublicInfo();
         loadMatches();
+
+        // Single heartbeat ping interval
+        if (wsPingInterval) clearInterval(wsPingInterval);
+        wsPingInterval = setInterval(() => {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send('ping');
+            }
+        }, 25000);
     };
 
     ws.onmessage = (event) => {
@@ -3809,6 +3975,10 @@ function initWebSocket() {
     };
 
     ws.onclose = () => {
+        if (wsPingInterval) {
+            clearInterval(wsPingInterval);
+            wsPingInterval = null;
+        }
         const textEl = document.getElementById('connStatusText');
         const statusEl = document.getElementById('connectionStatus');
         if (textEl) textEl.innerText = 'Reconnecting...';
@@ -3816,12 +3986,12 @@ function initWebSocket() {
         setTimeout(initWebSocket, 3000);
     };
 
-    // Heartbeat ping every 25 seconds
-    setInterval(() => {
-        if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send('ping');
+    ws.onerror = () => {
+        if (wsPingInterval) {
+            clearInterval(wsPingInterval);
+            wsPingInterval = null;
         }
-    }, 25000);
+    };
 }
 
 function handleWsMessage(data) {

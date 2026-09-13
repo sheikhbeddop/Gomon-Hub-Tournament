@@ -117,6 +117,45 @@ function showToast(message, type = 'info') {
     }, 4500);
 }
 
+// -------------------------------------------------------------
+// Universal API Request Helper
+// -------------------------------------------------------------
+async function apiRequest(endpoint, method = 'GET', body = null) {
+    const headers = {};
+    const activeToken = token || localStorage.getItem('token') || localStorage.getItem('ff_token');
+    if (activeToken) {
+        headers['Authorization'] = `Bearer ${activeToken}`;
+    }
+    if (body && !(body instanceof FormData)) {
+        headers['Content-Type'] = 'application/json';
+    }
+
+    const options = {
+        method,
+        headers
+    };
+    if (body) {
+        options.body = (body instanceof FormData) ? body : JSON.stringify(body);
+    }
+
+    const res = await fetch(endpoint, options);
+    let data;
+    try {
+        data = await res.json();
+    } catch (e) {
+        data = { success: res.ok, status: res.status };
+    }
+
+    if (!res.ok) {
+        const errorMsg = data.detail || data.message || `Request failed (${res.status})`;
+        const err = new Error(errorMsg);
+        err.status = res.status;
+        err.data = data;
+        throw err;
+    }
+    return data;
+}
+
 let splashMinTimePassed = false;
 let splashDismissRequested = false;
 
@@ -1958,14 +1997,79 @@ function joinMatch(matchId, entryFee) {
 async function handleDepositSubmit(e) {
     e.preventDefault();
     if (!currentUser) {
-        showToast('Please sign in before making a deposit', 'info');
+        showToast('ডিপোজিট করার আগে অনুগ্রহ করে সাইন ইন করুন', 'info');
         openModal('authModal');
         return;
     }
 
-    const bkash_number = document.getElementById('depSenderPhone').value.trim();
-    const amount = parseInt(document.getElementById('depAmount').value);
-    const trx_id = document.getElementById('depTrxId').value.trim();
+    const form = e.target;
+    // Find inputs within the specifically submitted form
+    const phoneInput = form.querySelector('[name="bkash_number"]') || 
+                       form.querySelector('#modalDepSenderPhone') || 
+                       form.querySelector('#shopDepSenderPhone') ||
+                       form.querySelector('#depSenderPhone') ||
+                       form.querySelector('input[type="text"][maxlength="11"]');
+                       
+    const amountInput = form.querySelector('[name="amount"]') || 
+                        form.querySelector('#modalDepAmount') || 
+                        form.querySelector('#shopDepAmount') ||
+                        form.querySelector('#depAmount') ||
+                        form.querySelector('input[type="number"]');
+                        
+    const trxInput = form.querySelector('[name="trx_id"]') || 
+                     form.querySelector('#modalDepTrxId') || 
+                     form.querySelector('#shopDepTrxId') ||
+                     form.querySelector('#depTrxId') ||
+                     form.querySelector('input[placeholder*="BL"]');
+
+    const rawPhone = phoneInput ? phoneInput.value.trim().replace(/\s+/g, '').replace(/-/g, '') : '';
+    const bkash_number = rawPhone.startsWith('+88') ? rawPhone.slice(3) : rawPhone;
+    const amount = amountInput ? parseInt(amountInput.value) : 0;
+    const trx_id = trxInput ? trxInput.value.trim().toUpperCase().replace(/\s+/g, '') : '';
+
+    // Frontend validations with helpful Bengali feedback
+    if (!bkash_number || !/^01[3-9]\d{8}$/.test(bkash_number)) {
+        showToast('সঠিক ১১ ডিজিটের বিকাশ নাম্বার দিন (যেমন: 017XXXXXXXX)', 'error');
+        if (phoneInput) phoneInput.focus();
+        return;
+    }
+
+    if (!amount || amount < 10) {
+        showToast('ডিপোজিটের জন্য সর্বনিম্ন পরিমাণ ১০ টাকা', 'error');
+        if (amountInput) amountInput.focus();
+        return;
+    }
+
+    if (amount > 25000) {
+        showToast('একবারে সর্বোচ্চ ডিপোজিট পরিমাণ ২৫,০০০ টাকা', 'error');
+        if (amountInput) amountInput.focus();
+        return;
+    }
+
+    if (!trx_id || trx_id.length < 8 || trx_id.length > 16) {
+        showToast('বিকাশ ট্রানজেকশন আইডি (TrxID) সাধারণত ৮ থেকে ১২ ক্যারেক্টারের হয় (যেমন: BLA491J3KP)', 'error');
+        if (trxInput) trxInput.focus();
+        return;
+    }
+
+    if (!/^[A-Z0-9]{8,16}$/.test(trx_id)) {
+        showToast('ট্রানজেকশন আইডিতে শুধুমাত্র ইংরেজি বড় হাতের অক্ষর ও সংখ্যা দিন (কোনো স্পেস বা চিহ্ন নয়)', 'error');
+        if (trxInput) trxInput.focus();
+        return;
+    }
+
+    if (/^01\d{9}$/.test(trx_id)) {
+        showToast('আপনি ট্রানজেকশন আইডির ঘরে ফোন নাম্বার দিয়েছেন! বিকাশ ফিরতি মেসেজ থেকে TrxID দিন।', 'error');
+        if (trxInput) trxInput.focus();
+        return;
+    }
+
+    const submitBtn = form.querySelector('button[type="submit"]');
+    const originalBtnContent = submitBtn ? submitBtn.innerHTML : '';
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '⏳ ভেরিফাই হচ্ছে...';
+    }
 
     try {
         const res = await fetch('/api/wallet/deposit', {
@@ -1981,13 +2085,26 @@ async function handleDepositSubmit(e) {
         if (res.ok) {
             playSound('coin');
             showToast(data.message, 'success');
-            document.getElementById('depositForm').reset();
+            form.reset();
+            // Reset both forms so inputs are clean everywhere
+            document.querySelectorAll('#depositForm, #shopDepositForm, #modalDepositForm').forEach(f => {
+                try { f.reset(); } catch(err) {}
+            });
             loadWalletHistory();
+            // Close modal if open
+            if (typeof closeModal === 'function') {
+                closeModal('depositModal');
+            }
         } else {
-            showToast(data.detail || 'Deposit request failed', 'error');
+            showToast(data.detail || 'ডিপোজিট রিকোয়েস্ট সম্পন্ন হয়নি', 'error');
         }
     } catch (e) {
-        showToast('Unable to connect to server', 'error');
+        showToast('সার্ভারের সাথে সংযোগ করা যাচ্ছে না। কিছুক্ষণ পর আবার চেষ্টা করুন।', 'error');
+    } finally {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalBtnContent;
+        }
     }
 }
 
@@ -2007,22 +2124,26 @@ async function loadWalletHistory() {
 }
 
 function renderDepositHistory(deposits) {
-    const tbody = document.getElementById('depositHistoryBody');
-    if (!tbody) return;
+    const targets = document.querySelectorAll('#depositHistoryBody, #modalDepositHistoryBody, .deposit-history-body');
+    if (!targets || targets.length === 0) return;
 
+    let content = '';
     if (!deposits || deposits.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted);">No deposit history found</td></tr>`;
-        return;
+        content = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 14px;">No deposit history found</td></tr>`;
+    } else {
+        content = deposits.map(d => `
+            <tr>
+                <td>${d.created_at ? d.created_at.split(' ')[0] : '-'}</td>
+                <td style="font-weight: 700; color: var(--neon-amber);">${d.amount} 🪙</td>
+                <td style="font-family: monospace; font-weight: 700; color: #0284c7;">${escapeHtml(d.trx_id)}</td>
+                <td><span class="badge-status ${d.status}">${d.status}</span></td>
+            </tr>
+        `).join('');
     }
 
-    tbody.innerHTML = deposits.map(d => `
-        <tr>
-            <td>${d.created_at.split(' ')[0]}</td>
-            <td style="font-weight: 700; color: var(--neon-amber);">${d.amount} 🪙</td>
-            <td style="font-family: monospace;">${escapeHtml(d.trx_id)}</td>
-            <td><span class="badge-status ${d.status}">${d.status}</span></td>
-        </tr>
-    `).join('');
+    targets.forEach(tbody => {
+        tbody.innerHTML = content;
+    });
 }
 
 function copyBkashNumber() {

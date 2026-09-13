@@ -21,21 +21,12 @@
             pointer-events: none !important;
         }
 
-        /* Main App is only visible when authenticated */
-        body.not-authenticated #mainAppWrapper {
-            display: none !important;
-        }
-        body.authenticated #mainAppWrapper {
+        /* Main App is always visible on load/refresh */
+        #mainAppWrapper {
             display: block !important;
         }
         #authModal:not(.show),
         .auth-modal-overlay:not(.show) {
-            display: none !important;
-        }
-
-        /* Prevent closing or dismissing auth modal without logging in */
-        #authModal .auth-close-btn,
-        #authModal .signup-close-btn {
             display: none !important;
         }
 
@@ -703,11 +694,11 @@
         }
     </style>
 
-<body class="not-authenticated">
+<body>
 
     <!-- IN-APP SPLASH SCREEN REMOVED PER USER REQUEST -->
     <!-- MAIN APP WRAPPER -->
-    <div id="mainAppWrapper">
+    <div id="mainAppWrapper" style="display: block;">
 
     <!-- Top Navbar -->
     <header class="navbar">
@@ -2325,7 +2316,7 @@
     </div>
 
     <!-- MODAL 1: AUTH (LOGIN & REGISTER - USER MOCKUP DESIGN) -->
-    <div class="modal-overlay auth-modal-overlay show" id="authModal">
+    <div class="modal-overlay auth-modal-overlay" id="authModal">
         <!-- 1. SIGN IN VIEW (User Mockup 1: GOMON HUB Circle Logo) -->
         <div class="auth-card" id="authLoginCard">
             <!-- Top Overlapping Circular Avatar -->

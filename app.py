@@ -314,10 +314,12 @@ def init_db():
             slot_number INTEGER,
             player_ign TEXT DEFAULT '',
             player_uid TEXT DEFAULT '',
+            team_name TEXT DEFAULT '',
+            is_leader INTEGER DEFAULT 1,
             joined_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (match_id) REFERENCES matches(id) ON DELETE CASCADE,
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-            UNIQUE(match_id, user_id)
+            UNIQUE(match_id, slot_number)
         );
 
         CREATE TABLE IF NOT EXISTS deposits (
@@ -396,15 +398,49 @@ def init_db():
         );
         """)
 
-        # Migration: Ensure player_ign and player_uid columns exist in participations table
+        # Migration: Ensure player_ign, player_uid, team_name, is_leader columns exist in participations table
         for col, ctype in [
             ("player_ign", "TEXT DEFAULT ''"),
-            ("player_uid", "TEXT DEFAULT ''")
+            ("player_uid", "TEXT DEFAULT ''"),
+            ("team_name", "TEXT DEFAULT ''"),
+            ("is_leader", "INTEGER DEFAULT 1")
         ]:
             try:
                 conn.execute(f"ALTER TABLE participations ADD COLUMN {col} {ctype}")
             except Exception:
                 pass
+
+        # Migration: Ensure participations allows multiple slots per user for team bookings (UNIQUE on match_id, slot_number)
+        try:
+            tbl_sql_row = conn.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='participations'").fetchone()
+            if tbl_sql_row and "UNIQUE(MATCH_ID,USER_ID)" in re.sub(r'\s+', '', (tbl_sql_row[0] or '').upper()):
+                conn.execute("PRAGMA foreign_keys=OFF;")
+                conn.execute("""
+                CREATE TABLE participations_temp (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    match_id INTEGER NOT NULL,
+                    user_id INTEGER NOT NULL,
+                    slot_number INTEGER,
+                    player_ign TEXT DEFAULT '',
+                    player_uid TEXT DEFAULT '',
+                    team_name TEXT DEFAULT '',
+                    is_leader INTEGER DEFAULT 1,
+                    joined_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (match_id) REFERENCES matches(id) ON DELETE CASCADE,
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                    UNIQUE(match_id, slot_number)
+                );
+                """)
+                conn.execute("""
+                INSERT INTO participations_temp (id, match_id, user_id, slot_number, player_ign, player_uid, team_name, is_leader, joined_at)
+                SELECT id, match_id, user_id, slot_number, COALESCE(player_ign, ''), COALESCE(player_uid, ''), COALESCE(team_name, ''), COALESCE(is_leader, 1), joined_at 
+                FROM participations;
+                """)
+                conn.execute("DROP TABLE participations;")
+                conn.execute("ALTER TABLE participations_temp RENAME TO participations;")
+                conn.execute("PRAGMA foreign_keys=ON;")
+        except Exception as e:
+            print(f"[Participations Migration Notice] {e}")
 
         # Migration: Ensure email and plain_password columns exist in users table
         try:
@@ -775,10 +811,17 @@ class PublishMatchResultsRequest(BaseModel):
     match_id: Optional[int] = None
     results: List[PlayerResultItem]
 
+class TeammateInput(BaseModel):
+    player_ign: str
+    player_uid: str
+
 class JoinMatchRequest(BaseModel):
     match_id: Optional[int] = None
     player_ign: Optional[str] = None
     player_uid: Optional[str] = None
+    team_name: Optional[str] = None
+    entry_type: Optional[str] = "solo"
+    teammates: Optional[List[TeammateInput]] = []
 
 class AdminMatchCreate(BaseModel):
     title: str
@@ -1290,14 +1333,17 @@ def get_my_matches(user: dict = Depends(get_current_user)):
     rows = conn.execute("""
     SELECT m.*,
            (SELECT COUNT(*) FROM participations p2 WHERE p2.match_id = m.id) as joined_count,
-           p.slot_number as my_slot,
+           MIN(p.slot_number) as my_slot,
+           (SELECT GROUP_CONCAT(slot_number, ', ') FROM participations WHERE match_id = m.id AND user_id = ?) as my_slots,
            p.player_ign as my_ign,
-           p.player_uid as my_uid
+           p.player_uid as my_uid,
+           p.team_name as my_team
     FROM matches m
     JOIN participations p ON p.match_id = m.id
     WHERE p.user_id = ?
+    GROUP BY m.id
     ORDER BY m.status = 'upcoming' DESC, m.match_time ASC
-    """, (user_id,)).fetchall()
+    """, (user_id, user_id)).fetchall()
     conn.close()
     
     matches = []
@@ -1330,6 +1376,8 @@ def get_match_participants_for_player(match_id: int, user: dict = Depends(get_cu
         SELECT p.slot_number,
                COALESCE(NULLIF(p.player_ign, ''), u.ff_ign, u.username) as player_ign,
                COALESCE(NULLIF(p.player_uid, ''), u.ff_uid) as player_uid,
+               COALESCE(p.team_name, '') as team_name,
+               COALESCE(p.is_leader, 1) as is_leader,
                p.joined_at,
                (p.user_id = ?) as is_self
         FROM participations p
@@ -1361,6 +1409,8 @@ async def join_match(data: Optional[JoinMatchRequest] = None, match_id: Optional
 
     req_ign = (data.player_ign.strip() if data and data.player_ign else "").strip()
     req_uid = (data.player_uid.strip() if data and data.player_uid else "").strip()
+    team_name = (data.team_name.strip() if data and data.team_name else "").strip()
+    raw_teammates = data.teammates if (data and data.teammates) else []
 
     player_ign = req_ign or user.get("ff_ign") or user.get("username")
     player_uid = req_uid or user.get("ff_uid")
@@ -1369,6 +1419,19 @@ async def join_match(data: Optional[JoinMatchRequest] = None, match_id: Optional
         raise HTTPException(status_code=400, detail="ইন-গেম নাম (In-Game Name) দেওয়া আবশ্যক")
     if not player_uid or not str(player_uid).isdigit() or len(str(player_uid)) < 6:
         raise HTTPException(status_code=400, detail="সঠিক ফ্রি ফায়ার ইউআইডি (UID) দেওয়া আবশ্যক (কমপক্ষে ৬ ডিজিটের সংখ্যা)")
+
+    # Validate teammate details if booking for multiple slots
+    valid_teammates = []
+    for idx, tm in enumerate(raw_teammates):
+        t_ign = str(tm.player_ign or "").strip()
+        t_uid = str(tm.player_uid or "").strip()
+        if not t_ign:
+            raise HTTPException(status_code=400, detail=f"প্লেয়ার {idx + 2} এর ইন-গেম নাম (IGN) দেওয়া আবশ্যক")
+        if not t_uid or not t_uid.isdigit() or len(t_uid) < 6:
+            raise HTTPException(status_code=400, detail=f"প্লেয়ার {idx + 2} এর সঠিক Free Fire UID দেওয়া আবশ্যক (কমপক্ষে ৬ ডিজিটের সংখ্যা)")
+        valid_teammates.append({"player_ign": t_ign, "player_uid": t_uid})
+
+    num_slots = 1 + len(valid_teammates)
 
     conn = get_db()
     try:
@@ -1389,31 +1452,46 @@ async def join_match(data: Optional[JoinMatchRequest] = None, match_id: Optional
                 raise HTTPException(status_code=400, detail="You have already joined this match!")
 
             joined_count = conn.execute("SELECT COUNT(*) FROM participations WHERE match_id = ?", (match_id,)).fetchone()[0]
-            if joined_count >= match["total_slots"]:
-                raise HTTPException(status_code=400, detail="Match is full! No slots available.")
-
-            user_fresh = conn.execute("SELECT digits_balance FROM users WHERE id = ?", (user_id,)).fetchone()
-            if user_fresh["digits_balance"] < match["entry_fee"]:
+            remaining_slots = match["total_slots"] - joined_count
+            if num_slots > remaining_slots:
                 raise HTTPException(
-                    status_code=400,
-                    detail=f"পর্যাপ্ত ডিজিট নেই! (Insufficient Digits). এই ম্যাচে জয়েন করতে {match['entry_fee']} ডিজিট লাগবে। আপনার ব্যালেন্স {user_fresh['digits_balance']} ডিজিট। অনুগ্রহ করে bKash দিয়ে রিচার্জ করুন।"
+                    status_code=400, 
+                    detail=f"ম্যাচে মাত্র {remaining_slots}টি স্লট খালি আছে! আপনি {num_slots}টি স্লট বুক করতে পারবেন না।"
                 )
 
-            new_balance = user_fresh["digits_balance"] - match["entry_fee"]
+            total_fee = match["entry_fee"] * num_slots
+            user_fresh = conn.execute("SELECT digits_balance FROM users WHERE id = ?", (user_id,)).fetchone()
+            if user_fresh["digits_balance"] < total_fee:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"পর্যাপ্ত ডিজিট নেই! (Insufficient Digits). {num_slots}টি স্লটের মোট ফি {total_fee} ডিজিট। আপনার ব্যালেন্স {user_fresh['digits_balance']} ডিজিট। অনুগ্রহ করে bKash দিয়ে রিচার্জ করুন।"
+                )
+
+            new_balance = user_fresh["digits_balance"] - total_fee
             conn.execute("UPDATE users SET digits_balance = ? WHERE id = ?", (new_balance, user_id))
 
-            # Fixed and immutable sequential slot assignment (1, 2, 3...)
-            slot_num = joined_count + 1
+            # Sequential slot assignment for leader and all teammates
+            leader_slot = joined_count + 1
             conn.execute("""
-            INSERT INTO participations (match_id, user_id, slot_number, player_ign, player_uid)
-            VALUES (?, ?, ?, ?, ?)
-            """, (match_id, user_id, slot_num, player_ign, str(player_uid)))
+            INSERT INTO participations (match_id, user_id, slot_number, player_ign, player_uid, team_name, is_leader)
+            VALUES (?, ?, ?, ?, ?, ?, 1)
+            """, (match_id, user_id, leader_slot, player_ign, str(player_uid), team_name))
+
+            assigned_slots = [leader_slot]
+            for i, tm in enumerate(valid_teammates):
+                tm_slot = leader_slot + 1 + i
+                assigned_slots.append(tm_slot)
+                conn.execute("""
+                INSERT INTO participations (match_id, user_id, slot_number, player_ign, player_uid, team_name, is_leader)
+                VALUES (?, ?, ?, ?, ?, ?, 0)
+                """, (match_id, user_id, tm_slot, tm["player_ign"], str(tm["player_uid"]), team_name))
 
             m_code = match["match_code"] if ("match_code" in match.keys() and match["match_code"]) else f"MATCH-{match_id}"
+            slot_desc = f"Slot #{leader_slot}" if num_slots == 1 else f"Slots #{leader_slot}-#{assigned_slots[-1]}"
             conn.execute("""
             INSERT INTO audit_logs (admin_id, target_user_id, action, amount, reason)
             VALUES (NULL, ?, 'MATCH_ENTRY_FEE', ?, ?)
-            """, (user_id, -match["entry_fee"], f"Joined Match #{m_code} (Slot #{slot_num}): {match['title']}"))
+            """, (user_id, -total_fee, f"Joined Match #{m_code} ({slot_desc}): {match['title']}"))
 
     except HTTPException:
         conn.close()
@@ -1425,7 +1503,7 @@ async def join_match(data: Optional[JoinMatchRequest] = None, match_id: Optional
     await manager.broadcast({
         "type": "MATCH_SLOT_UPDATE",
         "match_id": match_id,
-        "new_joined_count": joined_count + 1
+        "new_joined_count": joined_count + num_slots
     })
 
     await manager.send_to_user(user_id, {
@@ -1434,15 +1512,19 @@ async def join_match(data: Optional[JoinMatchRequest] = None, match_id: Optional
     })
 
     conn.close()
+    slot_msg = f"#{leader_slot}" if num_slots == 1 else f"#{leader_slot} থেকে #{assigned_slots[-1]}"
     return {
         "success": True,
         "match_id": match_id,
         "match_code": m_code,
-        "message": f"সফলভাবে জয়েন হয়েছেন! আপনার নির্ধারিত স্থায়ী স্লট নম্বর: #{slot_num}",
+        "message": f"সফলভাবে জয়েন হয়েছেন! আপনার নির্ধারিত স্লট: {slot_msg}",
         "new_balance": new_balance,
-        "slot_number": slot_num,
+        "slot_number": leader_slot,
+        "assigned_slots": assigned_slots,
+        "num_slots": num_slots,
         "player_ign": player_ign,
         "player_uid": player_uid,
+        "team_name": team_name,
         "room_id": match["room_id"] if match["room_id"] else "খেলার ১০ মিনিট আগে রিলিজ হবে",
         "room_pass": match["room_pass"] if match["room_pass"] else "খেলার ১০ মিনিট আগে রিলিজ হবে"
     }
@@ -2533,6 +2615,8 @@ def admin_get_match_participants(match_id: int, admin: dict = Depends(verify_mod
            COALESCE(NULLIF(p.player_ign, ''), u.ff_ign, u.username) as ff_ign,
            COALESCE(NULLIF(p.player_uid, ''), u.ff_uid) as ff_uid,
            p.slot_number,
+           COALESCE(p.is_leader, 1) as is_leader,
+           COALESCE(p.team_name, '') as team_name,
            COALESCE(mr.rank_position, 0) as rank_position,
            COALESCE(mr.kills, 0) as kills,
            COALESCE(mr.rank_prize, 0) as rank_prize,

@@ -343,8 +343,10 @@ async function initAuth() {
             const data = await res.json();
             alert(data.detail || "🚨 Your account has been banned from GOMON HUB!");
             logout(false);
-        } else if (res.status === 401) {
+        } else if (res.status === 401 || res.status === 404) {
             logout(false);
+            setAuthMode('login');
+            openModal('authModal');
         }
     } catch (e) {
         console.warn('Network issue during auth check. Keeping cached login session intact.', e);
@@ -3119,6 +3121,7 @@ async function confirmDeleteUser(userId, username) {
     if (!confirm(`🚨 WARNING: Are you sure you want to permanently delete @${username}?\n\nAll player data, tournament records, and wallet balances will be permanently deleted and cannot be recovered!`)) {
         return;
     }
+    showToast(`Deleting @${username}...`, 'info');
     try {
         const res = await fetch(`/api/admin/users/${userId}`, {
             method: 'DELETE',
@@ -3128,6 +3131,7 @@ async function confirmDeleteUser(userId, username) {
         if (res.ok) {
             closeModal('adminUserActionModal');
             showToast(`Account @${data.deleted_username || username} has been permanently deleted!`, 'success');
+            playSound('alert');
             loadAdminUsers();
             loadAdminOverview();
         } else {
@@ -3898,6 +3902,10 @@ function handleWsMessage(data) {
     } else if (data.type === 'USER_BANNED_ALERT') {
         playSound('alert');
         showBanAlertToast(data.username);
+    } else if (data.type === 'ACCOUNT_DELETED_KICK') {
+        logout(false);
+        showToast('⚠️ ' + (data.message || 'আপনার অ্যাকাউন্টটি ডিলিট করা হয়েছে।'), 'error');
+        alert('⚠️ আপনার অ্যাকাউন্টটি অ্যাডমিন দ্বারা সম্পূর্ণ ডিলিট করা হয়েছে।');
     } else if (data.type === 'ACCOUNT_BANNED_KICK') {
         logout(false);
         showToast('🚨 ' + data.message, 'error');

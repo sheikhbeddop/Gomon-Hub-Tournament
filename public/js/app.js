@@ -1021,13 +1021,13 @@ const MATCH_CATEGORIES_CONFIG = [
     {
         id: 'cs_4v4',
         group: 'BONUS and Clash Squad Matches',
-        title: '4 VS 4 CS 4V4 - MATCH',
-        shortName: 'CS 4v4',
-        tag: 'CS 4V4',
+        title: 'CLASH SQUAD',
+        shortName: 'Clash Squad',
+        tag: 'CLASH SQUAD',
         matches(m) {
             const t = (m.match_type || '').toLowerCase();
             const title = (m.title || '').toLowerCase();
-            if (t.includes('cs') || t.includes('clash') || t.includes('4v4')) return true;
+            if (t.includes('cs') || t.includes('clash') || t.includes('4v4') || t.includes('1v1') || t.includes('2v2') || t.includes('3v3')) return true;
             if (t.includes('squad') && !title.includes('survival')) return true;
             return false;
         }
@@ -1279,13 +1279,13 @@ function getCategoryBannerSvg(catId) {
   <path d="M-20 150 C20 115, 60 120, 100 142 C140 110, 190 118, 230 140 C270 112, 310 120, 350 138 C380 115, 410 125, 430 150 Z" fill="#1c0700" opacity="0.88"/>
   <path d="M-10 150 C30 125, 80 128, 120 146 C160 124, 220 128, 260 146 C300 126, 360 132, 400 150 Z" fill="#0c0300" opacity="0.95"/>
   <rect x="22" y="24" width="70" height="25" rx="12.5" fill="#facc15" stroke="#000000" stroke-width="2" filter="url(#shadow_cs)"/>
-  <text x="57" y="41.5" font-family="'Arial Black', Impact, sans-serif" font-size="12.5" font-weight="900" text-anchor="middle" fill="#000000">4 VS 4</text>
+  <text x="57" y="41" font-family="'Arial Black', Impact, sans-serif" font-size="10.5" font-weight="900" text-anchor="middle" fill="#000000">1V1 - 4V4</text>
   <rect x="288" y="24" width="70" height="25" rx="12.5" fill="#facc15" stroke="#000000" stroke-width="2" filter="url(#shadow_cs)"/>
-  <text x="323" y="41.5" font-family="'Arial Black', Impact, sans-serif" font-size="12.5" font-weight="900" text-anchor="middle" fill="#000000">4 VS 4</text>
+  <text x="323" y="41" font-family="'Arial Black', Impact, sans-serif" font-size="10.5" font-weight="900" text-anchor="middle" fill="#000000">1V1 - 4V4</text>
   <circle cx="190" cy="32" r="18" fill="#ffffff" stroke="#1c1917" stroke-width="2" filter="url(#shadow_cs)"/>
   <circle cx="190" cy="32" r="15" fill="#fef08a"/>
   <text x="190" y="37" font-family="'Arial Black', Impact, sans-serif" font-size="15" text-anchor="middle" fill="#0f172a">⚔️</text>
-  <text x="190" y="74" font-family="'Rajdhani', 'Arial Black', Impact, sans-serif" font-size="22" font-weight="900" text-anchor="middle" fill="url(#gold_cs)" stroke="#451a03" stroke-width="1.8" letter-spacing="1.2" filter="url(#shadow_cs)">CS 4V4 - MATCH</text>
+  <text x="190" y="74" font-family="'Rajdhani', 'Arial Black', Impact, sans-serif" font-size="23" font-weight="900" text-anchor="middle" fill="url(#gold_cs)" stroke="#451a03" stroke-width="1.8" letter-spacing="1.5" filter="url(#shadow_cs)">CLASH SQUAD</text>
   <text x="190" y="94" font-family="'Rajdhani', Arial, sans-serif" font-size="11.5" font-weight="800" text-anchor="middle" fill="#ffffff" stroke="#000000" stroke-width="0.6" letter-spacing="3.5" filter="url(#shadow_cs)">GOMON HUB</text>
   <text x="190" y="122" font-family="'Arial Black', Impact, sans-serif" font-size="20" font-weight="900" text-anchor="middle" fill="#ffffff" stroke="#000000" stroke-width="1.2" letter-spacing="3" filter="url(#shadow_cs)">FREE FIRE</text>
 </svg>`;
@@ -3913,7 +3913,7 @@ function renderAdminMatchHistory() {
             br_survival: 'BR Survival',
             lone_wolf: 'Lone Wolf',
             bonus_match: 'Bonus Match',
-            cs_4v4: 'CS 4v4'
+            cs_4v4: 'Clash Squad'
         };
         const curLabel = catLabels[activeHistoryCatFilter] || 'এই ক্যাটাগরি';
 
@@ -3941,7 +3941,7 @@ function renderAdminMatchHistory() {
             br_survival: '<span class="admin-history-badge admin-history-badge-survival">🛡️ BR Survival</span>',
             lone_wolf: '<span class="admin-history-badge admin-history-badge-lone">🐺 Lone Wolf</span>',
             bonus_match: '<span class="admin-history-badge admin-history-badge-bonus">🎁 Bonus Match</span>',
-            cs_4v4: '<span class="admin-history-badge admin-history-badge-cs">🔥 CS 4v4</span>'
+            cs_4v4: '<span class="admin-history-badge admin-history-badge-cs">🔥 Clash Squad</span>'
         };
         const badgeHtml = catBadges[m.category_key] || `<span class="admin-history-badge admin-history-badge-solo">${escapeHtml(m.category_name || m.match_type)}</span>`;
 

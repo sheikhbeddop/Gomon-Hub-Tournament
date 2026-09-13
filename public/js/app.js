@@ -2340,19 +2340,19 @@ function renderAdminUsersTable(users) {
         }
 
         const actionsHtml = isMod ? `
-            <div style="display: flex; gap: 6px; align-items: center;">
+            <div style="display: inline-flex; gap: 4px; align-items: center; white-space: nowrap;">
                 <span class="badge-status pending" style="font-size: 0.72rem; padding: 4px 8px;">🛡️ View Only</span>
             </div>
         ` : `
-            <div style="display: flex; gap: 6px; flex-wrap: wrap; align-items: center;">
-                <button type="button" class="btn-action-manage" onclick="openUserActionModal(${u.id}); event.stopPropagation();" title="Open full control panel">
+            <div class="user-action-btn-group" style="display: inline-flex; align-items: center; gap: 4px; background: #f8fafc; padding: 3px 6px; border-radius: 8px; border: 1px solid #e2e8f0; white-space: nowrap;">
+                <button type="button" class="btn-action-manage" onclick="openUserActionModal(${u.id}); event.stopPropagation();" title="Full Control Panel (Timeout, Ban, Role, Password)" style="padding: 4px 9px; font-size: 0.75rem; font-weight: 700; border-radius: 5px; white-space: nowrap;">
                     ⚙️ Control
                 </button>
-                <button type="button" class="btn btn-outline btn-sm" onclick="openAdjustDigitsModal(${u.id}, '${escapeHtml(u.username)}', ${u.digits_balance}); event.stopPropagation();" title="Adjust Balance">
+                <button type="button" class="btn btn-outline btn-sm" onclick="openAdjustDigitsModal(${u.id}, '${escapeHtml(u.username)}', ${u.digits_balance}); event.stopPropagation();" title="Adjust Balance (+ / -)" style="padding: 4px 8px; font-size: 0.75rem; font-weight: 700; border-radius: 5px; border-color: #f59e0b; color: #b45309; background: #fef3c7; white-space: nowrap;">
                     🪙 +/-
                 </button>
                 ${u.role !== 'admin' ? `
-                    <button type="button" class="btn btn-crimson btn-sm" onclick="confirmDeleteUser(${u.id}, '${escapeHtml(u.username)}'); event.stopPropagation();" title="Permanently delete player account" style="padding: 4px 8px; font-size: 0.75rem;">
+                    <button type="button" class="btn btn-crimson btn-sm" onclick="confirmDeleteUser(${u.id}, '${escapeHtml(u.username)}'); event.stopPropagation();" title="Permanently Delete Player Account" style="padding: 4px 8px; font-size: 0.75rem; font-weight: 700; border-radius: 5px; white-space: nowrap;">
                         🗑️ Delete
                     </button>
                 ` : ''}
@@ -2382,7 +2382,7 @@ function renderAdminUsersTable(users) {
                 </span>
             </td>
             <td>${statusBadge}</td>
-            <td onclick="event.stopPropagation()">${actionsHtml}</td>
+            <td onclick="event.stopPropagation()" style="text-align: center; white-space: nowrap;">${actionsHtml}</td>
         </tr>
     `}).join('');
 }

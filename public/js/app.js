@@ -212,13 +212,6 @@ async function startApp() {
     await loadPublicInfo();
     await initAuth();
     initServiceWorker();
-
-    // Show Important Notice modal on fresh app entry (only if logged in and not yet dismissed this session)
-    if (token || currentUser) {
-        setTimeout(() => {
-            openWelcomeNotice(false);
-        }, 350);
-    }
 }
 
 if (document.readyState === 'loading') {
@@ -297,10 +290,10 @@ async function initAuth() {
         document.body.classList.add('not-authenticated');
         document.body.classList.remove('authenticated');
         const mainApp = document.getElementById('mainAppWrapper');
-        if (mainApp) mainApp.style.display = 'none';
+        if (mainApp) mainApp.style.display = 'block';
+        closeModal('authModal');
         renderLoggedOutNav();
-        setAuthMode('login');
-        openModal('authModal');
+        loadMatches();
         dismissSplashScreen();
         return;
     }
@@ -508,10 +501,15 @@ function logout(manual = true) {
     document.body.classList.remove('authenticated');
     document.body.classList.add('not-authenticated');
     const mainApp = document.getElementById('mainAppWrapper');
-    if (mainApp) mainApp.style.display = 'none';
+    if (mainApp) mainApp.style.display = 'block';
     renderLoggedOutNav();
-    setAuthMode('login');
-    openModal('authModal');
+    loadMatches();
+    if (manual) {
+        setAuthMode('login');
+        openModal('authModal');
+    } else {
+        closeModal('authModal');
+    }
     const saved = localStorage.getItem('saved_login_user');
     const uInp = document.getElementById('loginUsername');
     if (uInp && saved) {
@@ -1309,7 +1307,8 @@ function updateCategoryCounts() {
     MATCH_CATEGORIES_CONFIG.forEach(c => {
         const countEl = document.getElementById('count_' + c.id);
         if (!countEl) return;
-        const matchesInCat = (allMatches || []).filter(m => c.matches(m));
+        // Only count active / upcoming matches (concluded/completed matches are excluded from categories)
+        const matchesInCat = (allMatches || []).filter(m => m.status !== 'completed' && m.status !== 'cancelled' && c.matches(m));
         const cnt = matchesInCat.length;
         if (cnt === 0) {
             countEl.innerText = 'No Matches Found';
@@ -1337,7 +1336,7 @@ async function refreshCategory(event, catId, btn) {
     try {
         await loadMatches();
         const cat = MATCH_CATEGORIES_CONFIG.find(c => c.id === catId);
-        const count = (allMatches || []).filter(m => cat && cat.matches(m)).length;
+        const count = (allMatches || []).filter(m => m.status !== 'completed' && m.status !== 'cancelled' && cat && cat.matches(m)).length;
         showToast(count > 0 ? `${cat ? cat.shortName : 'ক্যাটাগরি'} রিফ্রেশ হয়েছে (${count} ম্যাচ)` : `${cat ? cat.shortName : 'ক্যাটাগরি'} রিফ্রেশ হয়েছে (০ ম্যাচ)`, 'info');
     } catch (e) {
         console.error('Refresh category failed', e);
@@ -1392,7 +1391,7 @@ function selectMatchCategory(catId) {
 
     if (cat && headerTitle) {
         headerTitle.innerText = cat.title;
-        const count = (allMatches || []).filter(m => cat.matches(m)).length;
+        const count = (allMatches || []).filter(m => m.status !== 'completed' && m.status !== 'cancelled' && cat.matches(m)).length;
         if (badge) {
             badge.innerText = count > 0 ? `${count} Active Match${count > 1 ? 'es' : ''}` : '0 Active Matches';
         }
@@ -1449,14 +1448,18 @@ function renderMatches() {
     const grid = document.getElementById('matchesGrid');
     if (!grid) return;
 
-    let filtered = allMatches || [];
+    // Filter out completed/concluded and cancelled matches:
+    // Only active/upcoming matches appear in the category lists
+    const activeMatches = (allMatches || []).filter(m => m.status !== 'completed' && m.status !== 'cancelled');
+
+    let filtered = activeMatches;
     if (selectedCategory) {
         const cat = MATCH_CATEGORIES_CONFIG.find(c => c.id === selectedCategory);
         if (cat) {
-            filtered = (allMatches || []).filter(m => cat.matches(m));
+            filtered = activeMatches.filter(m => cat.matches(m));
         }
     } else if (activeCategoryFilter && activeCategoryFilter !== 'all' && activeCategoryFilter !== 'all matches' && activeCategoryFilter !== 'সব ম্যাচ') {
-        filtered = (allMatches || []).filter(m => (m.match_type || '').toLowerCase().trim() === activeCategoryFilter.toLowerCase().trim());
+        filtered = activeMatches.filter(m => (m.match_type || '').toLowerCase().trim() === activeCategoryFilter.toLowerCase().trim());
     }
 
     if (!filtered || filtered.length === 0) {
@@ -3521,9 +3524,14 @@ function handleWsMessage(data) {
             match.joined_count = data.new_joined_count;
             renderMatches();
         }
-    } else if (data.type === 'NEW_MATCH_CREATED' || data.type === 'ROOM_CREDENTIALS_RELEASED') {
+    } else if (data.type === 'NEW_MATCH_CREATED' || data.type === 'ROOM_CREDENTIALS_RELEASED' || data.type === 'MATCH_RESULTS_PUBLISHED' || data.type === 'MATCH_STATUS_UPDATED') {
         loadMatches();
-        if (data.message) {
+        if (typeof renderResults === 'function') {
+            renderResults();
+        }
+        if (data.type === 'MATCH_RESULTS_PUBLISHED' && data.match_title) {
+            showToast(`🏆 ${data.match_title} ম্যাচ সমাপ্ত হয়েছে ও ফলাফল প্রকাশিত হয়েছে!`, 'success');
+        } else if (data.message) {
             showToast(`📢 ${data.message}`, 'info');
             playSound('alert');
         }
@@ -4494,18 +4502,12 @@ function openModal(id) {
 }
 
 function closeModal(id) {
-    if (id === 'authModal' && !currentUser) {
-        return; // Locked: Cannot close login modal without logging in
-    }
     const modal = document.getElementById(id);
     if (modal) modal.classList.remove('show');
 }
 
 window.onclick = (e) => {
     if (e.target.classList.contains('modal-overlay')) {
-        if (e.target.id === 'authModal' && !currentUser) {
-            return; // Locked: Cannot dismiss by clicking outside
-        }
         e.target.classList.remove('show');
     }
 };

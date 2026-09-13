@@ -2681,3 +2681,132 @@ body {
     text-transform: uppercase;
     letter-spacing: 0.5px;
 }
+
+/* Match Live Countdown Pill & Pulsing Animation */
+.match-countdown-pill {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    padding: 5px 10px;
+    margin-top: 6px;
+    background: rgba(15, 23, 42, 0.7);
+    border: 1px solid rgba(0, 245, 155, 0.25);
+    border-radius: 6px;
+    font-family: 'Rajdhani', monospace, sans-serif;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    color: #f1f5f9;
+    box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.04);
+    transition: all 0.3s ease;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.match-countdown-pill .countdown-pulse-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #00f59b;
+    box-shadow: 0 0 8px #00f59b;
+    display: inline-block;
+    flex-shrink: 0;
+    animation: countdownPulseGlow 1.5s infinite ease-in-out;
+}
+
+.match-countdown-pill .countdown-timer-text {
+    display: inline-block;
+    letter-spacing: 0.6px;
+}
+
+/* Urgent state (< 15 mins) */
+.match-countdown-pill.state-urgent {
+    border-color: rgba(245, 158, 11, 0.45);
+    background: rgba(245, 158, 11, 0.09);
+    color: #fbbf24;
+}
+.match-countdown-pill.state-urgent .countdown-pulse-dot {
+    background: #f59e0b;
+    box-shadow: 0 0 10px #f59e0b;
+    animation: countdownPulseUrgent 1s infinite ease-in-out;
+}
+
+/* Live / Started state */
+.match-countdown-pill.state-live {
+    border-color: rgba(239, 68, 68, 0.45);
+    background: rgba(239, 68, 68, 0.1);
+    color: #fca5a5;
+}
+.match-countdown-pill.state-live .countdown-pulse-dot {
+    background: #ef4444;
+    box-shadow: 0 0 10px #ef4444;
+    animation: countdownPulseLive 0.8s infinite ease-in-out;
+}
+
+/* Completed state */
+.match-countdown-pill.state-completed {
+    border-color: rgba(148, 163, 184, 0.2);
+    background: rgba(148, 163, 184, 0.05);
+    color: #94a3b8;
+}
+.match-countdown-pill.state-completed .countdown-pulse-dot {
+    background: #64748b;
+    box-shadow: none;
+    animation: none;
+}
+
+@keyframes countdownPulseGlow {
+    0% {
+        transform: scale(0.85);
+        opacity: 0.6;
+        box-shadow: 0 0 3px rgba(0, 245, 155, 0.4);
+    }
+    50% {
+        transform: scale(1.3);
+        opacity: 1;
+        box-shadow: 0 0 12px rgba(0, 245, 155, 0.9);
+    }
+    100% {
+        transform: scale(0.85);
+        opacity: 0.6;
+        box-shadow: 0 0 3px rgba(0, 245, 155, 0.4);
+    }
+}
+
+@keyframes countdownPulseUrgent {
+    0% {
+        transform: scale(0.85);
+        opacity: 0.6;
+        box-shadow: 0 0 4px rgba(245, 158, 11, 0.5);
+    }
+    50% {
+        transform: scale(1.35);
+        opacity: 1;
+        box-shadow: 0 0 14px rgba(245, 158, 11, 1);
+    }
+    100% {
+        transform: scale(0.85);
+        opacity: 0.6;
+        box-shadow: 0 0 4px rgba(245, 158, 11, 0.5);
+    }
+}
+
+@keyframes countdownPulseLive {
+    0% {
+        transform: scale(0.8);
+        opacity: 0.5;
+        box-shadow: 0 0 4px rgba(239, 68, 68, 0.6);
+    }
+    50% {
+        transform: scale(1.4);
+        opacity: 1;
+        box-shadow: 0 0 15px rgba(239, 68, 68, 1);
+    }
+    100% {
+        transform: scale(0.8);
+        opacity: 0.5;
+        box-shadow: 0 0 4px rgba(239, 68, 68, 0.6);
+    }
+}
+

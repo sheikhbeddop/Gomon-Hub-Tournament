@@ -1410,7 +1410,29 @@ function backToCategoryHub() {
     updateCategoryCounts();
 }
 
-async function loadMatches() {
+function showMatchesSkeleton() {
+    const grid = document.getElementById('matchesGrid');
+    if (!grid || (allMatches && allMatches.length > 0)) return;
+    grid.innerHTML = Array(4).fill(0).map(() => `
+        <div class="skeleton-card">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div class="skeleton-shimmer" style="width: 80px; height: 22px; border-radius: 999px;"></div>
+                <div class="skeleton-shimmer" style="width: 60px; height: 18px;"></div>
+            </div>
+            <div class="skeleton-shimmer" style="width: 65%; height: 20px; margin-top: 4px;"></div>
+            <div style="display: flex; gap: 10px; margin: 8px 0;">
+                <div class="skeleton-shimmer" style="flex: 1; height: 36px; border-radius: 8px;"></div>
+                <div class="skeleton-shimmer" style="flex: 1; height: 36px; border-radius: 8px;"></div>
+            </div>
+            <div class="skeleton-shimmer" style="width: 100%; height: 38px; border-radius: 8px;"></div>
+        </div>
+    `).join('');
+}
+
+async function loadMatches(silent = false) {
+    if (!silent && (!allMatches || allMatches.length === 0)) {
+        showMatchesSkeleton();
+    }
     try {
         const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
         const res = await fetch('/api/matches?_t=' + Date.now(), { headers });
@@ -1428,7 +1450,11 @@ async function loadMatches() {
 }
 
 function fetchMatches() {
-    return loadMatches();
+    if (allMatches && allMatches.length > 0) {
+        renderMatches();
+        return loadMatches(true);
+    }
+    return loadMatches(false);
 }
 
 function filterMatches(category, btnElem) {
@@ -4323,39 +4349,53 @@ function openRulesModal() {
     openModal('allRulesModal');
 }
 
+let cachedLeaderboardList = null;
+
+function renderLeaderboardRows(list, body) {
+    body.innerHTML = list.map((p, idx) => {
+        let rankBadge = `${idx + 1}`;
+        if (idx === 0) rankBadge = '🥇';
+        else if (idx === 1) rankBadge = '🥈';
+        else if (idx === 2) rankBadge = '🥉';
+
+        return `
+            <tr style="${idx < 3 ? 'background: rgba(245, 158, 11, 0.05); font-weight:700;' : ''}">
+                <td style="font-size: 1.1rem; text-align: center;">${rankBadge}</td>
+                <td><b>${escapeHtml(p.username)}</b> <span style="font-size:0.75rem; color:#64748b;">(${p.player_id})</span></td>
+                <td style="color: #2563eb; font-weight: 800;">${p.win_points || 0}</td>
+                <td style="color: #16a34a; font-weight: 700;">${p.matches_won || 0}</td>
+            </tr>
+        `;
+    }).join('');
+}
+
 async function openTopPlayersModal() {
     openModal('topPlayersModal');
     const body = document.getElementById('leaderboardBody');
     if (!body) return;
-    body.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:20px; color:#64748b;">Loading...</td></tr>';
+
+    if (cachedLeaderboardList && cachedLeaderboardList.length > 0) {
+        renderLeaderboardRows(cachedLeaderboardList, body);
+    } else {
+        body.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:20px; color:#64748b;">Loading...</td></tr>';
+    }
 
     try {
         const res = await fetch('/api/leaderboard');
         const data = await res.json();
         const list = data.leaderboard || [];
+        cachedLeaderboardList = list;
 
         if (list.length === 0) {
             body.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:20px; color:#94a3b8;">No records found</td></tr>';
             return;
         }
 
-        body.innerHTML = list.map((p, idx) => {
-            let rankBadge = `${idx + 1}`;
-            if (idx === 0) rankBadge = '🥇';
-            else if (idx === 1) rankBadge = '🥈';
-            else if (idx === 2) rankBadge = '🥉';
-
-            return `
-                <tr style="${idx < 3 ? 'background: rgba(245, 158, 11, 0.05); font-weight:700;' : ''}">
-                    <td style="font-size: 1.1rem; text-align: center;">${rankBadge}</td>
-                    <td><b>${escapeHtml(p.username)}</b> <span style="font-size:0.75rem; color:#64748b;">(${p.player_id})</span></td>
-                    <td style="color: #2563eb; font-weight: 800;">${p.win_points || 0}</td>
-                    <td style="color: #16a34a; font-weight: 700;">${p.matches_won || 0}</td>
-                </tr>
-            `;
-        }).join('');
+        renderLeaderboardRows(list, body);
     } catch (err) {
-        body.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#ef4444;">Failed to load</td></tr>';
+        if (!cachedLeaderboardList) {
+            body.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#ef4444;">Failed to load</td></tr>';
+        }
     }
 }
 

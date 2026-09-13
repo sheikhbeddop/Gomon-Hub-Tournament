@@ -21,24 +21,12 @@
             pointer-events: none !important;
         }
 
-        /* Strict Login Lock: Hide inner app and force full-screen login when not logged in */
-        body.not-authenticated #mainAppWrapper {
-            display: none !important;
-        }
-        body.authenticated #mainAppWrapper {
+        /* Main App is always visible on load/refresh */
+        #mainAppWrapper {
             display: block !important;
         }
-        body.not-authenticated #authModal.modal-overlay,
-        body.not-authenticated .auth-modal-overlay {
-            display: flex !important;
-            opacity: 1 !important;
-            visibility: visible !important;
-        }
-        body.not-authenticated .auth-close-btn,
-        body.not-authenticated .signup-close-btn {
-            display: none !important;
-        }
-        body.authenticated #authModal:not(.show) {
+        #authModal:not(.show),
+        .auth-modal-overlay:not(.show) {
             display: none !important;
         }
 
@@ -707,11 +695,11 @@
     </style>
 
 </head>
-<body class="not-authenticated">
+<body>
 
     <!-- IN-APP SPLASH SCREEN REMOVED PER USER REQUEST -->
-    <!-- MAIN APP WRAPPER (HIDDEN UNTIL AUTHENTICATED) -->
-    <div id="mainAppWrapper" style="display: none;">
+    <!-- MAIN APP WRAPPER -->
+    <div id="mainAppWrapper" style="display: block;">
 
     <!-- Top Navbar -->
     <header class="navbar">

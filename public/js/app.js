@@ -1472,7 +1472,7 @@ function filterMatches(category, btnElem) {
 // DYNAMIC MATCH FORMAT & CATEGORY DISPLAY HELPERS (FORMAT MONITOR)
 // -------------------------------------------------------------
 function getMatchFormatInfo(m) {
-    if (!m) return { label: '1 VS 1', icon: '⚔️', cssClass: 'match-format-1v1', slotColor: '#b45309' };
+    if (!m) return { label: '1 VS 1', icon: '⚔️', cssClass: 'match-format-1v1', slotColor: '#b45309', inlineStyle: 'background: #fef08a !important; color: #854d0e !important; border: 1.5px solid #facc15 !important;' };
     const slots = parseInt(m.total_slots, 10) || 0;
     const mt = String(m.match_type || '').trim();
     const tl = String(m.title || '').trim();
@@ -1481,16 +1481,16 @@ function getMatchFormatInfo(m) {
 
     // 1. Explicit format tag in title (if admin explicitly wrote 1v1, 2v2 etc. in title)
     if (/\b1\s*(?:v|vs)\s*1\b/i.test(titleLower) || titleLower.includes('1v1')) {
-        return { label: '1 VS 1', icon: '⚔️', cssClass: 'match-format-1v1', slotColor: '#b45309' };
+        return { label: '1 VS 1', icon: '⚔️', cssClass: 'match-format-1v1', slotColor: '#b45309', inlineStyle: 'background: #fef08a !important; color: #854d0e !important; border: 1.5px solid #facc15 !important;' };
     }
     if (/\b2\s*(?:v|vs)\s*2\b/i.test(titleLower) || titleLower.includes('2v2')) {
-        return { label: '2 VS 2', icon: '⚔️', cssClass: 'match-format-2v2', slotColor: '#4338ca' };
+        return { label: '2 VS 2', icon: '⚔️', cssClass: 'match-format-2v2', slotColor: '#4338ca', inlineStyle: 'background: #e0e7ff !important; color: #3730a3 !important; border: 1.5px solid #818cf8 !important;' };
     }
     if (/\b3\s*(?:v|vs)\s*3\b/i.test(titleLower) || titleLower.includes('3v3')) {
-        return { label: '3 VS 3', icon: '⚔️', cssClass: 'match-format-3v3', slotColor: '#be185d' };
+        return { label: '3 VS 3', icon: '⚔️', cssClass: 'match-format-3v3', slotColor: '#be185d', inlineStyle: 'background: #fce7f3 !important; color: #9d174d !important; border: 1.5px solid #f472b6 !important;' };
     }
     if (/\b4\s*(?:v|vs)\s*4\b/i.test(titleLower) || titleLower.includes('4v4')) {
-        return { label: '4 VS 4', icon: '⚔️', cssClass: 'match-format-4v4', slotColor: '#c2410c' };
+        return { label: '4 VS 4', icon: '⚔️', cssClass: 'match-format-4v4', slotColor: '#c2410c', inlineStyle: 'background: #ffedd5 !important; color: #9a3412 !important; border: 1.5px solid #fb923c !important;' };
     }
 
     const isCs = combined.includes('cs') || combined.includes('clash');
@@ -1498,51 +1498,51 @@ function getMatchFormatInfo(m) {
 
     // 2. Slot-based identification for Clash Squad / Lone Wolf / Custom Rooms
     if (slots === 2) {
-        return { label: '1 VS 1', icon: '⚔️', cssClass: 'match-format-1v1', slotColor: '#b45309' };
+        return { label: '1 VS 1', icon: '⚔️', cssClass: 'match-format-1v1', slotColor: '#b45309', inlineStyle: 'background: #fef08a !important; color: #854d0e !important; border: 1.5px solid #facc15 !important;' };
     }
     if (slots === 4) {
         if (isCs || isLoneWolf || combined.includes('2v2')) {
-            return { label: '2 VS 2', icon: '⚔️', cssClass: 'match-format-2v2', slotColor: '#4338ca' };
+            return { label: '2 VS 2', icon: '⚔️', cssClass: 'match-format-2v2', slotColor: '#4338ca', inlineStyle: 'background: #e0e7ff !important; color: #3730a3 !important; border: 1.5px solid #818cf8 !important;' };
         }
         if (combined.includes('duo')) {
-            return { label: 'DUO', icon: '👥', cssClass: 'match-format-duo', slotColor: '#0369a1' };
+            return { label: 'DUO', icon: '👥', cssClass: 'match-format-duo', slotColor: '#0369a1', inlineStyle: 'background: #e0f2fe !important; color: #075985 !important; border: 1.5px solid #38bdf8 !important;' };
         }
-        return { label: '2 VS 2', icon: '⚔️', cssClass: 'match-format-2v2', slotColor: '#4338ca' };
+        return { label: '2 VS 2', icon: '⚔️', cssClass: 'match-format-2v2', slotColor: '#4338ca', inlineStyle: 'background: #e0e7ff !important; color: #3730a3 !important; border: 1.5px solid #818cf8 !important;' };
     }
     if (slots === 6) {
-        return { label: '3 VS 3', icon: '⚔️', cssClass: 'match-format-3v3', slotColor: '#be185d' };
+        return { label: '3 VS 3', icon: '⚔️', cssClass: 'match-format-3v3', slotColor: '#be185d', inlineStyle: 'background: #fce7f3 !important; color: #9d174d !important; border: 1.5px solid #f472b6 !important;' };
     }
     if (slots === 8) {
-        return { label: '4 VS 4', icon: '⚔️', cssClass: 'match-format-4v4', slotColor: '#c2410c' };
+        return { label: '4 VS 4', icon: '⚔️', cssClass: 'match-format-4v4', slotColor: '#c2410c', inlineStyle: 'background: #ffedd5 !important; color: #9a3412 !important; border: 1.5px solid #fb923c !important;' };
     }
 
     // 3. For Clash Squad with default/unusual slots
     if (isCs) {
-        if (slots <= 2) return { label: '1 VS 1', icon: '⚔️', cssClass: 'match-format-1v1', slotColor: '#b45309' };
-        if (slots <= 4) return { label: '2 VS 2', icon: '⚔️', cssClass: 'match-format-2v2', slotColor: '#4338ca' };
-        if (slots <= 6) return { label: '3 VS 3', icon: '⚔️', cssClass: 'match-format-3v3', slotColor: '#be185d' };
-        return { label: '4 VS 4', icon: '⚔️', cssClass: 'match-format-4v4', slotColor: '#c2410c' };
+        if (slots <= 2) return { label: '1 VS 1', icon: '⚔️', cssClass: 'match-format-1v1', slotColor: '#b45309', inlineStyle: 'background: #fef08a !important; color: #854d0e !important; border: 1.5px solid #facc15 !important;' };
+        if (slots <= 4) return { label: '2 VS 2', icon: '⚔️', cssClass: 'match-format-2v2', slotColor: '#4338ca', inlineStyle: 'background: #e0e7ff !important; color: #3730a3 !important; border: 1.5px solid #818cf8 !important;' };
+        if (slots <= 6) return { label: '3 VS 3', icon: '⚔️', cssClass: 'match-format-3v3', slotColor: '#be185d', inlineStyle: 'background: #fce7f3 !important; color: #9d174d !important; border: 1.5px solid #f472b6 !important;' };
+        return { label: '4 VS 4', icon: '⚔️', cssClass: 'match-format-4v4', slotColor: '#c2410c', inlineStyle: 'background: #ffedd5 !important; color: #9a3412 !important; border: 1.5px solid #fb923c !important;' };
     }
 
     // 4. Survival / Full Map modes
     if (combined.includes('survival') || combined.includes('zone') || combined.includes('জোন')) {
-        return { label: 'SURVIVAL', icon: '🏆', cssClass: 'match-format-survival', slotColor: '#047857' };
+        return { label: 'SURVIVAL', icon: '🏆', cssClass: 'match-format-survival', slotColor: '#047857', inlineStyle: 'background: #ecfdf5 !important; color: #065f46 !important; border: 1.5px solid #34d399 !important;' };
     }
     if (combined.includes('duo')) {
-        return { label: 'DUO', icon: '👥', cssClass: 'match-format-duo', slotColor: '#0369a1' };
+        return { label: 'DUO', icon: '👥', cssClass: 'match-format-duo', slotColor: '#0369a1', inlineStyle: 'background: #e0f2fe !important; color: #075985 !important; border: 1.5px solid #38bdf8 !important;' };
     }
     if (combined.includes('squad')) {
-        return { label: 'SQUAD', icon: '🛡️', cssClass: 'match-format-squad', slotColor: '#6d28d9' };
+        return { label: 'SQUAD', icon: '🛡️', cssClass: 'match-format-squad', slotColor: '#6d28d9', inlineStyle: 'background: #f3e8ff !important; color: #6b21a8 !important; border: 1.5px solid #c084fc !important;' };
     }
     if (combined.includes('solo') || slots <= 1) {
-        return { label: 'SOLO', icon: '👤', cssClass: 'match-format-solo', slotColor: '#15803d' };
+        return { label: 'SOLO', icon: '👤', cssClass: 'match-format-solo', slotColor: '#15803d', inlineStyle: 'background: #dcfce7 !important; color: #166534 !important; border: 1.5px solid #4ade80 !important;' };
     }
 
     // 5. Fallback for larger lobbies
     if (slots >= 12) {
-        return { label: 'SOLO', icon: '👤', cssClass: 'match-format-solo', slotColor: '#15803d' };
+        return { label: 'SOLO', icon: '👤', cssClass: 'match-format-solo', slotColor: '#15803d', inlineStyle: 'background: #dcfce7 !important; color: #166534 !important; border: 1.5px solid #4ade80 !important;' };
     }
-    return { label: 'SOLO', icon: '👤', cssClass: 'match-format-solo', slotColor: '#15803d' };
+    return { label: 'SOLO', icon: '👤', cssClass: 'match-format-solo', slotColor: '#15803d', inlineStyle: 'background: #dcfce7 !important; color: #166534 !important; border: 1.5px solid #4ade80 !important;' };
 }
 
 function getMatchCategoryDisplay(matchType) {
@@ -1683,7 +1683,7 @@ function renderMatches() {
                         <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 4px;">
                             <span class="match-code-badge">#${escapeHtml(m.match_code || ('MATCH-' + m.id))}</span>
                             <span class="match-category" style="margin-bottom: 0;">🔥 ${escapeHtml(catName)}</span>
-                            <span class="match-format-monitor ${fmt.cssClass}">${fmt.icon} ${fmt.label}</span>
+                            <span class="match-format-monitor ${fmt.cssClass}" style="display: inline-flex; align-items: center; gap: 4px; font-size: 0.74rem; font-weight: 800; padding: 2.5px 9px; border-radius: 999px; letter-spacing: 0.5px; text-transform: uppercase; font-family: 'Rajdhani', sans-serif; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05); line-height: 1.2; ${fmt.inlineStyle}">${fmt.icon} ${fmt.label}</span>
                         </div>
                         <div class="match-title">${escapeHtml(m.title)}</div>
                         <div class="match-time-badge">⏰ ${escapeHtml(m.match_time || '')}</div>
@@ -2057,7 +2057,7 @@ function renderMyMatches() {
                         <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 4px;">
                             <span class="match-code-badge">#${escapeHtml(m.match_code || ('MATCH-' + m.id))}</span>
                             <span class="match-category" style="background: rgba(0, 245, 155, 0.15); color: #00f59b; margin-bottom: 0;">✅ Registered</span>
-                            <span class="match-format-monitor ${fmt.cssClass}">${fmt.icon} ${fmt.label}</span>
+                            <span class="match-format-monitor ${fmt.cssClass}" style="display: inline-flex; align-items: center; gap: 4px; font-size: 0.74rem; font-weight: 800; padding: 2.5px 9px; border-radius: 999px; letter-spacing: 0.5px; text-transform: uppercase; font-family: 'Rajdhani', sans-serif; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05); line-height: 1.2; ${fmt.inlineStyle}">${fmt.icon} ${fmt.label}</span>
                         </div>
                         <div class="match-title">${escapeHtml(m.title)}</div>
                         <div class="match-time-badge">⏰ ${escapeHtml(m.match_time || '')}</div>
@@ -3159,7 +3159,7 @@ function renderAdminMatches() {
             <td>
                 <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
                     <span>${escapeHtml(catName)} (${escapeHtml(m.map_name || 'Bermuda')})</span>
-                    <span class="match-format-monitor ${fmt.cssClass}" style="font-size: 0.68rem; padding: 1px 6px;">${fmt.icon} ${fmt.label}</span>
+                    <span class="match-format-monitor ${fmt.cssClass}" style="display: inline-flex; align-items: center; gap: 4px; font-size: 0.68rem; font-weight: 800; padding: 1px 6px; border-radius: 999px; letter-spacing: 0.5px; text-transform: uppercase; font-family: 'Rajdhani', sans-serif; margin-left: 4px; ${fmt.inlineStyle}">${fmt.icon} ${fmt.label}</span>
                 </div>
             </td>
             <td style="font-size: 0.8rem;">${m.match_time}</td>
@@ -4560,7 +4560,7 @@ async function loadCompletedResults(category, btnElem) {
                     <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
                         <span class="match-code-badge" style="font-size:0.7rem; padding:1px 6px;">#${escapeHtml(m.match_code || ('MATCH-' + m.id))}</span>
                         <span class="filter-pill" style="background:#e0f2fe; color:#0369a1; border:none; padding:2px 8px; font-size:0.68rem; font-weight:700;">🔥 ${escapeHtml(catName)}</span>
-                        <span class="match-format-monitor ${fmt.cssClass}" style="font-size:0.68rem; padding:1px 6px;">${fmt.icon} ${fmt.label}</span>
+                        <span class="match-format-monitor ${fmt.cssClass}" style="display: inline-flex; align-items: center; gap: 4px; font-size: 0.68rem; font-weight: 800; padding: 1px 6px; border-radius: 999px; letter-spacing: 0.5px; text-transform: uppercase; font-family: 'Rajdhani', sans-serif; ${fmt.inlineStyle}">${fmt.icon} ${fmt.label}</span>
                     </div>
                     <span style="font-size:0.72rem; color:#64748b;">Concluded: ${(m.completed_at || m.match_time || '').split(' ')[0]}</span>
                 </div>

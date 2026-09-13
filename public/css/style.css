@@ -1637,6 +1637,44 @@ body {
     background-color: #f1f5f9 !important;
 }
 
+#adminSection-players .custom-table th,
+#adminSection-players .custom-table td {
+    padding: 8px 10px;
+    font-size: 0.84rem;
+    vertical-align: middle;
+}
+
+#adminSection-players .custom-table th:last-child,
+#adminSection-players .custom-table td:last-child {
+    position: sticky;
+    right: 0;
+    background: #ffffff;
+    box-shadow: -4px 0 8px -2px rgba(0, 0, 0, 0.06);
+    text-align: center;
+    white-space: nowrap;
+    z-index: 1;
+}
+
+#adminSection-players .custom-table th:last-child {
+    background: #f8fafc;
+    z-index: 2;
+}
+
+#adminSection-players .custom-table tr:hover td:last-child {
+    background: #f1f5f9 !important;
+}
+
+.user-action-btn-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: #f8fafc;
+    padding: 3px 6px;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+    white-space: nowrap;
+}
+
 .badge-status.timeout {
     background: #fef3c7;
     color: #b45309;

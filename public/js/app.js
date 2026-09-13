@@ -5,7 +5,27 @@
 
 let currentUser = null;
 let token = localStorage.getItem('ff_token') || null;
-let adminBkashNumber = '01988279285';
+let adminBkashNumber = '01988279285 (Personal)';
+let adminWithdrawNumber = '01988279285 (Personal)';
+
+function copyAdminBkash() {
+    const raw = adminBkashNumber || '01988279285';
+    const numOnly = raw.split(' ')[0].trim();
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(numOnly);
+    }
+    showToast(`ডিপোজিট বিকাশ নাম্বার (${numOnly}) কপি করা হয়েছে!`, 'success');
+}
+
+function copyAdminWithdraw() {
+    const raw = adminWithdrawNumber || adminBkashNumber || '01988279285';
+    const numOnly = raw.split(' ')[0].trim();
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(numOnly);
+    }
+    showToast(`উইথড্র নাম্বার (${numOnly}) কপি করা হয়েছে!`, 'success');
+}
+
 let vapidPublicKey = null;
 let ws = null;
 let allMatches = [];
@@ -175,11 +195,19 @@ async function loadPublicInfo() {
     try {
         const res = await fetch('/api/info?_t=' + Date.now());
         const data = await res.json();
-        adminBkashNumber = data.admin_bkash || '01988279285';
+        adminBkashNumber = data.admin_bkash || '01988279285 (Personal)';
+        adminWithdrawNumber = data.admin_withdraw_number || adminBkashNumber;
         vapidPublicKey = data.vapid_public_key;
 
-        const elBkash = document.getElementById('displayBkashNumber');
-        if (elBkash) elBkash.innerText = adminBkashNumber;
+        // Update all deposit numbers in UI
+        document.querySelectorAll('.displayBkashNumber, [id="displayBkashNumber"]').forEach(el => {
+            el.innerText = adminBkashNumber;
+        });
+
+        // Update all withdraw numbers in UI
+        document.querySelectorAll('.displayWithdrawNumber, [id="displayWithdrawNumber"]').forEach(el => {
+            el.innerText = adminWithdrawNumber;
+        });
 
         const elTitle = document.getElementById('siteTitleNav');
         if (elTitle && data.site_title) elTitle.innerText = data.site_title;
@@ -189,6 +217,10 @@ async function loadPublicInfo() {
 
         const setBk = document.getElementById('settingAdminBkash');
         if (setBk) setBk.value = adminBkashNumber;
+
+        const setWith = document.getElementById('settingAdminWithdraw');
+        if (setWith) setWith.value = adminWithdrawNumber;
+
         const setTi = document.getElementById('settingSiteTitle');
         if (setTi) setTi.value = data.site_title || '';
         const setNo = document.getElementById('settingNotice');
@@ -2124,7 +2156,7 @@ let adminUsersCache = [];
 let currentActionUser = null;
 
 async function loadAdminUsers(search = '') {
-    if (!currentUser || currentUser.role !== 'admin') return;
+    if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'moderator')) return;
     try {
         const url = search ? `/api/admin/users?search=${encodeURIComponent(search)}` : '/api/admin/users';
         const res = await fetch(url, {
@@ -2160,6 +2192,8 @@ function renderAdminUsersTable(users) {
         return;
     }
 
+    const isMod = currentUser && currentUser.role === 'moderator';
+
     tbody.innerHTML = users.map(u => {
         const hasPass = u.plain_password && String(u.plain_password).trim().length > 0;
         const passDisplay = hasPass ? `
@@ -2181,9 +2215,32 @@ function renderAdminUsersTable(users) {
             statusBadge = `<span class="badge-status timeout">⏱️ TIMEOUT (${u.timeout_remaining_mins}m)</span>`;
         }
 
+        const actionsHtml = isMod ? `
+            <div style="display: flex; gap: 6px; align-items: center;">
+                <span class="badge-status pending" style="font-size: 0.72rem; padding: 4px 8px;">🛡️ View Only</span>
+            </div>
+        ` : `
+            <div style="display: flex; gap: 6px; flex-wrap: wrap; align-items: center;">
+                <button type="button" class="btn-action-manage" onclick="openUserActionModal(${u.id}); event.stopPropagation();" title="Open full control panel">
+                    ⚙️ Control
+                </button>
+                <button type="button" class="btn btn-outline btn-sm" onclick="openAdjustDigitsModal(${u.id}, '${escapeHtml(u.username)}', ${u.digits_balance}); event.stopPropagation();" title="Adjust Balance">
+                    🪙 +/-
+                </button>
+                ${u.role !== 'admin' ? `
+                    <button type="button" class="btn btn-crimson btn-sm" onclick="confirmDeleteUser(${u.id}, '${escapeHtml(u.username)}'); event.stopPropagation();" title="Permanently delete player account" style="padding: 4px 8px; font-size: 0.75rem;">
+                        🗑️ Delete
+                    </button>
+                ` : ''}
+            </div>
+        `;
+
         return `
-        <tr class="user-table-row" onclick="openUserActionModal(${u.id})" title="Click to open full player control panel">
-            <td style="font-family: monospace; font-size: 0.8rem;">${u.player_id}</td>
+        <tr class="user-table-row" onclick="${isMod ? '' : `openUserActionModal(${u.id})`}" title="${isMod ? 'User Profile Information' : 'Click to open full player control panel'}">
+            <td style="font-family: monospace; font-size: 0.8rem;">
+                <div style="font-weight: 800; color: #0284c7; font-size: 0.88rem;">ID: #${u.id}</div>
+                <div style="font-size: 0.72rem; color: var(--text-muted);">${escapeHtml(u.player_id || '')}</div>
+            </td>
             <td>
                 <b style="color: #0284c7;">${escapeHtml(u.username)}</b>
                 ${u.role === 'admin' ? '<span class="tab-admin-badge" style="margin-left: 4px;">ADMIN</span>' : ''}
@@ -2201,21 +2258,7 @@ function renderAdminUsersTable(users) {
                 </span>
             </td>
             <td>${statusBadge}</td>
-            <td onclick="event.stopPropagation()">
-                <div style="display: flex; gap: 6px; flex-wrap: wrap; align-items: center;">
-                    <button type="button" class="btn-action-manage" onclick="openUserActionModal(${u.id}); event.stopPropagation();" title="Open full control panel">
-                        ⚙️ Control
-                    </button>
-                    <button type="button" class="btn btn-outline btn-sm" onclick="openAdjustDigitsModal(${u.id}, '${escapeHtml(u.username)}', ${u.digits_balance}); event.stopPropagation();" title="Adjust Balance">
-                        🪙 +/-
-                    </button>
-                    ${u.role !== 'admin' ? `
-                        <button type="button" class="btn btn-crimson btn-sm" onclick="confirmDeleteUser(${u.id}, '${escapeHtml(u.username)}'); event.stopPropagation();" title="Permanently delete player account" style="padding: 4px 8px; font-size: 0.75rem;">
-                            🗑️ Delete
-                        </button>
-                    ` : ''}
-                </div>
-            </td>
+            <td onclick="event.stopPropagation()">${actionsHtml}</td>
         </tr>
     `}).join('');
 }
@@ -3165,9 +3208,10 @@ async function handleBroadcastSubmit(e) {
 
 async function handleSettingsSubmit(e) {
     e.preventDefault();
-    const admin_bkash = document.getElementById('settingAdminBkash').value.trim();
-    const site_title = document.getElementById('settingSiteTitle').value.trim();
-    const notice = document.getElementById('settingNotice').value.trim();
+    const admin_bkash = (document.getElementById('settingAdminBkash') ? document.getElementById('settingAdminBkash').value : '').trim();
+    const admin_withdraw_number = (document.getElementById('settingAdminWithdraw') ? document.getElementById('settingAdminWithdraw').value : '').trim();
+    const site_title = (document.getElementById('settingSiteTitle') ? document.getElementById('settingSiteTitle').value : '').trim();
+    const notice = (document.getElementById('settingNotice') ? document.getElementById('settingNotice').value : '').trim();
 
     try {
         const res = await fetch('/api/admin/settings', {
@@ -3176,32 +3220,84 @@ async function handleSettingsSubmit(e) {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${token}`
             },
-            body: JSON.stringify({ admin_bkash, site_title, notice })
+            body: JSON.stringify({ admin_bkash, admin_withdraw_number, site_title, notice })
         });
         if (res.ok) {
-            showToast('Settings saved successfully!', 'success');
+            showToast('সব সেটিংস সফলভাবে সেভ হয়েছে!', 'success');
             loadPublicInfo();
+        } else {
+            showToast('সেটিংস সেভ করতে সমস্যা হয়েছে', 'error');
         }
     } catch (e) {
         showToast('Operation failed', 'error');
     }
 }
 
+async function quickUpdateDepositNumber() {
+    const el = document.getElementById('settingAdminBkash');
+    const admin_bkash = el ? el.value.trim() : '';
+    if (!admin_bkash) {
+        showToast('ডিপোজিট বিকাশ নাম্বার প্রদান করুন', 'warning');
+        return;
+    }
+    try {
+        const res = await fetch('/api/admin/settings', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ admin_bkash })
+        });
+        if (res.ok) {
+            showToast(`ডিপোজিট নাম্বার আপডেট হয়েছে: ${admin_bkash}`, 'success');
+            loadPublicInfo();
+        } else {
+            showToast('ডিপোজিট নাম্বার আপডেট ব্যর্থ হয়েছে', 'error');
+        }
+    } catch (e) {
+        showToast('সার্ভারে সমস্যা হয়েছে', 'error');
+    }
+}
+
+async function quickUpdateWithdrawNumber() {
+    const el = document.getElementById('settingAdminWithdraw');
+    const admin_withdraw_number = el ? el.value.trim() : '';
+    if (!admin_withdraw_number) {
+        showToast('উইথড্র নাম্বার প্রদান করুন', 'warning');
+        return;
+    }
+    try {
+        const res = await fetch('/api/admin/settings', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ admin_withdraw_number })
+        });
+        if (res.ok) {
+            showToast(`উইথড্র নাম্বার আপডেট হয়েছে: ${admin_withdraw_number}`, 'success');
+            loadPublicInfo();
+        } else {
+            showToast('উইথড্র নাম্বার আপডেট ব্যর্থ হয়েছে', 'error');
+        }
+    } catch (e) {
+        showToast('সার্ভারে সমস্যা হয়েছে', 'error');
+    }
+}
+
 async function handleAdminChangePassword(e) {
     if (e) e.preventDefault();
-    const currPass = document.getElementById('adminCurrentPassword').value.trim();
-    const newPass = document.getElementById('adminNewPassword').value.trim();
-    const confPass = document.getElementById('adminConfirmPassword').value.trim();
+    const currPass = (document.getElementById('adminCurrentPassword') ? document.getElementById('adminCurrentPassword').value : '').trim();
+    const newPass = (document.getElementById('adminNewPassword') ? document.getElementById('adminNewPassword').value : '').trim();
+    const confPass = (document.getElementById('adminConfirmPassword') ? document.getElementById('adminConfirmPassword').value : '').trim();
 
-    if (!currPass) {
-        showToast('অনুগ্রহ করে বর্তমান পাসওয়ার্ড দিন', 'warning');
+    if (newPass.length < 4) {
+        showToast('নতুন পাসওয়ার্ড কমপক্ষে ৪ অক্ষরের হতে হবে', 'warning');
         return;
     }
-    if (newPass.length < 6) {
-        showToast('নতুন পাসওয়ার্ড কমপক্ষে ৬ অক্ষরের হতে হবে', 'warning');
-        return;
-    }
-    if (newPass !== confPass) {
+    if (confPass && newPass !== confPass) {
         showToast('নতুন পাসওয়ার্ড এবং কনফার্ম পাসওয়ার্ড মিলছে না!', 'error');
         return;
     }
@@ -3221,11 +3317,12 @@ async function handleAdminChangePassword(e) {
             if (res.token) {
                 token = res.token;
                 localStorage.setItem('token', res.token);
+                localStorage.setItem('ff_token', res.token);
             }
             const form = document.getElementById('adminChangePasswordForm');
             if (form) form.reset();
         } else {
-            showToast((res && res.detail) || 'পাসওয়ার্ড পরিবর্তন ব্যর্থ হয়েছে', 'error');
+            showToast((res && (res.detail || res.message)) || 'পাসওয়ার্ড পরিবর্তন ব্যর্থ হয়েছে', 'error');
         }
     } catch (e) {
         console.error('Admin password change error', e);
@@ -3326,8 +3423,19 @@ function handleWsMessage(data) {
         }
         if (data.admin_bkash) {
             adminBkashNumber = data.admin_bkash;
-            const elBkash = document.getElementById('displayBkashNumber');
-            if (elBkash) elBkash.innerText = data.admin_bkash;
+            document.querySelectorAll('.displayBkashNumber, [id="displayBkashNumber"]').forEach(el => el.innerText = data.admin_bkash);
+            const setBk = document.getElementById('settingAdminBkash');
+            if (setBk) setBk.value = data.admin_bkash;
+        }
+        if (data.admin_withdraw_number) {
+            adminWithdrawNumber = data.admin_withdraw_number;
+            document.querySelectorAll('.displayWithdrawNumber, [id="displayWithdrawNumber"]').forEach(el => el.innerText = data.admin_withdraw_number);
+            const setWith = document.getElementById('settingAdminWithdraw');
+            if (setWith) setWith.value = data.admin_withdraw_number;
+        }
+    } else if (data.type === 'ADMIN_DASHBOARD_UPDATE') {
+        if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'moderator')) {
+            loadAdminOverview();
         }
     } else if (data.type === 'APP_UPDATE_AVAILABLE') {
         playSound('alert');
@@ -3532,7 +3640,7 @@ function switchAdminSection(sectionId) {
     } else if (sectionId === 'withdrawals') {
         if (currentUser && currentUser.role === 'admin') loadAdminOverview();
     } else if (sectionId === 'players') {
-        if (currentUser && currentUser.role === 'admin') loadAdminUsers();
+        if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'moderator')) loadAdminUsers();
     } else if (sectionId === 'matches') {
         if (currentUser && currentUser.role === 'moderator') {
             loadMatches();

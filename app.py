@@ -8,6 +8,7 @@ import secrets
 import sqlite3
 import base64
 import re
+import threading
 from typing import Optional, List
 from datetime import datetime, timedelta, timezone
 
@@ -2240,17 +2241,20 @@ async def admin_delete_user(target_user_id: int, admin: dict = Depends(verify_ad
     finally:
         conn.close()
 
-    # INSTANT SYNCHRONOUS PURGE FROM MONGODB ATLAS (NO GHOSTS EVER)
-    try:
-        delete_from_mongo_direct("users", target_user_id)
-        delete_from_mongo_direct("participations", target_user_id, id_field="user_id")
-        delete_from_mongo_direct("deposits", target_user_id, id_field="user_id")
-        delete_from_mongo_direct("withdrawals", target_user_id, id_field="user_id")
-        delete_from_mongo_direct("push_subscriptions", target_user_id, id_field="user_id")
-        push_sqlite_to_mongo()
-        sync_snapshot_now()
-    except Exception as e:
-        print(f"[User Delete Atlas Sync Error] {e}")
+    # ASYNCHRONOUS BACKGROUND PURGE FROM MONGODB ATLAS (NO BLOCKING / ZERO LAG)
+    def _bg_atlas_user_purge(uid):
+        try:
+            delete_from_mongo_direct("users", uid)
+            delete_from_mongo_direct("participations", uid, id_field="user_id")
+            delete_from_mongo_direct("deposits", uid, id_field="user_id")
+            delete_from_mongo_direct("withdrawals", uid, id_field="user_id")
+            delete_from_mongo_direct("push_subscriptions", uid, id_field="user_id")
+            push_sqlite_to_mongo()
+            sync_snapshot_now()
+        except Exception as e:
+            print(f"[User Delete Atlas Sync Error] {e}")
+
+    threading.Thread(target=_bg_atlas_user_purge, args=(target_user_id,), daemon=True).start()
 
     try:
         await manager.send_to_user(target_user_id, {
@@ -2764,15 +2768,18 @@ def admin_delete_match(match_id: int, admin: dict = Depends(verify_admin)):
             conn.execute("UPDATE settings SET value = ? WHERE key = ?", (str(rem_max), f"seq_watermark_{pfx}"))
     conn.close()
 
-    # INSTANT SYNCHRONOUS PURGE FROM MONGODB ATLAS (NO GHOSTS EVER)
-    try:
-        delete_from_mongo_direct("matches", match_id)
-        delete_from_mongo_direct("participations", match_id, id_field="match_id")
-        delete_from_mongo_direct("match_results", match_id, id_field="match_id")
-        push_sqlite_to_mongo()
-        sync_snapshot_now()
-    except Exception as e:
-        print(f"[Match Delete Atlas Sync Error] {e}")
+    # ASYNCHRONOUS BACKGROUND PURGE FROM MONGODB ATLAS (NO BLOCKING / ZERO LAG)
+    def _bg_atlas_match_purge(mid):
+        try:
+            delete_from_mongo_direct("matches", mid)
+            delete_from_mongo_direct("participations", mid, id_field="match_id")
+            delete_from_mongo_direct("match_results", mid, id_field="match_id")
+            push_sqlite_to_mongo()
+            sync_snapshot_now()
+        except Exception as e:
+            print(f"[Match Delete Atlas Sync Error] {e}")
+
+    threading.Thread(target=_bg_atlas_match_purge, args=(match_id,), daemon=True).start()
 
     return {"success": True, "message": "Match deleted"}
 

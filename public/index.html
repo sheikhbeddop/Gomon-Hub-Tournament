@@ -10,7 +10,7 @@
     <link rel="manifest" href="/manifest.json?v=4.2.0">
     <script>window.GOMON_HUB_LOGO = "/gomon_hub_logo.png";</script>
     <meta name="theme-color" content="#080b11">
-    <link rel="stylesheet" href="/static/css/style.css?v=5.1.0">
+    <link rel="stylesheet" href="/static/css/style.css?v=5.2.0">
 
     <style id="gomon-hub-auth-critical-css">
         /* Disable Splash Screen Completely */
@@ -2946,40 +2946,73 @@
                 <button class="modal-close" onclick="closeModal('joinMatchModal')">&times;</button>
             </div>
             <div class="modal-body">
-                <div style="background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 10px; padding: 12px 14px; margin-bottom: 16px;">
+                <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 14px; margin-bottom: 14px;">
                     <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
-                        <span style="color: var(--text-muted); font-size: 0.85rem;">Match Title:</span>
-                        <b id="joinModalMatchTitle" style="color: #ffffff; font-size: 0.92rem;">Free Fire Match</b>
+                        <span style="color: #64748b; font-size: 0.85rem; font-weight: 600;">Match Title:</span>
+                        <b id="joinModalMatchTitle" style="color: #0f172a; font-size: 0.92rem;">Free Fire Match</b>
                     </div>
                     <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
-                        <span style="color: var(--text-muted); font-size: 0.85rem;">Entry Fee:</span>
-                        <b id="joinModalMatchFee" style="color: var(--neon-amber); font-size: 0.95rem;">20 Digits</b>
+                        <span style="color: #64748b; font-size: 0.85rem; font-weight: 600;">Total Entry Fee:</span>
+                        <b id="joinModalMatchFee" style="color: #d97706; font-size: 0.95rem; font-weight: 800;">20 Digits</b>
                     </div>
                     <div style="display: flex; justify-content: space-between;">
-                        <span style="color: var(--text-muted); font-size: 0.85rem;">Your Balance:</span>
-                        <b id="joinModalUserBal" style="color: var(--neon-cyan); font-size: 0.95rem;">100 Digits</b>
+                        <span style="color: #64748b; font-size: 0.85rem; font-weight: 600;">Your Balance:</span>
+                        <b id="joinModalUserBal" style="color: #059669; font-size: 0.95rem; font-weight: 800;">100 Digits</b>
                     </div>
+                </div>
+
+                <div id="joinModalFeeWarning" style="display: none; background: #fef2f2; border: 1.5px solid #fecaca; border-radius: 8px; padding: 10px 12px; font-size: 0.82rem; color: #b91c1c; margin-bottom: 14px; line-height: 1.4; font-weight: 600;">
+                    ⚠️ <b>পর্যাপ্ত ব্যালেন্স নেই!</b> প্রয়োজন: <b id="warnRequiredFee">0</b> Digits, আপনার আছে: <b id="warnCurrentBal">0</b> Digits। দয়া করে রিচার্জ করুন।
                 </div>
 
                 <form id="joinMatchForm" onsubmit="handleJoinMatchFormSubmit(event)">
                     <input type="hidden" id="joinModalMatchId">
+                    <input type="hidden" id="joinModalEntrySlots" value="1">
                     
-                    <div class="form-group" style="margin-bottom: 14px;">
-                        <label class="form-label" style="display: block; font-size: 0.85rem; font-weight: 700; color: #e2e8f0; margin-bottom: 6px;">
-                            Free Fire In-Game Name (IGN) *
+                    <!-- Entry Type Selector (Solo / Duo / Trio / Squad) -->
+                    <div class="form-group" id="entryTypeGroup" style="margin-bottom: 14px;">
+                        <label class="form-label" style="display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; font-weight: 700; color: #1e293b; margin-bottom: 6px;">
+                            <span>👥 Booking Mode (বুকিং অপশন)</span>
+                            <span id="entrySlotsBadge" style="font-size: 0.72rem; background: #059669; color: #ffffff; padding: 2px 8px; border-radius: 99px; font-weight: 800;">1 Player</span>
                         </label>
-                        <input type="text" class="form-input" id="joinPlayerIgn" required placeholder="Enter exact Free Fire in-game name" style="width: 100%; box-sizing: border-box;">
+                        <div id="entryTypeSelector" style="display: flex; gap: 8px; flex-wrap: wrap;">
+                            <!-- Populated dynamically: Solo (1), Duo (2), Trio (3), Squad (4) -->
+                        </div>
                     </div>
 
-                    <div class="form-group" style="margin-bottom: 16px;">
-                        <label class="form-label" style="display: block; font-size: 0.85rem; font-weight: 700; color: #e2e8f0; margin-bottom: 6px;">
-                            Free Fire UID * (Numeric Game ID)
+                    <!-- Team Name (Visible if slots > 1) -->
+                    <div class="form-group" id="teamNameGroup" style="display: none; margin-bottom: 14px;">
+                        <label class="form-label" style="display: block; font-size: 0.85rem; font-weight: 700; color: #1e293b; margin-bottom: 6px;">
+                            🛡️ Team / Squad Name (টিম বা দলের নাম - ঐচ্ছিক)
                         </label>
-                        <input type="text" class="form-input" id="joinPlayerUid" required inputmode="numeric" pattern="[0-9]{6,15}" placeholder="Enter numeric Free Fire UID" style="width: 100%; box-sizing: border-box;">
+                        <input type="text" class="form-input" id="joinTeamName" placeholder="e.g. VIP Gaming, Apex Squad" style="width: 100%; box-sizing: border-box; background: #ffffff; border: 1.5px solid #cbd5e1; color: #0f172a;">
                     </div>
 
-                    <div style="background: rgba(0, 245, 155, 0.08); border-left: 3px solid var(--neon-green); padding: 10px 12px; border-radius: 6px; font-size: 0.8rem; color: #cbd5e1; margin-bottom: 18px; line-height: 1.4;">
-                        🔒 <b>Fixed Slot Rule:</b> Upon joining, a fixed slot number will be permanently assigned to you. In the custom room, you must sit in this exact slot.
+                    <!-- Player 1 (Leader) Details -->
+                    <div style="background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 8px; padding: 12px; margin-bottom: 12px;">
+                        <div style="font-size: 0.8rem; font-weight: 800; color: #059669; margin-bottom: 8px; font-family: 'Rajdhani', sans-serif; text-transform: uppercase;">
+                            👤 Player 1 (Team Leader / You)
+                        </div>
+                        <div class="form-group" style="margin-bottom: 10px;">
+                            <label class="form-label" id="leaderIgnLabel" style="display: block; font-size: 0.82rem; font-weight: 700; color: #334155; margin-bottom: 4px;">
+                                Your Free Fire In-Game Name (IGN) *
+                            </label>
+                            <input type="text" class="form-input" id="joinPlayerIgn" required placeholder="Enter exact Free Fire in-game name" style="width: 100%; box-sizing: border-box; background: #ffffff; border: 1.5px solid #cbd5e1; color: #0f172a;">
+                        </div>
+
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label class="form-label" id="leaderUidLabel" style="display: block; font-size: 0.82rem; font-weight: 700; color: #334155; margin-bottom: 4px;">
+                                Your Free Fire UID * (Numeric Game ID)
+                            </label>
+                            <input type="text" class="form-input" id="joinPlayerUid" required inputmode="numeric" pattern="[0-9]{6,15}" placeholder="Enter numeric Free Fire UID" style="width: 100%; box-sizing: border-box; background: #ffffff; border: 1.5px solid #cbd5e1; color: #0f172a;">
+                        </div>
+                    </div>
+
+                    <!-- Dynamic Teammates Container -->
+                    <div id="teammatesContainer" style="display: none; margin-bottom: 14px;"></div>
+
+                    <div style="background: #ecfdf5; border-left: 4px solid #059669; padding: 10px 12px; border-radius: 6px; font-size: 0.8rem; color: #065f46; margin-bottom: 16px; line-height: 1.4;">
+                        🔒 <b>Fixed Slot Rule:</b> Upon joining, fixed consecutive slot numbers will be assigned to your team. In the custom room, you and your teammates must sit in these exact slots.
                     </div>
 
                     <div style="display: flex; gap: 10px;">
@@ -3159,7 +3192,7 @@
     <!-- Toast Notification Container -->
     <div class="toast-container" id="toastContainer"></div>
 
-    <script src="/static/js/app.js?v=5.1.0"></script>
+    <script src="/static/js/app.js?v=5.2.0"></script>
 
 </body>
 </html>

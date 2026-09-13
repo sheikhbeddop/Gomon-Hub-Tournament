@@ -1002,18 +1002,19 @@
                 <!-- Direct Deposit Form -->
                 <div class="card" style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 22px; margin-bottom: 24px;">
                     <h3 style="font-family: 'Rajdhani', sans-serif; font-size: 1.25rem; font-weight: 800; color: #0f172a; margin-bottom: 14px;">ডিপোজিট ইনফরমেশন সাবমিট করুন</h3>
-                    <form id="depositForm">
+                    <form id="shopDepositForm" onsubmit="handleDepositSubmit(event)">
                         <div style="margin-bottom: 14px;">
                             <label style="display: block; font-size: 0.85rem; font-weight: 700; color: #334155; margin-bottom: 6px;">প্রেরক বিকাশ নাম্বার (যে নাম্বার থেকে পাঠিয়েছেন)</label>
-                            <input type="text" id="depSenderPhone" class="input-glow" placeholder="01XXXXXXXXX" maxlength="11" required style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #cbd5e1;">
+                            <input type="text" name="bkash_number" id="shopDepSenderPhone" class="input-glow" placeholder="01XXXXXXXXX" maxlength="11" required style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #cbd5e1; box-sizing: border-box;">
                         </div>
                         <div style="margin-bottom: 14px;">
                             <label style="display: block; font-size: 0.85rem; font-weight: 700; color: #334155; margin-bottom: 6px;">টাকার পরিমাণ (BDT)</label>
-                            <input type="number" id="depAmount" class="input-glow" placeholder="e.g. 100" min="10" required style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #cbd5e1;">
+                            <input type="number" name="amount" id="shopDepAmount" class="input-glow" placeholder="e.g. 100" min="10" max="25000" required style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #cbd5e1; box-sizing: border-box;">
                         </div>
                         <div style="margin-bottom: 18px;">
                             <label style="display: block; font-size: 0.85rem; font-weight: 700; color: #334155; margin-bottom: 6px;">বিকাশ ট্রানজেকশন আইডি (TrxID)</label>
-                            <input type="text" id="depTrxId" class="input-glow" placeholder="যেমন: BL72X99P" required style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #cbd5e1; text-transform: uppercase;">
+                            <input type="text" name="trx_id" id="shopDepTrxId" class="input-glow" placeholder="যেমন: BLA491J3KP" minlength="8" maxlength="16" required style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #cbd5e1; text-transform: uppercase; font-family: monospace; font-weight: 700; letter-spacing: 1px; box-sizing: border-box;" autocomplete="off" oninput="this.value = this.value.toUpperCase().replace(/\s+/g, '')">
+                            <small style="color: #64748b; font-size: 0.74rem; display: block; margin-top: 4px;">টাকা পাঠানোর পর বিকাশ ফিরতি এসএমএস থেকে TrxID কপি করে এখানে দিন।</small>
                         </div>
                         <button type="submit" class="btn btn-neon" style="width: 100%; padding: 14px; font-weight: 800; font-size: 1rem;">
                             🚀 ডিপোজিট রিকোয়েস্ট পাঠান
@@ -1034,7 +1035,7 @@
                                     <th>Status</th>
                                 </tr>
                             </thead>
-                            <tbody id="depositHistoryBody">
+                            <tbody id="depositHistoryBody" class="deposit-history-body">
                                 <tr><td colspan="4" style="text-align: center; color: #94a3b8; padding: 16px;">Loading...</td></tr>
                             </tbody>
                         </table>
@@ -1974,18 +1975,19 @@
                 <!-- Direct Deposit Form -->
                 <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px; margin-bottom: 14px;">
                     <h4 style="font-family: 'Rajdhani', sans-serif; font-size: 0.95rem; font-weight: 800; color: #0f172a; margin: 0 0 10px 0;">টাকা পাঠিয়ে তথ্য সাবমিট করুন</h4>
-                    <form id="depositForm" onsubmit="handleDepositSubmit(event)">
+                    <form id="modalDepositForm" onsubmit="handleDepositSubmit(event)">
                         <div style="margin-bottom: 10px;">
                             <label style="display: block; font-size: 0.74rem; font-weight: 700; color: #334155; margin-bottom: 3px;">প্রেরক বিকাশ নাম্বার (যে নাম্বার থেকে পাঠিয়েছেন)</label>
-                            <input type="text" id="depSenderPhone" class="input-glow" placeholder="01XXXXXXXXX" maxlength="11" required style="width: 100%; padding: 8px 10px; font-size: 0.82rem; border-radius: 6px; border: 1px solid #cbd5e1; box-sizing: border-box;">
+                            <input type="text" name="bkash_number" id="modalDepSenderPhone" class="input-glow" placeholder="01XXXXXXXXX" maxlength="11" required style="width: 100%; padding: 8px 10px; font-size: 0.82rem; border-radius: 6px; border: 1px solid #cbd5e1; box-sizing: border-box;">
                         </div>
                         <div style="margin-bottom: 10px;">
                             <label style="display: block; font-size: 0.74rem; font-weight: 700; color: #334155; margin-bottom: 3px;">টাকার পরিমাণ (BDT)</label>
-                            <input type="number" id="depAmount" class="input-glow" placeholder="e.g. 100" min="10" required style="width: 100%; padding: 8px 10px; font-size: 0.82rem; border-radius: 6px; border: 1px solid #cbd5e1; box-sizing: border-box;">
+                            <input type="number" name="amount" id="modalDepAmount" class="input-glow" placeholder="e.g. 100" min="10" max="25000" required style="width: 100%; padding: 8px 10px; font-size: 0.82rem; border-radius: 6px; border: 1px solid #cbd5e1; box-sizing: border-box;">
                         </div>
                         <div style="margin-bottom: 12px;">
                             <label style="display: block; font-size: 0.74rem; font-weight: 700; color: #334155; margin-bottom: 3px;">বিকাশ ট্রানজেকশন আইডি (TrxID)</label>
-                            <input type="text" id="depTrxId" class="input-glow" placeholder="যেমন: BL72X99P" required style="width: 100%; padding: 8px 10px; font-size: 0.82rem; border-radius: 6px; border: 1px solid #cbd5e1; text-transform: uppercase; box-sizing: border-box;">
+                            <input type="text" name="trx_id" id="modalDepTrxId" class="input-glow" placeholder="যেমন: BLA491J3KP" minlength="8" maxlength="16" required style="width: 100%; padding: 8px 10px; font-size: 0.82rem; border-radius: 6px; border: 1px solid #cbd5e1; text-transform: uppercase; font-family: monospace; font-weight: 700; letter-spacing: 1px; box-sizing: border-box;" autocomplete="off" oninput="this.value = this.value.toUpperCase().replace(/\s+/g, '')">
+                            <small style="color: #64748b; font-size: 0.7rem; display: block; margin-top: 3px;">টাকা পাঠানোর পর বিকাশ ফিরতি এসএমএস থেকে TrxID দিন।</small>
                         </div>
                         <button type="submit" class="btn btn-neon" style="width: 100%; padding: 10px; font-weight: 800; font-size: 0.88rem; background: linear-gradient(135deg, #e11d48, #be123c); border: none; color: white; border-radius: 8px; cursor: pointer; box-shadow: 0 3px 10px rgba(225, 29, 72, 0.25);">
                             🚀 ডিপোজিট রিকোয়েস্ট পাঠান
@@ -2006,7 +2008,7 @@
                                     <th style="padding: 6px 8px;">Status</th>
                                 </tr>
                             </thead>
-                            <tbody id="depositHistoryBody">
+                            <tbody id="modalDepositHistoryBody" class="deposit-history-body">
                                 <tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 12px; font-size: 0.74rem;">No deposit history found</td></tr>
                             </tbody>
                         </table>

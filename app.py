@@ -618,6 +618,8 @@ async def add_no_cache_header(request: Request, call_next):
         response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"
+    elif path.endswith((".png", ".jpg", ".jpeg", ".ico", ".svg", ".woff2", ".webp")):
+        response.headers["Cache-Control"] = "public, max-age=86400"
     return response
 
 

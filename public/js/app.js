@@ -4604,7 +4604,8 @@ async function loadCompletedResults(category, btnElem) {
                     </div>
                 `}
             </div>
-        `).join('');
+        `;
+    }).join('');
     } catch (err) {
         container.innerHTML = '<div style="text-align:center; color:#ef4444; padding:20px; font-size:0.8rem;">Unable to load tournament results</div>';
     }

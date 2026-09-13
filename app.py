@@ -35,7 +35,9 @@ from db_mongo import (
     pull_mongo_to_sqlite,
     notify_db_change,
     sync_db_async,
-    purge_records_older_than_15_days
+    purge_records_older_than_15_days,
+    delete_from_mongo_direct,
+    sync_snapshot_now
 )
 
 
@@ -2154,10 +2156,17 @@ async def admin_delete_user(target_user_id: int, admin: dict = Depends(verify_ad
     finally:
         conn.close()
 
+    # INSTANT SYNCHRONOUS PURGE FROM MONGODB ATLAS (NO GHOSTS EVER)
     try:
-        sync_db_async()
-    except Exception:
-        pass
+        delete_from_mongo_direct("users", target_user_id)
+        delete_from_mongo_direct("participations", target_user_id, id_field="user_id")
+        delete_from_mongo_direct("deposits", target_user_id, id_field="user_id")
+        delete_from_mongo_direct("withdrawals", target_user_id, id_field="user_id")
+        delete_from_mongo_direct("push_subscriptions", target_user_id, id_field="user_id")
+        push_sqlite_to_mongo()
+        sync_snapshot_now()
+    except Exception as e:
+        print(f"[User Delete Atlas Sync Error] {e}")
 
     try:
         await manager.send_to_user(target_user_id, {
@@ -2641,6 +2650,8 @@ def admin_delete_match(match_id: int, admin: dict = Depends(verify_admin)):
     with conn:
         m = conn.execute("SELECT match_code, title, match_type FROM matches WHERE id = ?", (match_id,)).fetchone()
         conn.execute("DELETE FROM matches WHERE id = ?", (match_id,))
+        conn.execute("DELETE FROM participations WHERE match_id = ?", (match_id,))
+        conn.execute("DELETE FROM match_results WHERE match_id = ?", (match_id,))
         if m and m["match_code"]:
             conn.execute("""
             INSERT INTO audit_logs (admin_id, target_user_id, action, amount, reason)
@@ -2666,10 +2677,17 @@ def admin_delete_match(match_id: int, admin: dict = Depends(verify_admin)):
             conn.execute("UPDATE match_code_sequences SET last_number = ? WHERE category = ?", (rem_max, pfx))
             conn.execute("UPDATE settings SET value = ? WHERE key = ?", (str(rem_max), f"seq_watermark_{pfx}"))
     conn.close()
+
+    # INSTANT SYNCHRONOUS PURGE FROM MONGODB ATLAS (NO GHOSTS EVER)
     try:
-        sync_db_async()
-    except Exception:
-        pass
+        delete_from_mongo_direct("matches", match_id)
+        delete_from_mongo_direct("participations", match_id, id_field="match_id")
+        delete_from_mongo_direct("match_results", match_id, id_field="match_id")
+        push_sqlite_to_mongo()
+        sync_snapshot_now()
+    except Exception as e:
+        print(f"[Match Delete Atlas Sync Error] {e}")
+
     return {"success": True, "message": "Match deleted"}
 
 @app.get("/api/admin/matches/history")

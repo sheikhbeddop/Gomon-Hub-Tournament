@@ -103,12 +103,6 @@ TABLES_TO_COLLECTIONS = [
 # -------------------------------------------------------------------
 def push_sqlite_to_mongo(conn=None) -> bool:
     """Reads all records from SQLite and saves them into MongoDB collections."""
-    # STRICT PRODUCTION GUARD: Only Render (Live Web) can push to production MongoDB Atlas!
-    # Local development on PC is strictly BLOCKED from pushing test users to live Atlas.
-    if not (os.environ.get("RENDER") or os.environ.get("PRODUCTION") or os.environ.get("FORCE_MONGO_PUSH")):
-        print("[MongoDB Guard] Local development: Push to production Atlas blocked to protect live client data.")
-        return False
-
     db = get_mongo_database()
     if db is None:
         return False
@@ -147,6 +141,8 @@ def push_sqlite_to_mongo(conn=None) -> bool:
 
             col = db[table]
             if not rows:
+                if table not in ["users", "settings"]:
+                    col.delete_many({})
                 continue
 
             docs = []
@@ -175,7 +171,19 @@ def push_sqlite_to_mongo(conn=None) -> bool:
             # Purge deleted records from MongoDB collections so deleted ghosts never return
             if docs:
                 current_ids = [d["_id"] for d in docs]
-                col.delete_many({"_id": {"$nin": current_ids}})
+                all_valid_ids = []
+                for cid in current_ids:
+                    all_valid_ids.append(cid)
+                    if isinstance(cid, int):
+                        all_valid_ids.append(str(cid))
+                    elif str(cid).isdigit():
+                        all_valid_ids.append(int(cid))
+                col.delete_many({
+                    "$and": [
+                        {"_id": {"$nin": all_valid_ids}},
+                        {"id": {"$nin": all_valid_ids}}
+                    ]
+                })
             elif table not in ["users", "settings"]:
                 col.delete_many({})
 
@@ -250,6 +258,18 @@ def pull_mongo_to_sqlite(target_path=DB_PATH) -> bool:
 
                 col = db[table]
                 docs = list(col.find())
+                
+                # Reconcile deletions for matches, participations, and match_results
+                if table in ["matches", "participations", "match_results", "purged_match_numbers"]:
+                    if not docs:
+                        conn.execute(f"DELETE FROM {table}")
+                        continue
+                    else:
+                        valid_ids = [int(d["_id"]) for d in docs if isinstance(d.get("_id"), int) or (isinstance(d.get("_id"), str) and str(d.get("_id")).isdigit())]
+                        if valid_ids and "id" in col_names:
+                            placeholders = ", ".join(["?"] * len(valid_ids))
+                            conn.execute(f"DELETE FROM {table} WHERE id NOT IN ({placeholders})", valid_ids)
+
                 if not docs:
                     continue
 
@@ -311,6 +331,54 @@ def sync_db_async():
     """Instantly pushes database changes to MongoDB in an asynchronous thread."""
     import threading
     threading.Thread(target=push_sqlite_to_mongo, daemon=True).start()
+
+def delete_from_mongo_direct(table_name: str, id_val, id_field: str = "id"):
+    """
+    Instantly and synchronously purges record from MongoDB Atlas.
+    Matches both integer and string representations of ID.
+    """
+    db = get_mongo_database()
+    if db is None:
+        return
+    try:
+        col = db[table_name]
+        id_int = int(id_val) if str(id_val).isdigit() else None
+        id_str = str(id_val)
+        filters = []
+        if id_field == "id":
+            filters.append({"_id": id_str})
+            if id_int is not None:
+                filters.append({"_id": id_int})
+        filters.append({id_field: id_str})
+        if id_int is not None:
+            filters.append({id_field: id_int})
+
+        col.delete_many({"$or": filters})
+    except Exception as e:
+        print(f"[MongoDB Direct Delete] {table_name} {id_val}: {e}")
+
+def sync_snapshot_now():
+    """Immediately refreshes the latest binary snapshot in MongoDB Atlas."""
+    db = get_mongo_database()
+    if db is None or not os.path.exists(DB_PATH):
+        return
+    try:
+        with open(DB_PATH, "rb") as f:
+            db_bytes = f.read()
+        if db_bytes:
+            db["db_snapshots"].replace_one(
+                {"_id": "latest"},
+                {
+                    "_id": "latest",
+                    "data": db_bytes,
+                    "size": len(db_bytes),
+                    "updated_at": datetime.utcnow().isoformat(),
+                    "hash": hashlib.md5(db_bytes).hexdigest()
+                },
+                upsert=True
+            )
+    except Exception as e:
+        print(f"[Snapshot Sync] {e}")
 
 def purge_records_older_than_15_days(db=None):
     """

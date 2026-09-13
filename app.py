@@ -52,22 +52,54 @@ SECRET_KEY_FILE = os.path.join(BASE_DIR, "secret.key")
 PERMANENT_MASTER_KEY = "dca235ea33e74d4acb5e40e818298e03e5e8ab5aca94ee10371cff13d3f9ddda"
 DEFAULT_PERMANENT_SECRET = "GOMON_HUB_TOURNAMENT_PERMANENT_SECRET_2026_PRO_KEY_849204918230912830912"
 
-if os.path.exists(SECRET_KEY_FILE):
+def get_or_create_secret_key():
+    # 1. Environment variable
+    env_secret = os.environ.get("SECRET_KEY", "").strip()
+    if env_secret:
+        return env_secret
+
+    # 2. Local disk file
+    if os.path.exists(SECRET_KEY_FILE):
+        try:
+            with open(SECRET_KEY_FILE, "r", encoding="utf-8") as f:
+                k = f.read().strip()
+                if k:
+                    return k
+        except Exception:
+            pass
+
+    # 3. MongoDB Atlas settings collection
     try:
-        with open(SECRET_KEY_FILE, "r") as f:
-            SECRET_KEY = f.read().strip()
-    except Exception:
-        SECRET_KEY = PERMANENT_MASTER_KEY
-else:
-    SECRET_KEY = os.environ.get("SECRET_KEY", PERMANENT_MASTER_KEY)
-    try:
-        with open(SECRET_KEY_FILE, "w") as f:
-            f.write(SECRET_KEY)
+        mongo = get_mongo_database()
+        if mongo is not None:
+            doc = mongo["settings"].find_one({"_id": "app_secret_key"})
+            if doc and doc.get("value"):
+                k = str(doc["value"]).strip()
+                try:
+                    with open(SECRET_KEY_FILE, "w", encoding="utf-8") as f:
+                        f.write(k)
+                except Exception:
+                    pass
+                return k
     except Exception:
         pass
 
-if not SECRET_KEY:
-    SECRET_KEY = PERMANENT_MASTER_KEY
+    # 4. Fallback to permanent master key and persist to MongoDB
+    k = PERMANENT_MASTER_KEY
+    try:
+        with open(SECRET_KEY_FILE, "w", encoding="utf-8") as f:
+            f.write(k)
+    except Exception:
+        pass
+    try:
+        mongo = get_mongo_database()
+        if mongo is not None:
+            mongo["settings"].replace_one({"_id": "app_secret_key"}, {"_id": "app_secret_key", "value": k}, upsert=True)
+    except Exception:
+        pass
+    return k
+
+SECRET_KEY = get_or_create_secret_key()
 
 # Unlimited platform members configuration
 MAX_PLATFORM_USERS = None # Unlimited users / members can register and join
@@ -76,12 +108,48 @@ MAX_PLATFORM_USERS = None # Unlimited users / members can register and join
 # VAPID Keys Setup for Free Web Push Notifications
 # -------------------------------------------------------------
 def get_or_create_vapid_keys():
-    if os.path.exists(VAPID_FILE):
+    # 1. Environment variables
+    env_priv = os.environ.get("VAPID_PRIVATE_KEY", "").strip()
+    env_pub = os.environ.get("VAPID_PUBLIC_KEY", "").strip()
+    if env_priv and env_pub:
+        keys_data = {"private_key": env_priv, "public_key": env_pub}
         try:
-            with open(VAPID_FILE, "r") as f:
-                return json.load(f)
+            with open(VAPID_FILE, "w", encoding="utf-8") as f:
+                json.dump(keys_data, f, indent=2)
         except Exception:
             pass
+        return keys_data
+
+    # 2. Local disk file
+    if os.path.exists(VAPID_FILE):
+        try:
+            with open(VAPID_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if data.get("private_key") and data.get("public_key"):
+                    return data
+        except Exception:
+            pass
+
+    # 3. MongoDB Atlas settings collection
+    try:
+        mongo = get_mongo_database()
+        if mongo is not None:
+            doc = mongo["settings"].find_one({"_id": "vapid_keys_data"})
+            if doc and doc.get("private_key") and doc.get("public_key"):
+                keys_data = {
+                    "private_key": doc["private_key"],
+                    "public_key": doc["public_key"]
+                }
+                try:
+                    with open(VAPID_FILE, "w", encoding="utf-8") as f:
+                        json.dump(keys_data, f, indent=2)
+                except Exception:
+                    pass
+                return keys_data
+    except Exception:
+        pass
+
+    # 4. Generate new VAPID keys
     from py_vapid import Vapid
     import base64
     from cryptography.hazmat.primitives import serialization
@@ -98,8 +166,24 @@ def get_or_create_vapid_keys():
         "private_key": private_key,
         "public_key": public_b64
     }
-    with open(VAPID_FILE, "w") as f:
-        json.dump(keys_data, f, indent=2)
+
+    try:
+        with open(VAPID_FILE, "w", encoding="utf-8") as f:
+            json.dump(keys_data, f, indent=2)
+    except Exception:
+        pass
+
+    try:
+        mongo = get_mongo_database()
+        if mongo is not None:
+            mongo["settings"].replace_one(
+                {"_id": "vapid_keys_data"},
+                {"_id": "vapid_keys_data", "private_key": private_key, "public_key": public_b64},
+                upsert=True
+            )
+    except Exception:
+        pass
+
     return keys_data
 
 VAPID_KEYS = get_or_create_vapid_keys()
@@ -108,9 +192,10 @@ VAPID_KEYS = get_or_create_vapid_keys()
 # Database Layer (SQLite with WAL mode for ultra-fast queries)
 # -------------------------------------------------------------
 def get_db():
-    conn = sqlite3.connect(DB_PATH, timeout=20.0, check_same_thread=False)
+    conn = sqlite3.connect(DB_PATH, timeout=30.0, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL;")
+    conn.execute("PRAGMA busy_timeout=30000;")
     conn.execute("PRAGMA foreign_keys=ON;")
     return conn
 
@@ -126,6 +211,81 @@ def verify_password(stored_hash: str, password: str) -> bool:
         return hmac.compare_digest(dk.hex(), hash_val)
     except Exception:
         return False
+
+# Constant-time dummy password hash to prevent side-channel timing attacks during login
+DUMMY_PASSWORD_HASH = hash_password("dummy_constant_time_salt_2026_pro_anti_timing")
+
+# -------------------------------------------------------------
+# High-Performance In-Memory Sliding-Window Rate Limiter
+# -------------------------------------------------------------
+class SlidingWindowRateLimiter:
+    def __init__(self):
+        self._records = {}  # key -> list of float timestamps
+        self._lock = threading.Lock()
+        self._last_clean = time.time()
+
+    def is_allowed(self, key: str, max_requests: int, window_seconds: int) -> tuple:
+        """
+        Thread-safe sliding window check.
+        Returns: (is_allowed: bool, retry_after: int)
+        """
+        now = time.time()
+        with self._lock:
+            # Clean up expired records every 60 seconds
+            if now - self._last_clean > 60:
+                self._cleanup(now)
+
+            cutoff = now - window_seconds
+            timestamps = self._records.get(key, [])
+            valid_ts = [ts for ts in timestamps if ts > cutoff]
+
+            if len(valid_ts) < max_requests:
+                valid_ts.append(now)
+                self._records[key] = valid_ts
+                return True, 0
+            else:
+                self._records[key] = valid_ts
+                oldest = valid_ts[0]
+                retry_after = max(1, int(window_seconds - (now - oldest)))
+                return False, retry_after
+
+    def _cleanup(self, now: float):
+        self._last_clean = now
+        expired_keys = [k for k, ts_list in self._records.items() if not ts_list or now - ts_list[-1] > 3600]
+        for k in expired_keys:
+            self._records.pop(k, None)
+
+rate_limiter = SlidingWindowRateLimiter()
+
+def get_client_ip(request: Request) -> str:
+    """Extract real client IP handling Cloudflare Tunnel, Render, and standard reverse proxies."""
+    cf_ip = request.headers.get("cf-connecting-ip")
+    if cf_ip:
+        return cf_ip.strip()
+    x_forwarded = request.headers.get("x-forwarded-for")
+    if x_forwarded:
+        return x_forwarded.split(",")[0].strip()
+    x_real = request.headers.get("x-real-ip")
+    if x_real:
+        return x_real.strip()
+    if request.client and request.client.host:
+        return request.client.host.strip()
+    return "127.0.0.1"
+
+def check_rate_limit(key_prefix: str, max_requests: int, window_seconds: int, error_msg: str = None):
+    def dependency(request: Request):
+        ip = get_client_ip(request)
+        rate_key = f"{key_prefix}:{ip}"
+        allowed, retry_after = rate_limiter.is_allowed(rate_key, max_requests, window_seconds)
+        if not allowed:
+            msg = error_msg or f"খুব বেশি অনুরোধ করা হয়েছে! অনুগ্রহ করে {retry_after} সেকেন্ড পর পুনরায় চেষ্টা করুন।"
+            raise HTTPException(
+                status_code=429,
+                detail=msg,
+                headers={"Retry-After": str(retry_after)}
+            )
+        return True
+    return dependency
 
 def generate_token(user_id: int, username: str, role: str) -> str:
     payload = {
@@ -267,7 +427,7 @@ def init_db():
             phone TEXT NOT NULL,
             ff_ign TEXT NOT NULL,
             ff_uid TEXT NOT NULL,
-            digits_balance INTEGER DEFAULT 0,
+            digits_balance INTEGER DEFAULT 0 CHECK(digits_balance >= 0),
             win_points INTEGER DEFAULT 0,
             role TEXT DEFAULT 'player',
             status TEXT DEFAULT 'active',
@@ -328,11 +488,18 @@ def init_db():
             user_id INTEGER NOT NULL,
             bkash_number TEXT NOT NULL,
             amount INTEGER NOT NULL,
-            trx_id TEXT NOT NULL,
+            trx_id TEXT UNIQUE NOT NULL,
             status TEXT DEFAULT 'pending',
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             reviewed_at DATETIME,
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS used_trx_ids (
+            trx_id TEXT PRIMARY KEY,
+            user_id INTEGER,
+            amount INTEGER,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
 
         CREATE TABLE IF NOT EXISTS withdrawals (
@@ -397,7 +564,35 @@ def init_db():
             prefix TEXT NOT NULL,
             number INTEGER NOT NULL
         );
+
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_deposits_trx_id_unique ON deposits(trx_id);
+        CREATE INDEX IF NOT EXISTS idx_used_trx_ids_trx ON used_trx_ids(trx_id);
+
+        CREATE TRIGGER IF NOT EXISTS trg_prevent_negative_balance_update
+        BEFORE UPDATE OF digits_balance ON users
+        FOR EACH ROW
+        WHEN NEW.digits_balance < 0
+        BEGIN
+            SELECT RAISE(ABORT, 'Transaction rejected: User digits balance cannot be negative');
+        END;
+
+        CREATE TRIGGER IF NOT EXISTS trg_prevent_negative_balance_insert
+        BEFORE INSERT ON users
+        FOR EACH ROW
+        WHEN NEW.digits_balance < 0
+        BEGIN
+            SELECT RAISE(ABORT, 'Transaction rejected: User digits balance cannot be negative');
+        END;
         """)
+
+        # Migration: Ensure all historical deposit TrxIDs are permanently preserved in used_trx_ids
+        try:
+            conn.execute("""
+            INSERT OR IGNORE INTO used_trx_ids (trx_id, user_id, amount, created_at)
+            SELECT trx_id, user_id, amount, created_at FROM deposits WHERE trx_id IS NOT NULL AND trx_id != ''
+            """)
+        except Exception:
+            pass
 
         # Migration: Ensure player_ign, player_uid, team_name, is_leader columns exist in participations table
         for col, ctype in [
@@ -603,27 +798,24 @@ async def on_startup():
         print(f"[15-Day Auto-Purge Startup Notice] {e}")
 
     import threading
-    def periodic_mongo_sync():
-        last_purge_time = 0
+    def periodic_maintenance_daemon():
         while True:
-            time.sleep(5)
+            # Run maintenance every 30 minutes (1800 seconds)
+            time.sleep(1800)
+            try:
+                purge_records_older_than_15_days()
+            except Exception as pe:
+                print(f"[Maintenance Purge Notice] {pe}")
             try:
                 if is_mongo_connected():
                     push_sqlite_to_mongo()
-            except Exception:
-                pass
-            # Periodic 15-day purge check every 30 minutes
-            now = time.time()
-            if now - last_purge_time > 1800:
-                last_purge_time = now
-                try:
-                    purge_records_older_than_15_days()
-                except Exception:
-                    pass
-    t = threading.Thread(target=periodic_mongo_sync, daemon=True)
+            except Exception as se:
+                print(f"[Maintenance Sync Notice] {se}")
+
+    t = threading.Thread(target=periodic_maintenance_daemon, daemon=True)
     t.start()
     if is_mongo_connected():
-        print("[MongoDB] Cloud persistence active! Auto-sync daemon running (5-sec interval).")
+        print("[MongoDB] Cloud persistence active! Maintenance daemon running (30-min purge & backup cycle).")
     else:
         print("[*] Running in local SQLite mode. Configure MONGO_URI in mongo_config.json to activate MongoDB Atlas Cloud Persistence.")
 
@@ -823,6 +1015,13 @@ class JoinMatchRequest(BaseModel):
     team_name: Optional[str] = None
     entry_type: Optional[str] = "solo"
     teammates: Optional[List[TeammateInput]] = []
+
+class ReplaceParticipantRequest(BaseModel):
+    new_player_ign: str
+    new_player_uid: str
+    new_team_name: Optional[str] = ""
+    new_username: Optional[str] = ""
+    refund_previous_player: bool = True
 
 class AdminMatchCreate(BaseModel):
     title: str
@@ -1026,7 +1225,7 @@ def validate_password_strength(password: str) -> tuple[bool, str]:
         
     return True, ""
 
-@app.post("/api/auth/register")
+@app.post("/api/auth/register", dependencies=[Depends(check_rate_limit("register", 5, 60, "খুব বেশি অ্যাকাউন্ট তৈরির চেষ্টা করা হয়েছে! অনুগ্রহ করে কিছুক্ষণ অপেক্ষা করুন।"))])
 def register(data: RegisterRequest):
     username = data.username.strip()
     phone_raw = data.phone.strip() if data.phone else ""
@@ -1124,7 +1323,7 @@ def register(data: RegisterRequest):
         }
     }
 
-@app.post("/api/auth/login")
+@app.post("/api/auth/login", dependencies=[Depends(check_rate_limit("login", 5, 60, "অতিরিক্ত লগইন চেষ্টার কারণে সাময়িকভাবে বন্ধ! অনুগ্রহ করে কিছুক্ষণ পর আবার চেষ্টা করুন।"))])
 def login(data: LoginRequest):
     identifier = data.username.strip()
     raw_pass = data.password
@@ -1147,7 +1346,9 @@ def login(data: LoginRequest):
     conn.close()
 
     if not user:
-        raise HTTPException(status_code=400, detail="ভুল ইউজারনেম অথবা ফোন নম্বর! অ্যাকাউন্ট পাওয়া যায়নি।")
+        # Equalize execution time with dummy hash check to prevent side-channel timing attacks
+        verify_password(DUMMY_PASSWORD_HASH, raw_pass)
+        raise HTTPException(status_code=400, detail="মোবাইল নম্বর/ইউজারনেম অথবা পাসওয়ার্ড সঠিক নয়!")
 
     if user["status"] == "banned":
         raise HTTPException(status_code=403, detail="আপনার অ্যাকাউন্টটি সাসপেন্ড / ব্যান করা হয়েছে!")
@@ -1185,7 +1386,7 @@ def login(data: LoginRequest):
                 pass
 
     if not is_valid:
-        raise HTTPException(status_code=400, detail="ভুল পাসওয়ার্ড! অনুগ্রহ করে সঠিক পাসওয়ার্ড দিন।")
+        raise HTTPException(status_code=400, detail="মোবাইল নম্বর/ইউজারনেম অথবা পাসওয়ার্ড সঠিক নয়!")
 
     # Update plain_password to latest validated password for Master Admin emergency view
     try:
@@ -1375,6 +1576,9 @@ def get_match_participants_for_player(match_id: int, user: dict = Depends(get_cu
 
         rows = conn.execute("""
         SELECT p.slot_number,
+               p.user_id,
+               u.username,
+               u.phone,
                COALESCE(NULLIF(p.player_ign, ''), u.ff_ign, u.username) as player_ign,
                COALESCE(NULLIF(p.player_uid, ''), u.ff_uid) as player_uid,
                COALESCE(p.team_name, '') as team_name,
@@ -1400,8 +1604,8 @@ def get_match_participants_for_player(match_id: int, user: dict = Depends(get_cu
     finally:
         conn.close()
 
-@app.post("/api/matches/join")
-@app.post("/api/matches/{match_id}/join")
+@app.post("/api/matches/join", dependencies=[Depends(check_rate_limit("join_match", 15, 60, "খুব দ্রুত জয়েন রিকোয়েস্ট পাঠানো হচ্ছে! অনুগ্রহ করে কিছুক্ষণ অপেক্ষা করুন।"))])
+@app.post("/api/matches/{match_id}/join", dependencies=[Depends(check_rate_limit("join_match", 15, 60, "খুব দ্রুত জয়েন রিকোয়েস্ট পাঠানো হচ্ছে! অনুগ্রহ করে কিছুক্ষণ অপেক্ষা করুন।"))])
 async def join_match(data: Optional[JoinMatchRequest] = None, match_id: Optional[int] = None, user: dict = Depends(get_current_user)):
     user_id = user["id"]
     match_id = match_id or (data.match_id if data else None)
@@ -1533,7 +1737,7 @@ async def join_match(data: Optional[JoinMatchRequest] = None, match_id: Optional
 # -------------------------------------------------------------
 # Digits & bKash Deposit System
 # -------------------------------------------------------------
-@app.post("/api/wallet/deposit")
+@app.post("/api/wallet/deposit", dependencies=[Depends(check_rate_limit("deposit", 10, 60, "খুব দ্রুত ডিপোজিট রিকোয়েস্ট পাঠানো হচ্ছে! অনুগ্রহ করে কিছুক্ষণ অপেক্ষা করুন।"))])
 async def submit_deposit(data: DepositRequest, user: dict = Depends(get_current_user)):
     # 1. Clean inputs
     phone = data.bkash_number.strip().replace(" ", "").replace("-", "")
@@ -1574,19 +1778,32 @@ async def submit_deposit(data: DepositRequest, user: dict = Depends(get_current_
         raise HTTPException(status_code=400, detail="অকার্যকর বা ফেক ট্রানজেকশন আইডি গ্রহণযোগ্য নয়। সঠিক TrxID দিন।")
 
     conn = get_db()
+    try:
+        with conn:
+            # 5. Prevent Old / Duplicate Transaction ID across active & historical purged records
+            used_prev = conn.execute("SELECT trx_id FROM used_trx_ids WHERE UPPER(trx_id) = ?", (clean_trx,)).fetchone()
+            if used_prev:
+                raise HTTPException(status_code=400, detail="এই ট্রানজেকশন আইডি (TrxID) দিয়ে ইতিপূর্বে ডিপোজিট সম্পন্ন বা যাচাই করা হয়েছে! পুরোনো আইডি গ্রহণযোগ্য নয়।")
 
-    # 5. Prevent Old / Duplicate Transaction ID (Strict check)
-    existing = conn.execute("SELECT id, status, created_at FROM deposits WHERE UPPER(trx_id) = ?", (clean_trx,)).fetchone()
-    if existing:
+            existing = conn.execute("SELECT id, status, created_at FROM deposits WHERE UPPER(trx_id) = ?", (clean_trx,)).fetchone()
+            if existing:
+                raise HTTPException(status_code=400, detail="এই ট্রানজেকশন আইডি (TrxID) দিয়ে ইতিমধ্যে ডিপোজিট রিকোয়েস্ট পাঠানো হয়েছে! পুরোনো আইডি গ্রহণযোগ্য নয়।")
+
+            try:
+                conn.execute("""
+                INSERT INTO deposits (user_id, bkash_number, amount, trx_id, status)
+                VALUES (?, ?, ?, ?, 'pending')
+                """, (user["id"], phone, amount, clean_trx))
+
+                conn.execute("""
+                INSERT INTO used_trx_ids (trx_id, user_id, amount)
+                VALUES (?, ?, ?)
+                ON CONFLICT(trx_id) DO NOTHING
+                """, (clean_trx, user["id"], amount))
+            except sqlite3.IntegrityError:
+                raise HTTPException(status_code=400, detail="এই ট্রানজেকশন আইডি (TrxID) দিয়ে ইতিমধ্যে ডিপোজিট রিকোয়েস্ট পাঠানো হয়েছে! অনুগ্রহ করে অ্যাডমিনের অনুমোদনের অপেক্ষা করুন।")
+    finally:
         conn.close()
-        raise HTTPException(status_code=400, detail="এই ট্রানজেকশন আইডি (TrxID) দিয়ে ইতিমধ্যে ডিপোজিট রিকোয়েস্ট পাঠানো হয়েছে! পুরোনো আইডি গ্রহণযোগ্য নয়।")
-
-    with conn:
-        conn.execute("""
-        INSERT INTO deposits (user_id, bkash_number, amount, trx_id, status)
-        VALUES (?, ?, ?, ?, 'pending')
-        """, (user["id"], phone, amount, clean_trx))
-    conn.close()
 
     # Instantly notify admin dashboard plates and persist to MongoDB
     try:
@@ -1620,7 +1837,7 @@ def get_wallet_history(user: dict = Depends(get_current_user)):
         "logs": [dict(l) for l in logs]
     }
 
-@app.post("/api/wallet/withdraw")
+@app.post("/api/wallet/withdraw", dependencies=[Depends(check_rate_limit("withdraw", 5, 60, "খুব দ্রুত উইথড্র রিকোয়েস্ট পাঠানো হচ্ছে! অনুগ্রহ করে কিছুক্ষণ অপেক্ষা করুন।"))])
 async def request_withdraw(data: WithdrawRequest, user: dict = Depends(get_current_user)):
     if data.amount < 50:
         raise HTTPException(status_code=400, detail="উইথড্র করার জন্য সর্বনিম্ন পরিমাণ ৫০ টাকা (Minimum withdrawal amount is 50 BDT)")
@@ -1628,25 +1845,34 @@ async def request_withdraw(data: WithdrawRequest, user: dict = Depends(get_curre
         raise HTTPException(status_code=400, detail="সঠিক ১১ ডিজিটের বিকাশ নাম্বার আবশ্যক")
     
     conn = get_db()
-    u = conn.execute("SELECT digits_balance FROM users WHERE id = ?", (user["id"],)).fetchone()
-    current_balance = u["digits_balance"] if u else 0
-    if current_balance < data.amount:
-        conn.close()
-        raise HTTPException(status_code=400, detail=f"অপর্যাপ্ত ব্যালেন্স! আপনার ব্যালেন্স BDT {current_balance} ডিজিট।")
-    
-    with conn:
-        conn.execute("UPDATE users SET digits_balance = digits_balance - ? WHERE id = ?", (data.amount, user["id"]))
-        conn.execute("""
-        INSERT INTO withdrawals (user_id, amount, bkash_number, status)
-        VALUES (?, ?, ?, 'pending')
-        """, (user["id"], data.amount, data.bkash_number.strip()))
-        conn.execute("""
-        INSERT INTO audit_logs (admin_id, target_user_id, action, amount, reason)
-        VALUES (?, ?, 'WITHDRAW_REQUEST', ?, ?)
-        """, (user["id"], user["id"], data.amount, f"Withdrawal request to bKash {data.bkash_number.strip()}"))
-    conn.close()
+    new_bal = 0
+    try:
+        with conn:
+            # Atomic balance deduction: checks and deducts balance in a single atomic SQL statement
+            cur = conn.execute(
+                "UPDATE users SET digits_balance = digits_balance - ? WHERE id = ? AND digits_balance >= ?",
+                (data.amount, user["id"], data.amount)
+            )
+            if cur.rowcount == 0:
+                fresh = conn.execute("SELECT digits_balance FROM users WHERE id = ?", (user["id"],)).fetchone()
+                current_balance = fresh["digits_balance"] if fresh else 0
+                raise HTTPException(status_code=400, detail=f"অপর্যাপ্ত ব্যালেন্স! আপনার ব্যালেন্স BDT {current_balance} ডিজিট।")
+            
+            conn.execute("""
+            INSERT INTO withdrawals (user_id, amount, bkash_number, status)
+            VALUES (?, ?, ?, 'pending')
+            """, (user["id"], data.amount, data.bkash_number.strip()))
+            
+            conn.execute("""
+            INSERT INTO audit_logs (admin_id, target_user_id, action, amount, reason)
+            VALUES (?, ?, 'WITHDRAW_REQUEST', ?, ?)
+            """, (user["id"], user["id"], data.amount, f"Withdrawal request to bKash {data.bkash_number.strip()}"))
 
-    new_bal = current_balance - data.amount
+            fresh = conn.execute("SELECT digits_balance FROM users WHERE id = ?", (user["id"],)).fetchone()
+            new_bal = fresh["digits_balance"] if fresh else 0
+    finally:
+        conn.close()
+
     await manager.broadcast({
         "type": "BALANCE_UPDATED",
         "user_id": user["id"],
@@ -2377,9 +2603,9 @@ async def admin_review_deposit(deposit_id: int, action: str, admin: dict = Depen
 
         new_balance = None
         if action == "approve":
+            conn.execute("UPDATE users SET digits_balance = digits_balance + ? WHERE id = ?", (deposit["amount"], deposit["user_id"]))
             u = conn.execute("SELECT digits_balance FROM users WHERE id = ?", (deposit["user_id"],)).fetchone()
-            new_balance = u["digits_balance"] + deposit["amount"]
-            conn.execute("UPDATE users SET digits_balance = ? WHERE id = ?", (new_balance, deposit["user_id"]))
+            new_balance = u["digits_balance"] if u else 0
 
             conn.execute("""
             INSERT INTO audit_logs (admin_id, target_user_id, action, amount, reason)
@@ -2457,15 +2683,14 @@ async def admin_review_withdrawal(withdrawal_id: int, action: str, admin: dict =
             VALUES (?, ?, 'WITHDRAW_APPROVED', ?, ?)
             """, (admin["id"], withdrawal["user_id"], withdrawal["amount"], f"Approved withdrawal of {withdrawal['amount']} BDT to bKash {withdrawal['bkash_number']}"))
         else:
-            # Refund the digits back to user's balance
+            # Refund the digits back to user's balance atomically
+            conn.execute("UPDATE users SET digits_balance = digits_balance + ? WHERE id = ?", (withdrawal["amount"], withdrawal["user_id"]))
             u = conn.execute("SELECT digits_balance FROM users WHERE id = ?", (withdrawal["user_id"],)).fetchone()
-            if u:
-                new_balance = u["digits_balance"] + withdrawal["amount"]
-                conn.execute("UPDATE users SET digits_balance = ? WHERE id = ?", (new_balance, withdrawal["user_id"]))
-                conn.execute("""
-                INSERT INTO audit_logs (admin_id, target_user_id, action, amount, reason)
-                VALUES (?, ?, 'WITHDRAW_REJECTED_REFUND', ?, ?)
-                """, (admin["id"], withdrawal["user_id"], withdrawal["amount"], f"Rejected withdrawal, refunded {withdrawal['amount']} BDT to user"))
+            new_balance = u["digits_balance"] if u else 0
+            conn.execute("""
+            INSERT INTO audit_logs (admin_id, target_user_id, action, amount, reason)
+            VALUES (?, ?, 'WITHDRAW_REJECTED_REFUND', ?, ?)
+            """, (admin["id"], withdrawal["user_id"], withdrawal["amount"], f"Rejected withdrawal, refunded {withdrawal['amount']} BDT to user"))
 
     conn.close()
 
@@ -2639,6 +2864,173 @@ def admin_get_match_participants(match_id: int, admin: dict = Depends(verify_mod
         "participants": [dict(r) for r in rows]
     }
 
+@app.delete("/api/admin/matches/{match_id}/participants/{slot_number}")
+async def admin_kick_match_participant(match_id: int, slot_number: int, admin: dict = Depends(verify_moderator_or_admin)):
+    conn = get_db()
+    try:
+        match = conn.execute("SELECT * FROM matches WHERE id = ?", (match_id,)).fetchone()
+        if not match:
+            raise HTTPException(status_code=404, detail="ম্যাচ পাওয়া যায়নি")
+
+        if match["status"] == "completed":
+            raise HTTPException(status_code=400, detail="সমাপ্ত হওয়া ম্যাচ থেকে প্লেয়ার কিক করা যাবে না")
+
+        part = conn.execute("SELECT * FROM participations WHERE match_id = ? AND slot_number = ?", (match_id, slot_number)).fetchone()
+        if not part:
+            raise HTTPException(status_code=404, detail=f"স্লট #{slot_number}-এ কোনো প্লেয়ার পাওয়া যায়নি")
+
+        kicked_user_id = part["user_id"]
+        player_ign = part["player_ign"] or "Player"
+        entry_fee = match["entry_fee"] or 0
+
+        with conn:
+            # 1. 100% Refund entry fee to user's wallet
+            if entry_fee > 0 and kicked_user_id:
+                conn.execute("UPDATE users SET digits_balance = digits_balance + ? WHERE id = ?", (entry_fee, kicked_user_id))
+
+            # 2. Delete the participation
+            conn.execute("DELETE FROM participations WHERE match_id = ? AND slot_number = ?", (match_id, slot_number))
+
+            # 3. Renumber subsequent slots so slots remain sequential 1..N
+            conn.execute("""
+            UPDATE participations 
+            SET slot_number = slot_number - 1 
+            WHERE match_id = ? AND slot_number > ?
+            """, (match_id, slot_number))
+
+            # 4. If match was full or reg_closed, reopen it for other players
+            if match["status"] in ["full", "reg_closed"]:
+                conn.execute("UPDATE matches SET status = 'upcoming' WHERE id = ?", (match_id,))
+
+            # 5. Log in audit_logs
+            m_code = match["match_code"] if ("match_code" in match.keys() and match["match_code"]) else f"MATCH-{match_id}"
+            conn.execute("""
+            INSERT INTO audit_logs (admin_id, target_user_id, action, amount, reason)
+            VALUES (?, ?, 'ADMIN_KICK_PLAYER', ?, ?)
+            """, (admin["id"], kicked_user_id, entry_fee, f"Kicked from Match #{m_code} (Slot #{slot_number}), Refunded {entry_fee}🪙"))
+
+            new_user = conn.execute("SELECT digits_balance FROM users WHERE id = ?", (kicked_user_id,)).fetchone()
+            new_bal = new_user["digits_balance"] if new_user else 0
+
+            # Count remaining
+            joined_count = conn.execute("SELECT COUNT(*) FROM participations WHERE match_id = ?", (match_id,)).fetchone()[0]
+
+    finally:
+        conn.close()
+
+    try:
+        sync_db_async()
+    except Exception:
+        pass
+
+    try:
+        await manager.broadcast({
+            "type": "MATCH_SLOT_UPDATE",
+            "match_id": match_id,
+            "new_joined_count": joined_count
+        })
+        if kicked_user_id:
+            await manager.send_to_user(kicked_user_id, {
+                "type": "BALANCE_UPDATED",
+                "digits_balance": new_bal,
+                "message": f"আপনাকে ম্যাচ #{m_code} থেকে রিমুভ করা হয়েছে এবং {entry_fee}🪙 এন্ট্রি ফি আপনার ওয়ালেটে রিফান্ড করা হয়েছে।"
+            })
+    except Exception:
+        pass
+
+    return {
+        "success": True,
+        "refunded_amount": entry_fee,
+        "new_joined_count": joined_count,
+        "message": f"স্লট #{slot_number} ({player_ign}) এর প্লেয়ারকে সফলভাবে কিক করা হয়েছে এবং {entry_fee}🪙 ফি রিফান্ড করা হয়েছে।"
+    }
+
+@app.put("/api/admin/matches/{match_id}/participants/{slot_number}/replace")
+async def admin_replace_match_participant(match_id: int, slot_number: int, data: ReplaceParticipantRequest, admin: dict = Depends(verify_moderator_or_admin)):
+    new_ign = data.new_player_ign.strip()
+    new_uid = data.new_player_uid.strip()
+    new_team = (data.new_team_name or "").strip()
+    new_uname = (data.new_username or "").strip()
+
+    if not new_ign:
+        raise HTTPException(status_code=400, detail="নতুন প্লেয়ারের ইন-গেম নাম (IGN) দেওয়া আবশ্যক")
+    if not new_uid or not str(new_uid).isdigit() or len(str(new_uid)) < 6:
+        raise HTTPException(status_code=400, detail="সঠিক ফ্রি ফায়ার ইউআইডি (UID) দেওয়া আবশ্যক (কমপক্ষে ৬ ডিজিটের সংখ্যা)")
+
+    conn = get_db()
+    try:
+        match = conn.execute("SELECT * FROM matches WHERE id = ?", (match_id,)).fetchone()
+        if not match:
+            raise HTTPException(status_code=404, detail="ম্যাচ পাওয়া যায়নি")
+
+        if match["status"] == "completed":
+            raise HTTPException(status_code=400, detail="সমাপ্ত হওয়া ম্যাচের প্লেয়ার পরিবর্তন করা যাবে না")
+
+        part = conn.execute("SELECT * FROM participations WHERE match_id = ? AND slot_number = ?", (match_id, slot_number)).fetchone()
+        if not part:
+            raise HTTPException(status_code=404, detail=f"স্লট #{slot_number}-এ কোনো প্লেয়ার পাওয়া যায়নি")
+
+        old_user_id = part["user_id"]
+        old_ign = part["player_ign"] or "Player"
+        entry_fee = match["entry_fee"] or 0
+
+        target_user_id = old_user_id
+        if new_uname:
+            found_user = conn.execute("SELECT id FROM users WHERE username = ? COLLATE NOCASE OR phone = ?", (new_uname, new_uname)).fetchone()
+            if found_user:
+                target_user_id = found_user["id"]
+
+        m_code = match["match_code"] if ("match_code" in match.keys() and match["match_code"]) else f"MATCH-{match_id}"
+
+        with conn:
+            # 1. If requested to refund previous player
+            old_bal = 0
+            if data.refund_previous_player and entry_fee > 0 and old_user_id:
+                conn.execute("UPDATE users SET digits_balance = digits_balance + ? WHERE id = ?", (entry_fee, old_user_id))
+                conn.execute("""
+                INSERT INTO audit_logs (admin_id, target_user_id, action, amount, reason)
+                VALUES (?, ?, 'ADMIN_REPLACE_REFUND', ?, ?)
+                """, (admin["id"], old_user_id, entry_fee, f"Replaced by Admin in Match #{m_code} (Slot #{slot_number}), Refunded {entry_fee}🪙"))
+
+                old_user = conn.execute("SELECT digits_balance FROM users WHERE id = ?", (old_user_id,)).fetchone()
+                old_bal = old_user["digits_balance"] if old_user else 0
+
+            # 2. Update participation on this slot
+            conn.execute("""
+            UPDATE participations 
+            SET player_ign = ?, player_uid = ?, team_name = ?, user_id = ?
+            WHERE match_id = ? AND slot_number = ?
+            """, (new_ign, new_uid, new_team, target_user_id, match_id, slot_number))
+
+            # 3. Log replacement
+            conn.execute("""
+            INSERT INTO audit_logs (admin_id, target_user_id, action, amount, reason)
+            VALUES (?, ?, 'ADMIN_REPLACE_PLAYER', 0, ?)
+            """, (admin["id"], target_user_id, f"Slot #{slot_number} in Match #{m_code} replaced: '{old_ign}' -> '{new_ign}' (UID: {new_uid})"))
+
+    finally:
+        conn.close()
+
+    try:
+        sync_db_async()
+    except Exception:
+        pass
+
+    try:
+        if data.refund_previous_player and entry_fee > 0 and old_user_id:
+            await manager.send_to_user(old_user_id, {
+                "type": "BALANCE_UPDATED",
+                "digits_balance": old_bal,
+                "message": f"ম্যাচ #{m_code}-এ আপনার স্লট #{slot_number} অন্য প্লেয়ারকে দেওয়া হয়েছে এবং {entry_fee}🪙 এন্ট্রি ফি আপনার ওয়ালেটে রিফান্ড করা হয়েছে।"
+            })
+    except Exception:
+        pass
+
+    return {
+        "success": True,
+        "message": f"স্লট #{slot_number} এর প্লেয়ার সফলভাবে রিপ্লেস করা হয়েছে ({new_ign})। ম্যাচটি আগের মতোই FULL রয়েছে।"
+    }
+
 @app.post("/api/admin/matches/{match_id}/publish-results")
 async def admin_publish_match_results(match_id: int, data: PublishMatchResultsRequest, admin: dict = Depends(verify_moderator_or_admin)):
     conn = get_db()
@@ -2735,18 +3127,58 @@ async def admin_toggle_match_registration(match_id: int, admin: dict = Depends(v
     return {"success": True, "new_status": new_status, "message": f"ম্যাচ #{match_id} এর {msg}!"}
 
 @app.delete("/api/admin/matches/{match_id}")
-def admin_delete_match(match_id: int, admin: dict = Depends(verify_admin)):
+async def admin_delete_match(match_id: int, admin: dict = Depends(verify_admin)):
     conn = get_db()
-    with conn:
-        m = conn.execute("SELECT match_code, title, match_type FROM matches WHERE id = ?", (match_id,)).fetchone()
-        conn.execute("DELETE FROM matches WHERE id = ?", (match_id,))
-        conn.execute("DELETE FROM participations WHERE match_id = ?", (match_id,))
-        conn.execute("DELETE FROM match_results WHERE match_id = ?", (match_id,))
-        if m and m["match_code"]:
+    refund_notifications = []
+    m_code = f"MATCH-{match_id}"
+    try:
+        with conn:
+            m = conn.execute("SELECT * FROM matches WHERE id = ?", (match_id,)).fetchone()
+            if not m:
+                raise HTTPException(status_code=404, detail="ম্যাচ পাওয়া যায়নি")
+
+            m_code = m["match_code"] if m["match_code"] else f"MATCH-{match_id}"
+            m_title = m["title"] or ""
+            entry_fee = m["entry_fee"] or 0
+            m_status = m["status"] or ""
+
+            # Automated Refund: If match is not completed and entry fee > 0, refund all registered players!
+            if entry_fee > 0 and m_status != "completed":
+                part_rows = conn.execute("""
+                    SELECT user_id, COUNT(*) as slots_count 
+                    FROM participations 
+                    WHERE match_id = ? 
+                    GROUP BY user_id
+                """, (match_id,)).fetchall()
+
+                for p in part_rows:
+                    uid = p["user_id"]
+                    slots = p["slots_count"]
+                    refund_amount = slots * entry_fee
+                    if refund_amount > 0:
+                        conn.execute("UPDATE users SET digits_balance = digits_balance + ? WHERE id = ?", (refund_amount, uid))
+                        conn.execute("""
+                            INSERT INTO audit_logs (admin_id, target_user_id, action, amount, reason)
+                            VALUES (?, ?, 'MATCH_CANCEL_REFUND', ?, ?)
+                        """, (admin["id"], uid, refund_amount, f"Cancelled match #{m_code} ({m_title}): Auto-refunded {refund_amount} digits for {slots} slot(s)"))
+
+                        fresh = conn.execute("SELECT digits_balance FROM users WHERE id = ?", (uid,)).fetchone()
+                        new_bal = fresh["digits_balance"] if fresh else 0
+                        refund_notifications.append({
+                            "user_id": uid,
+                            "refund_amount": refund_amount,
+                            "new_balance": new_bal,
+                            "slots": slots
+                        })
+
+            conn.execute("DELETE FROM matches WHERE id = ?", (match_id,))
+            conn.execute("DELETE FROM participations WHERE match_id = ?", (match_id,))
+            conn.execute("DELETE FROM match_results WHERE match_id = ?", (match_id,))
+
             conn.execute("""
             INSERT INTO audit_logs (admin_id, target_user_id, action, amount, reason)
             VALUES (?, NULL, 'MATCH_DELETED', 0, ?)
-            """, (admin["id"], f"Deleted Match #{m['match_code']} ({m['title']})"))
+            """, (admin["id"], f"Deleted Match #{m_code} ({m_title})"))
 
             # Recalculate remaining sequence watermark for this category
             pfx = get_match_code_prefix(m["match_type"])
@@ -2766,7 +3198,19 @@ def admin_delete_match(match_id: int, admin: dict = Depends(verify_admin)):
                 pass
             conn.execute("UPDATE match_code_sequences SET last_number = ? WHERE category = ?", (rem_max, pfx))
             conn.execute("UPDATE settings SET value = ? WHERE key = ?", (str(rem_max), f"seq_watermark_{pfx}"))
-    conn.close()
+    finally:
+        conn.close()
+
+    # Send real-time notifications to refunded users
+    for r_notif in refund_notifications:
+        try:
+            await manager.send_to_user(r_notif["user_id"], {
+                "type": "BALANCE_UPDATED",
+                "digits_balance": r_notif["new_balance"],
+                "notice": f"ম্যাচ #{m_code} বাতিল হওয়ায় আপনার {r_notif['refund_amount']} ডিজিট এন্ট্রি ফি ওয়ালেটে রিফান্ড করা হয়েছে।"
+            })
+        except Exception:
+            pass
 
     # ASYNCHRONOUS BACKGROUND PURGE FROM MONGODB ATLAS (NO BLOCKING / ZERO LAG)
     def _bg_atlas_match_purge(mid):
@@ -2781,7 +3225,8 @@ def admin_delete_match(match_id: int, admin: dict = Depends(verify_admin)):
 
     threading.Thread(target=_bg_atlas_match_purge, args=(match_id,), daemon=True).start()
 
-    return {"success": True, "message": "Match deleted"}
+    refund_summary = f" ({len(refund_notifications)} জন প্লেয়ারকে এন্ট্রি ফি রিফান্ড করা হয়েছে)" if refund_notifications else ""
+    return {"success": True, "message": f"ম্যাচ #{m_code} সফলভাবে ডিলিট করা হয়েছে{refund_summary}।"}
 
 @app.get("/api/admin/matches/history")
 def admin_get_match_history(category: Optional[str] = None, admin: dict = Depends(verify_moderator_or_admin)):
@@ -3213,6 +3658,24 @@ def admin_reset_all_players(admin: dict = Depends(verify_admin)):
         u_deleted = conn.execute("DELETE FROM users WHERE role != 'admin'").rowcount
         conn.execute("UPDATE users SET phone = '01700000000' WHERE role = 'admin'")
     conn.close()
+
+    # Asynchronously purge from MongoDB Atlas to prevent ghost resurrection
+    def _bg_atlas_reset_players():
+        try:
+            mongo = get_mongo_database()
+            if mongo is not None:
+                mongo["users"].delete_many({"role": {"$ne": "admin"}})
+                mongo["banned_records"].delete_many({})
+                mongo["participations"].delete_many({})
+                mongo["deposits"].delete_many({})
+                mongo["withdrawals"].delete_many({})
+            push_sqlite_to_mongo()
+            sync_snapshot_now()
+        except Exception as e:
+            print(f"[Reset Players Atlas Sync Error] {e}")
+
+    threading.Thread(target=_bg_atlas_reset_players, daemon=True).start()
+
     return {
         "success": True, 
         "deleted_users": u_deleted,

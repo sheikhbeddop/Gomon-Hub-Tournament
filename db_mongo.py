@@ -95,8 +95,12 @@ TABLES_TO_COLLECTIONS = [
     "push_subscriptions",
     "match_results",
     "banned_records",
-    "purged_match_numbers"
+    "purged_match_numbers",
+    "used_trx_ids"
 ]
+
+import threading
+_sync_lock = threading.Lock()
 
 # -------------------------------------------------------------------
 # Push SQLite Data to MongoDB Collections (Zero Data Loss)
@@ -107,30 +111,20 @@ def push_sqlite_to_mongo(conn=None) -> bool:
     if db is None:
         return False
 
+    if not _sync_lock.acquire(blocking=False):
+        # Already syncing in another thread, avoid redundant overlapping execution
+        return False
+
     should_close = False
     if conn is None:
         if not os.path.exists(DB_PATH):
+            _sync_lock.release()
             return False
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
         should_close = True
 
     try:
-        # SAFETY GUARD: Never wipe MongoDB if local SQLite has 0 users but MongoDB has users!
-        try:
-            sqlite_user_cnt = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
-            if sqlite_user_cnt == 0:
-                mongo_user_cnt = db["users"].count_documents({})
-                if mongo_user_cnt > 0:
-                    print(f"[MongoDB Guard] SQLite has 0 users but MongoDB has {mongo_user_cnt} users! Auto-recovering from MongoDB...")
-                    if should_close:
-                        conn.close()
-                        should_close = False
-                    pull_mongo_to_sqlite()
-                    return True
-        except Exception:
-            pass
-
         for table in TABLES_TO_COLLECTIONS:
             try:
                 cursor = conn.execute(f"SELECT * FROM {table}")
@@ -141,8 +135,11 @@ def push_sqlite_to_mongo(conn=None) -> bool:
 
             col = db[table]
             if not rows:
-                if table not in ["users", "settings"]:
-                    col.delete_many({})
+                if table != "settings":
+                    if table == "users":
+                        col.delete_many({"role": {"$ne": "admin"}})
+                    else:
+                        col.delete_many({})
                 continue
 
             docs = []
@@ -184,10 +181,13 @@ def push_sqlite_to_mongo(conn=None) -> bool:
                         {"id": {"$nin": all_valid_ids}}
                     ]
                 })
-            elif table not in ["users", "settings"]:
-                col.delete_many({})
+            elif table != "settings":
+                if table == "users":
+                    col.delete_many({"role": {"$ne": "admin"}})
+                else:
+                    col.delete_many({})
 
-        # Also store full binary snapshot with hash for instant recovery
+        # Store binary snapshot via GridFS (completely eliminates 16MB BSON size limit)
         actual_db_path = DB_PATH
         try:
             cur = conn.cursor()
@@ -204,17 +204,34 @@ def push_sqlite_to_mongo(conn=None) -> bool:
             with open(actual_db_path, "rb") as f:
                 db_bytes = f.read()
             if db_bytes:
-                db["db_snapshots"].replace_one(
-                    {"_id": "latest"},
-                    {
-                        "_id": "latest",
-                        "data": db_bytes,
-                        "size": len(db_bytes),
-                        "updated_at": datetime.utcnow().isoformat(),
-                        "hash": hashlib.md5(db_bytes).hexdigest()
-                    },
-                    upsert=True
-                )
+                try:
+                    import gridfs
+                    fs = gridfs.GridFS(db, collection="sqlite_snapshots")
+                    for old_f in fs.find({"filename": "tournament_latest.db"}):
+                        fs.delete(old_f._id)
+                    fs.put(
+                        db_bytes,
+                        filename="tournament_latest.db",
+                        upload_date=datetime.utcnow(),
+                        md5_hash=hashlib.md5(db_bytes).hexdigest()
+                    )
+                except Exception as ge:
+                    print(f"[GridFS Backup Notice] {ge}")
+
+                try:
+                    db["db_snapshots"].replace_one(
+                        {"_id": "latest"},
+                        {
+                            "_id": "latest",
+                            "size": len(db_bytes),
+                            "updated_at": datetime.utcnow().isoformat(),
+                            "hash": hashlib.md5(db_bytes).hexdigest()
+                        },
+                        upsert=True
+                    )
+                except Exception:
+                    pass
+
         print("[MongoDB] Synced SQLite database to MongoDB Atlas successfully.")
         return True
     except Exception as e:
@@ -223,6 +240,7 @@ def push_sqlite_to_mongo(conn=None) -> bool:
     finally:
         if should_close:
             conn.close()
+        _sync_lock.release()
 
 # -------------------------------------------------------------------
 # Pull Data from MongoDB into SQLite (Automatic Recovery on Deploy)
@@ -234,12 +252,27 @@ def pull_mongo_to_sqlite(target_path=DB_PATH) -> bool:
         return False
 
     try:
-        # 1. Restore binary snapshot if exists
-        snap = db["db_snapshots"].find_one({"_id": "latest"})
-        if snap and "data" in snap and snap["data"]:
-            with open(target_path, "wb") as f:
-                f.write(snap["data"])
-            print(f"[MongoDB] Restored full database from MongoDB Atlas snapshot ({snap.get('size', 0)} bytes).")
+        # 1. Restore clean snapshot ONLY if local DB does not exist on disk (clean deploy on Render)
+        if not os.path.exists(target_path):
+            restored = False
+            try:
+                import gridfs
+                fs = gridfs.GridFS(db, collection="sqlite_snapshots")
+                gf = fs.find_one({"filename": "tournament_latest.db"}, sort=[("uploadDate", -1)])
+                if gf:
+                    with open(target_path, "wb") as f:
+                        f.write(gf.read())
+                    restored = True
+                    print(f"[MongoDB] Restored clean database from GridFS snapshot ({gf.length} bytes).")
+            except Exception as ge:
+                print(f"[GridFS Restore Notice] {ge}")
+
+            if not restored:
+                snap = db["db_snapshots"].find_one({"_id": "latest"})
+                if snap and "data" in snap and snap["data"]:
+                    with open(target_path, "wb") as f:
+                        f.write(snap["data"])
+                    print(f"[MongoDB] Restored legacy database snapshot ({snap.get('size', 0)} bytes).")
 
         # 2. Re-sync table records from MongoDB collections to ensure 100% latest documents
         if not os.path.exists(target_path):
@@ -259,10 +292,11 @@ def pull_mongo_to_sqlite(target_path=DB_PATH) -> bool:
                 col = db[table]
                 docs = list(col.find())
                 
-                # Reconcile deletions for matches, participations, and match_results
-                if table in ["matches", "participations", "match_results", "purged_match_numbers"]:
+                # Reconcile deletions for matches, participations, match_results, and users so deleted records NEVER resurrect
+                if table in ["users", "matches", "participations", "match_results", "purged_match_numbers", "deposits", "withdrawals"]:
                     if not docs:
-                        conn.execute(f"DELETE FROM {table}")
+                        if table not in ["users", "settings"]:
+                            conn.execute(f"DELETE FROM {table}")
                         continue
                     else:
                         valid_ids = [int(d["_id"]) for d in docs if isinstance(d.get("_id"), int) or (isinstance(d.get("_id"), str) and str(d.get("_id")).isdigit())]
@@ -358,7 +392,7 @@ def delete_from_mongo_direct(table_name: str, id_val, id_field: str = "id"):
         print(f"[MongoDB Direct Delete] {table_name} {id_val}: {e}")
 
 def sync_snapshot_now():
-    """Immediately refreshes the latest binary snapshot in MongoDB Atlas."""
+    """Immediately refreshes the latest binary snapshot in MongoDB Atlas using GridFS."""
     db = get_mongo_database()
     if db is None or not os.path.exists(DB_PATH):
         return
@@ -366,11 +400,24 @@ def sync_snapshot_now():
         with open(DB_PATH, "rb") as f:
             db_bytes = f.read()
         if db_bytes:
+            try:
+                import gridfs
+                fs = gridfs.GridFS(db, collection="sqlite_snapshots")
+                for old_f in fs.find({"filename": "tournament_latest.db"}):
+                    fs.delete(old_f._id)
+                fs.put(
+                    db_bytes,
+                    filename="tournament_latest.db",
+                    upload_date=datetime.utcnow(),
+                    md5_hash=hashlib.md5(db_bytes).hexdigest()
+                )
+            except Exception as ge:
+                print(f"[GridFS Snapshot Notice] {ge}")
+
             db["db_snapshots"].replace_one(
                 {"_id": "latest"},
                 {
                     "_id": "latest",
-                    "data": db_bytes,
                     "size": len(db_bytes),
                     "updated_at": datetime.utcnow().isoformat(),
                     "hash": hashlib.md5(db_bytes).hexdigest()
@@ -386,6 +433,7 @@ def purge_records_older_than_15_days(db=None):
     - Completed matches, their match_results, and participations
     - Approved/rejected deposits older than 15 days
     - Approved/rejected withdrawals older than 15 days
+    - Audit logs older than 15 days
     'Jate r jibone o try korle khuija pawa na jay... mongo thekei dlt hoite Hobe'
     """
     cutoff_dt = datetime.utcnow() - timedelta(days=15)
@@ -396,7 +444,7 @@ def purge_records_older_than_15_days(db=None):
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
 
-    purged_counts = {"matches": 0, "results": 0, "participations": 0, "deposits": 0, "withdrawals": 0}
+    purged_counts = {"matches": 0, "results": 0, "participations": 0, "deposits": 0, "withdrawals": 0, "audit_logs": 0}
     old_match_ids = []
     old_dep_ids = []
     old_wd_ids = []
@@ -414,58 +462,75 @@ def purge_records_older_than_15_days(db=None):
         # 1. Identify old completed matches
         cursor.execute("""
             SELECT id, match_code, match_type FROM matches 
-            WHERE status = 'completed' 
+            WHERE status = 'completed'
             AND (
                 (completed_at IS NOT NULL AND completed_at != '' AND completed_at < ?)
                 OR ((completed_at IS NULL OR completed_at = '') AND created_at < ?)
             )
         """, (cutoff_str, cutoff_str))
-        old_match_rows = cursor.fetchall()
-        old_match_ids = [int(row["id"]) for row in old_match_rows]
+        matches_to_purge = cursor.fetchall()
 
-        # Record purged match numbers permanently so 15-day purged serials NEVER come back
         purged_match_docs = []
-        for row in old_match_rows:
-            m_code = str(row["match_code"] or "").strip()
-            if '-' in m_code:
-                parts = m_code.rsplit('-', 1)
-                if len(parts) == 2 and parts[1].isdigit():
-                    pfx, num = parts[0], int(parts[1])
-                    doc_id = f"{pfx}_{num}"
+        if matches_to_purge:
+            old_match_ids = [int(row["id"]) for row in matches_to_purge]
+            for m in matches_to_purge:
+                m_code = m["match_code"] or ""
+                m_type = m["match_type"] or "match"
+                import re
+                match_num = re.search(r'\d+', m_code)
+                if match_num:
+                    num_val = int(match_num.group())
+                    prefix_val = m_type
                     cursor.execute("""
-                        INSERT INTO purged_match_numbers (id, prefix, number)
-                        VALUES (?, ?, ?)
-                        ON CONFLICT(id) DO NOTHING
-                    """, (doc_id, pfx, num))
-                    purged_match_docs.append({"_id": doc_id, "id": doc_id, "prefix": pfx, "number": num})
+                    INSERT OR REPLACE INTO purged_match_numbers (id, prefix, number)
+                    VALUES (?, ?, ?)
+                    """, (f"{prefix_val}_{num_val}", prefix_val, num_val))
+                    purged_match_docs.append({"_id": f"{prefix_val}_{num_val}", "prefix": prefix_val, "number": num_val})
 
-        if old_match_ids:
             placeholders = ",".join(["?"] * len(old_match_ids))
-            
-            # Delete match_results
-            cursor.execute(f"DELETE FROM match_results WHERE match_id IN ({placeholders})", old_match_ids)
-            purged_counts["results"] = cursor.rowcount
-
-            # Delete participations
             cursor.execute(f"DELETE FROM participations WHERE match_id IN ({placeholders})", old_match_ids)
             purged_counts["participations"] = cursor.rowcount
 
-            # Delete matches
+            cursor.execute(f"DELETE FROM match_results WHERE match_id IN ({placeholders})", old_match_ids)
+            purged_counts["results"] = cursor.rowcount
+
             cursor.execute(f"DELETE FROM matches WHERE id IN ({placeholders})", old_match_ids)
             purged_counts["matches"] = cursor.rowcount
 
         # 2. Identify old deposits (approved or rejected)
         cursor.execute("""
-            SELECT id FROM deposits
+            SELECT id, trx_id, user_id, amount, created_at FROM deposits
             WHERE status IN ('approved', 'rejected')
             AND (
                 (reviewed_at IS NOT NULL AND reviewed_at != '' AND reviewed_at < ?)
                 OR ((reviewed_at IS NULL OR reviewed_at = '') AND created_at < ?)
             )
         """, (cutoff_str, cutoff_str))
-        old_dep_ids = [int(row["id"]) for row in cursor.fetchall()]
-        if old_dep_ids:
+        old_deps = cursor.fetchall()
+        purged_trx_docs = []
+        if old_deps:
+            old_dep_ids = [int(row["id"]) for row in old_deps]
             placeholders = ",".join(["?"] * len(old_dep_ids))
+
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS used_trx_ids (
+                trx_id TEXT PRIMARY KEY,
+                user_id INTEGER,
+                amount REAL,
+                created_at TEXT
+            )
+            """)
+
+            for dep_row in old_deps:
+                t_id = (dep_row["trx_id"] or "").strip()
+                if t_id:
+                    cursor.execute("""
+                    INSERT INTO used_trx_ids (trx_id, user_id, amount, created_at)
+                    VALUES (?, ?, ?, ?)
+                    ON CONFLICT(trx_id) DO NOTHING
+                    """, (t_id, dep_row["user_id"], dep_row["amount"], dep_row["created_at"]))
+                    purged_trx_docs.append({"_id": t_id, "trx_id": t_id, "user_id": dep_row["user_id"], "amount": dep_row["amount"], "created_at": dep_row["created_at"]})
+
             cursor.execute(f"DELETE FROM deposits WHERE id IN ({placeholders})", old_dep_ids)
             purged_counts["deposits"] = cursor.rowcount
 
@@ -483,6 +548,10 @@ def purge_records_older_than_15_days(db=None):
             placeholders = ",".join(["?"] * len(old_wd_ids))
             cursor.execute(f"DELETE FROM withdrawals WHERE id IN ({placeholders})", old_wd_ids)
             purged_counts["withdrawals"] = cursor.rowcount
+
+        # 4. Identify and purge old audit_logs
+        cursor.execute("DELETE FROM audit_logs WHERE created_at < ?", (cutoff_str,))
+        purged_counts["audit_logs"] = cursor.rowcount
 
         conn.commit()
     except Exception as e:
@@ -513,6 +582,13 @@ def purge_records_older_than_15_days(db=None):
                 mongo["participations"].delete_many({"$or": [{"match_id": {"$in": id_filter}}, {"match_id": {"$in": old_match_ids}}]})
 
             if old_dep_ids:
+                if purged_trx_docs:
+                    for tdoc in purged_trx_docs:
+                        mongo["used_trx_ids"].replace_one(
+                            {"_id": tdoc["_id"]},
+                            tdoc,
+                            upsert=True
+                        )
                 id_filter = old_dep_ids + [str(x) for x in old_dep_ids]
                 mongo["deposits"].delete_many({"$or": [{"id": {"$in": id_filter}}, {"_id": {"$in": id_filter}}]})
 
@@ -542,6 +618,12 @@ def purge_records_older_than_15_days(db=None):
                     {"reviewed_at": {"$lt": cutoff_str}},
                     {"reviewed_at": {"$lt": cutoff_iso}},
                     {"created_at": {"$lt": cutoff_str}}
+                ]
+            })
+            mongo["audit_logs"].delete_many({
+                "$or": [
+                    {"created_at": {"$lt": cutoff_str}},
+                    {"created_at": {"$lt": cutoff_iso}}
                 ]
             })
         except Exception as e:

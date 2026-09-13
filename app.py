@@ -181,7 +181,8 @@ def get_next_match_code(conn, match_type: str) -> str:
     # -------------------------------------------------------------------------
     # LIFETIME INVARIANCE & AUTOMATIC DELETED SERIAL RECLAMATION
     # 1. Update Immunity: If matches 01..10 exist, next match is 11 (never resets to 1).
-    # 2. Reclaim Deleted Serials: When a match is deleted, its serial code comes back!
+    # 2. Reclaim Deleted Serials: When a match is manually deleted, its serial code comes back!
+    # 3. 15-Day Auto-Purged Numbers: When a match is purged by 15-day cleanup, its serial NEVER comes back!
     # -------------------------------------------------------------------------
     used_numbers = set()
     try:
@@ -195,7 +196,17 @@ def get_next_match_code(conn, match_type: str) -> str:
     except Exception:
         pass
 
-    # Find the lowest positive integer candidate that is not currently assigned to any active match:
+    # Ensure 15-day auto-purged match numbers are NEVER reused / NEVER come back:
+    try:
+        p_rows = conn.execute("SELECT number FROM purged_match_numbers WHERE prefix = ?", (prefix,)).fetchall()
+        for pr in p_rows:
+            if pr[0] is not None:
+                used_numbers.add(int(pr[0]))
+    except Exception:
+        pass
+
+    # Find the lowest positive integer candidate that is not currently assigned to any active match
+    # and was NOT purged by 15-day history cleanup:
     candidate = 1
     while candidate in used_numbers:
         candidate += 1
@@ -374,6 +385,12 @@ def init_db():
             password_hash TEXT DEFAULT '',
             reason TEXT,
             banned_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS purged_match_numbers (
+            id TEXT PRIMARY KEY,
+            prefix TEXT NOT NULL,
+            number INTEGER NOT NULL
         );
         """)
 
@@ -2640,6 +2657,12 @@ def admin_delete_match(match_id: int, admin: dict = Depends(verify_admin)):
                     parts = val.rsplit('-', 1)
                     if len(parts) == 2 and parts[1].isdigit():
                         rem_max = max(rem_max, int(parts[1]))
+            try:
+                p_max = conn.execute("SELECT MAX(number) FROM purged_match_numbers WHERE prefix = ?", (pfx,)).fetchone()[0]
+                if p_max is not None:
+                    rem_max = max(rem_max, int(p_max))
+            except Exception:
+                pass
             conn.execute("UPDATE match_code_sequences SET last_number = ? WHERE category = ?", (rem_max, pfx))
             conn.execute("UPDATE settings SET value = ? WHERE key = ?", (str(rem_max), f"seq_watermark_{pfx}"))
     conn.close()

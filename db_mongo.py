@@ -94,7 +94,8 @@ TABLES_TO_COLLECTIONS = [
     "match_code_sequences",
     "push_subscriptions",
     "match_results",
-    "banned_records"
+    "banned_records",
+    "purged_match_numbers"
 ]
 
 # -------------------------------------------------------------------
@@ -333,9 +334,18 @@ def purge_records_older_than_15_days(db=None):
     old_wd_ids = []
 
     try:
+        # Ensure purged_match_numbers table exists in SQLite
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS purged_match_numbers (
+            id TEXT PRIMARY KEY,
+            prefix TEXT NOT NULL,
+            number INTEGER NOT NULL
+        )
+        """)
+
         # 1. Identify old completed matches
         cursor.execute("""
-            SELECT id FROM matches 
+            SELECT id, match_code, match_type FROM matches 
             WHERE status = 'completed' 
             AND (
                 (completed_at IS NOT NULL AND completed_at != '' AND completed_at < ?)
@@ -344,6 +354,22 @@ def purge_records_older_than_15_days(db=None):
         """, (cutoff_str, cutoff_str))
         old_match_rows = cursor.fetchall()
         old_match_ids = [int(row["id"]) for row in old_match_rows]
+
+        # Record purged match numbers permanently so 15-day purged serials NEVER come back
+        purged_match_docs = []
+        for row in old_match_rows:
+            m_code = str(row["match_code"] or "").strip()
+            if '-' in m_code:
+                parts = m_code.rsplit('-', 1)
+                if len(parts) == 2 and parts[1].isdigit():
+                    pfx, num = parts[0], int(parts[1])
+                    doc_id = f"{pfx}_{num}"
+                    cursor.execute("""
+                        INSERT INTO purged_match_numbers (id, prefix, number)
+                        VALUES (?, ?, ?)
+                        ON CONFLICT(id) DO NOTHING
+                    """, (doc_id, pfx, num))
+                    purged_match_docs.append({"_id": doc_id, "id": doc_id, "prefix": pfx, "number": num})
 
         if old_match_ids:
             placeholders = ",".join(["?"] * len(old_match_ids))
@@ -404,6 +430,14 @@ def purge_records_older_than_15_days(db=None):
     mongo = db if db is not None else get_mongo_database()
     if mongo is not None:
         try:
+            if purged_match_docs:
+                for pdoc in purged_match_docs:
+                    mongo["purged_match_numbers"].replace_one(
+                        {"_id": pdoc["_id"]},
+                        pdoc,
+                        upsert=True
+                    )
+
             if old_match_ids:
                 id_filter = old_match_ids + [str(x) for x in old_match_ids]
                 mongo["matches"].delete_many({"$or": [{"id": {"$in": id_filter}}, {"_id": {"$in": id_filter}}]})

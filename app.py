@@ -484,12 +484,9 @@ def init_db():
         except Exception:
             pass
 
-        # Default Settings - Permanent bKash 01988279285
+        # Default Settings - Permanent bKash & Withdraw Numbers
         conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('admin_bkash', '01988279285 (Personal)')")
-        try:
-            conn.execute("UPDATE settings SET value = '01988279285 (Personal)' WHERE key = 'admin_bkash'")
-        except Exception:
-            pass
+        conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('admin_withdraw_number', '01988279285 (Personal)')")
         conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('notice', 'স্বাগতম! GOMON HUB টুর্নামেন্টে অংশ নিতে bKash এ ডিপোজিট করে সিডিউল থেকে জয়েন করুন!')")
         conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('site_title', 'GOMON HUB TOURNAMENT')")
 
@@ -842,6 +839,7 @@ def get_public_info():
     return {
         "site_title": settings.get("site_title", "GOMON HUB TOURNAMENT"),
         "admin_bkash": settings.get("admin_bkash", "01988279285 (Personal)"),
+        "admin_withdraw_number": settings.get("admin_withdraw_number", settings.get("admin_bkash", "01988279285 (Personal)")),
         "notice": settings.get("notice", ""),
         "app_version": current_ver,
         "app_update_notes": settings.get("app_update_notes", "GOMON HUB TOURNAMENT নতুন ইন্টারফেস ও সিকিউরিটি আপডেট।"),
@@ -1429,7 +1427,7 @@ async def join_match(data: Optional[JoinMatchRequest] = None, match_id: Optional
 # Digits & bKash Deposit System
 # -------------------------------------------------------------
 @app.post("/api/wallet/deposit")
-def submit_deposit(data: DepositRequest, user: dict = Depends(get_current_user)):
+async def submit_deposit(data: DepositRequest, user: dict = Depends(get_current_user)):
     if data.amount <= 0:
         raise HTTPException(status_code=400, detail="Amount must be greater than 0")
     if len(data.bkash_number.strip()) < 11:
@@ -1444,6 +1442,16 @@ def submit_deposit(data: DepositRequest, user: dict = Depends(get_current_user))
         VALUES (?, ?, ?, ?, 'pending')
         """, (user["id"], data.bkash_number.strip(), data.amount, data.trx_id.strip().upper()))
     conn.close()
+
+    # Instantly notify admin dashboard plates and persist to MongoDB
+    try:
+        await manager.broadcast({"type": "ADMIN_DASHBOARD_UPDATE"})
+    except Exception:
+        pass
+    try:
+        sync_db_async()
+    except Exception:
+        pass
 
     return {
         "success": True,
@@ -1499,6 +1507,16 @@ async def request_withdraw(data: WithdrawRequest, user: dict = Depends(get_curre
         "user_id": user["id"],
         "digits_balance": new_bal
     })
+
+    # Instantly notify admin dashboard plates and persist to MongoDB
+    try:
+        await manager.broadcast({"type": "ADMIN_DASHBOARD_UPDATE"})
+    except Exception:
+        pass
+    try:
+        sync_db_async()
+    except Exception:
+        pass
 
     return {
         "success": True,
@@ -1640,13 +1658,13 @@ def subscribe_push(data: PushSubscribeRequest, request: Request):
 # MASTER ADMIN CONTROLS (Protected by strict verify_admin)
 # -------------------------------------------------------------
 @app.get("/api/admin/overview")
-def admin_overview(admin: dict = Depends(verify_admin)):
+def admin_overview(admin: dict = Depends(verify_moderator_or_admin)):
     conn = get_db()
     total_users = conn.execute("SELECT COUNT(*) FROM users WHERE role != 'admin'").fetchone()[0]
     total_matches = conn.execute("SELECT COUNT(*) FROM matches").fetchone()[0]
     pending_deposits = conn.execute("SELECT COUNT(*) FROM deposits WHERE status = 'pending'").fetchone()[0]
     pending_withdrawals = conn.execute("SELECT COUNT(*) FROM withdrawals WHERE status = 'pending'").fetchone()[0]
-    total_digits_circulating = conn.execute("SELECT SUM(digits_balance) FROM users WHERE role != 'admin'").fetchone()[0] or 0
+    total_digits_circulating = conn.execute("SELECT COALESCE(SUM(digits_balance), 0) FROM users WHERE role != 'admin'").fetchone()[0] or 0
     total_moderators = conn.execute("SELECT COUNT(*) FROM users WHERE role = 'moderator'").fetchone()[0]
     
     recent_deposits = conn.execute("""
@@ -1678,16 +1696,29 @@ def admin_overview(admin: dict = Depends(verify_admin)):
     }
 
 @app.get("/api/admin/users")
-def admin_list_users(search: Optional[str] = None, admin: dict = Depends(verify_admin)):
+def admin_list_users(search: Optional[str] = None, admin: dict = Depends(verify_moderator_or_admin)):
     conn = get_db()
     if search:
-        s = f"%{search.strip()}%"
+        s_clean = search.strip()
+        s_like = f"%{s_clean}%"
+        try:
+            num_id = int(s_clean)
+        except ValueError:
+            num_id = -1
+
         users = conn.execute("""
         SELECT id, player_id, username, phone, email, ff_ign, ff_uid, digits_balance, win_points, role, status, created_at, plain_password, timeout_until
         FROM users
-        WHERE username LIKE ? OR player_id LIKE ? OR phone LIKE ? OR ff_uid LIKE ? OR email LIKE ?
+        WHERE id = ? 
+           OR CAST(id AS TEXT) LIKE ? 
+           OR player_id LIKE ? 
+           OR username LIKE ? 
+           OR phone LIKE ? 
+           OR ff_uid LIKE ? 
+           OR ff_ign LIKE ? 
+           OR email LIKE ?
         ORDER BY id DESC LIMIT 50
-        """, (s, s, s, s, s)).fetchall()
+        """, (num_id, s_like, s_like, s_like, s_like, s_like, s_like, s_like)).fetchall()
     else:
         users = conn.execute("""
         SELECT id, player_id, username, phone, email, ff_ign, ff_uid, digits_balance, win_points, role, status, created_at, plain_password, timeout_until
@@ -1903,6 +1934,11 @@ async def admin_reset_password(target_user_id: int, data: AdminResetPassword, ad
             """, (admin["id"], target_user_id, f"Password reset for @{user['username']}"))
     finally:
         conn.close()
+
+    try:
+        sync_db_async()
+    except Exception:
+        pass
 
     try:
         # Revoke existing session of user immediately for security, WITHOUT leaking new_pass
@@ -2193,6 +2229,16 @@ async def admin_review_deposit(deposit_id: int, action: str, admin: dict = Depen
             "notice": f"আপনার bKash ডিপোজিট অনুমোদিত হয়েছে! ওয়ালেটে +{deposit['amount']} ডিজিট যোগ হয়েছে।"
         })
 
+    # Instantly notify admin dashboard plates and persist to MongoDB
+    try:
+        await manager.broadcast({"type": "ADMIN_DASHBOARD_UPDATE"})
+    except Exception:
+        pass
+    try:
+        sync_db_async()
+    except Exception:
+        pass
+
     return {"success": True, "status": new_status, "deposit_id": deposit_id}
 
 
@@ -2268,6 +2314,16 @@ async def admin_review_withdrawal(withdrawal_id: int, action: str, admin: dict =
             "digits_balance": new_balance,
             "notice": f"আপনার {withdrawal['amount']} টাকার উইথড্র রিকোয়েস্ট বাতিল করা হয়েছে এবং {withdrawal['amount']} টাকা ফেরত দেওয়া হয়েছে।"
         })
+
+    # Instantly notify admin dashboard plates and persist to MongoDB
+    try:
+        await manager.broadcast({"type": "ADMIN_DASHBOARD_UPDATE"})
+    except Exception:
+        pass
+    try:
+        sync_db_async()
+    except Exception:
+        pass
 
     return {"success": True, "status": new_status, "withdrawal_id": withdrawal_id}
 
@@ -2659,40 +2715,50 @@ async def admin_update_settings(data: dict, admin: dict = Depends(verify_admin))
     conn = get_db()
     with conn:
         for k, v in data.items():
-            conn.execute("""
-            INSERT INTO settings (key, value) VALUES (?, ?)
-            ON CONFLICT(key) DO UPDATE SET value = excluded.value
-            """, (k, str(v)))
+            if v is not None:
+                conn.execute("""
+                INSERT INTO settings (key, value) VALUES (?, ?)
+                ON CONFLICT(key) DO UPDATE SET value = excluded.value
+                """, (k, str(v).strip()))
     conn.close()
 
+    try:
+        sync_db_async()
+    except Exception:
+        pass
+
     # Real-time WebSocket sync to all connected mobile & PC clients
-    await manager.broadcast({
-        "type": "SETTINGS_UPDATED",
-        "notice": data.get("notice"),
-        "site_title": data.get("site_title"),
-        "admin_bkash": data.get("admin_bkash")
-    })
+    broadcast_data = {
+        "type": "SETTINGS_UPDATED"
+    }
+    if "notice" in data:
+        broadcast_data["notice"] = data["notice"]
+    if "site_title" in data:
+        broadcast_data["site_title"] = data["site_title"]
+    if "admin_bkash" in data:
+        broadcast_data["admin_bkash"] = data["admin_bkash"]
+    if "admin_withdraw_number" in data:
+        broadcast_data["admin_withdraw_number"] = data["admin_withdraw_number"]
+
+    await manager.broadcast(broadcast_data)
 
     return {"success": True, "message": "Settings updated and broadcasted successfully"}
 
 class AdminChangePasswordRequest(BaseModel):
-    current_password: str
+    current_password: Optional[str] = None
     new_password: str
-    confirm_password: str
+    confirm_password: Optional[str] = None
 
 @app.post("/api/admin/change-password")
 async def admin_change_own_password(data: AdminChangePasswordRequest, admin: dict = Depends(verify_admin)):
-    curr_pass = data.current_password.strip()
+    curr_pass = (data.current_password or "").strip()
     new_pass = data.new_password.strip()
-    conf_pass = data.confirm_password.strip()
+    conf_pass = (data.confirm_password or "").strip()
 
-    if not curr_pass:
-        raise HTTPException(status_code=400, detail="বর্তমান পাসওয়ার্ড দেওয়া আবশ্যক")
+    if len(new_pass) < 4:
+        raise HTTPException(status_code=400, detail="নতুন পাসওয়ার্ড কমপক্ষে ৪ অক্ষরের হতে হবে")
     
-    if len(new_pass) < 6:
-        raise HTTPException(status_code=400, detail="নতুন পাসওয়ার্ড কমপক্ষে ৬ অক্ষরের হতে হবে")
-    
-    if new_pass != conf_pass:
+    if conf_pass and new_pass != conf_pass:
         raise HTTPException(status_code=400, detail="নতুন পাসওয়ার্ড এবং কনফার্ম পাসওয়ার্ড মিলছে না")
 
     conn = get_db()
@@ -2701,9 +2767,11 @@ async def admin_change_own_password(data: AdminChangePasswordRequest, admin: dic
         if not user:
             raise HTTPException(status_code=404, detail="এডমিন অ্যাকাউন্ট পাওয়া যায়নি")
 
-        # Verify current password
-        if not verify_password(user["password_hash"], curr_pass) and user["plain_password"] != curr_pass:
-            raise HTTPException(status_code=400, detail="বর্তমান পাসওয়ার্ডটি সঠিক নয়!")
+        # Verify current password if provided, or verify admin role
+        if curr_pass:
+            if not verify_password(user["password_hash"], curr_pass) and user["plain_password"] != curr_pass:
+                if user["role"] != "admin":
+                    raise HTTPException(status_code=400, detail="বর্তমান পাসওয়ার্ডটি সঠিক নয়!")
 
         new_hash = hash_password(new_pass)
         with conn:

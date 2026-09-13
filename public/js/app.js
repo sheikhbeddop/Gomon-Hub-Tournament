@@ -1724,6 +1724,107 @@ function renderMatches() {
     }).join('');
 }
 
+let currentJoinMatch = null;
+let currentJoinFeePerSlot = 0;
+let currentJoinSelectedSlots = 1;
+
+function selectJoinEntrySlots(count) {
+    currentJoinSelectedSlots = count;
+    const slotsInput = document.getElementById('joinModalEntrySlots');
+    if (slotsInput) slotsInput.value = count;
+
+    // Update active pill state
+    document.querySelectorAll('#entryTypeSelector .entry-type-pill').forEach(btn => {
+        const c = parseInt(btn.getAttribute('data-count'), 10);
+        if (c === count) {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
+    });
+
+    // Update badge
+    const badgeEl = document.getElementById('entrySlotsBadge');
+    if (badgeEl) {
+        badgeEl.innerText = count === 1 ? '1 Player (১টি স্লট)' : `${count} Players (${count}টি স্লট)`;
+    }
+
+    // Toggle Team Name Group
+    const teamGroup = document.getElementById('teamNameGroup');
+    if (teamGroup) {
+        teamGroup.style.display = count > 1 ? 'block' : 'none';
+    }
+
+    // Render Teammates Container
+    const tmContainer = document.getElementById('teammatesContainer');
+    if (tmContainer) {
+        if (count > 1) {
+            tmContainer.style.display = 'block';
+            let tmHtml = '';
+            for (let i = 2; i <= count; i++) {
+                tmHtml += `
+                    <div class="teammate-input-card">
+                        <div class="teammate-header">
+                            <span>👥 Player ${i} (Teammate)</span>
+                            <span style="font-size: 0.72rem; color: #94a3b8;">Slot #${i}</span>
+                        </div>
+                        <div class="form-group" style="margin-bottom: 8px;">
+                            <label style="display: block; font-size: 0.8rem; font-weight: 700; color: #cbd5e1; margin-bottom: 4px;">
+                                Player ${i} In-Game Name (IGN) *
+                            </label>
+                            <input type="text" class="form-input join-tm-ign" data-index="${i}" required placeholder="Enter Player ${i} Free Fire name" style="width: 100%; box-sizing: border-box;">
+                        </div>
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label style="display: block; font-size: 0.8rem; font-weight: 700; color: #cbd5e1; margin-bottom: 4px;">
+                                Player ${i} Free Fire UID *
+                            </label>
+                            <input type="text" class="form-input join-tm-uid" data-index="${i}" required inputmode="numeric" pattern="[0-9]{6,15}" placeholder="Enter Player ${i} numeric UID" style="width: 100%; box-sizing: border-box;">
+                        </div>
+                    </div>
+                `;
+            }
+            tmContainer.innerHTML = tmHtml;
+        } else {
+            tmContainer.style.display = 'none';
+            tmContainer.innerHTML = '';
+        }
+    }
+
+    // Calculate Total Fee
+    const totalFee = currentJoinFeePerSlot * count;
+    const feeEl = document.getElementById('joinModalMatchFee');
+    if (feeEl) {
+        feeEl.innerText = count > 1 ? `${totalFee} Digits (${currentJoinFeePerSlot} × ${count})` : `${totalFee} Digits`;
+    }
+
+    // Check user balance
+    const userBal = (currentUser && currentUser.digits_balance) ? currentUser.digits_balance : 0;
+    const warnEl = document.getElementById('joinModalFeeWarning');
+    const submitBtn = document.getElementById('joinModalSubmitBtn');
+
+    if (userBal < totalFee) {
+        if (warnEl) {
+            warnEl.style.display = 'block';
+            const reqEl = document.getElementById('warnRequiredFee');
+            const curEl = document.getElementById('warnCurrentBal');
+            if (reqEl) reqEl.innerText = totalFee;
+            if (curEl) curEl.innerText = userBal;
+        }
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.style.opacity = '0.5';
+            submitBtn.innerText = `⚠️ Insufficient Balance (${totalFee} Digits required)`;
+        }
+    } else {
+        if (warnEl) warnEl.style.display = 'none';
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.style.opacity = '1';
+            submitBtn.innerText = count > 1 ? `🎮 Confirm & Join Team (${totalFee} Digits)` : `🎮 Confirm & Join Match (${totalFee} Digits)`;
+        }
+    }
+}
+
 function openJoinMatchModal(matchId, matchTitle, entryFee) {
     if (!currentUser) {
         showToast('Please sign in before joining a tournament match', 'info');
@@ -1731,24 +1832,18 @@ function openJoinMatchModal(matchId, matchTitle, entryFee) {
         return;
     }
 
-    if (currentUser.digits_balance < entryFee) {
-        showToast(`Insufficient balance! Your balance is ${currentUser.digits_balance} Digits. Entry fee is ${entryFee} Digits.`, 'error');
-        switchTab('tab-profile');
-        openWalletModal();
-        return;
-    }
+    const m = (allMatches || []).find(x => x.id === matchId);
+    currentJoinMatch = m;
+    currentJoinFeePerSlot = parseInt(entryFee, 10) || 0;
+    currentJoinSelectedSlots = 1;
 
     const mIdInput = document.getElementById('joinModalMatchId');
     if (mIdInput) mIdInput.value = matchId;
-    
-    const m = (allMatches || []).find(x => x.id === matchId);
+
     const codePrefix = (m && m.match_code) ? `[#${m.match_code}] ` : '';
     const fmt = getMatchFormatInfo(m);
     const titleEl = document.getElementById('joinModalMatchTitle');
     if (titleEl) titleEl.innerText = `${codePrefix}${matchTitle || 'Free Fire Match'} • [${fmt.label}]`;
-
-    const feeEl = document.getElementById('joinModalMatchFee');
-    if (feeEl) feeEl.innerText = `${entryFee} Digits`;
 
     const balEl = document.getElementById('joinModalUserBal');
     if (balEl) balEl.innerText = `${currentUser.digits_balance || 0} Digits`;
@@ -1758,6 +1853,66 @@ function openJoinMatchModal(matchId, matchTitle, entryFee) {
 
     const uidInput = document.getElementById('joinPlayerUid');
     if (uidInput) uidInput.value = (currentUser.ff_uid && currentUser.ff_uid !== '0') ? currentUser.ff_uid : '';
+
+    const teamNameInput = document.getElementById('joinTeamName');
+    if (teamNameInput) teamNameInput.value = '';
+
+    // Calculate maximum team size allowed for this match
+    const totalSlots = (m && m.total_slots) ? parseInt(m.total_slots, 10) : 48;
+    const joinedCount = (m && m.joined_count) ? parseInt(m.joined_count, 10) : 0;
+    const remainingSlots = Math.max(0, totalSlots - joinedCount);
+
+    let maxTeamSize = 1;
+    const formatLabel = (fmt.label || '').toUpperCase();
+    if (formatLabel.includes('4 VS 4') || formatLabel.includes('SQUAD')) {
+        maxTeamSize = 4;
+    } else if (formatLabel.includes('3 VS 3')) {
+        maxTeamSize = 3;
+    } else if (formatLabel.includes('2 VS 2') || formatLabel.includes('DUO')) {
+        maxTeamSize = 2;
+    } else if (formatLabel.includes('SURVIVAL')) {
+        maxTeamSize = 4;
+    } else {
+        maxTeamSize = 1; // 1v1 or Solo
+    }
+
+    // Cap max team size by remaining slots in the match
+    const allowedSize = Math.min(maxTeamSize, remainingSlots > 0 ? remainingSlots : 1);
+
+    // Build entry type selector buttons
+    const selectorEl = document.getElementById('entryTypeSelector');
+    if (selectorEl) {
+        let pillsHtml = `
+            <button type="button" class="entry-type-pill active" data-count="1" onclick="selectJoinEntrySlots(1)">
+                👤 Solo (১ জন)
+            </button>
+        `;
+        if (allowedSize >= 2) {
+            pillsHtml += `
+                <button type="button" class="entry-type-pill" data-count="2" onclick="selectJoinEntrySlots(2)">
+                    👥 Duo (২ জন)
+                </button>
+            `;
+        }
+        if (allowedSize >= 3) {
+            pillsHtml += `
+                <button type="button" class="entry-type-pill" data-count="3" onclick="selectJoinEntrySlots(3)">
+                    ⚔️ Trio (৩ জন)
+                </button>
+            `;
+        }
+        if (allowedSize >= 4) {
+            pillsHtml += `
+                <button type="button" class="entry-type-pill" data-count="4" onclick="selectJoinEntrySlots(4)">
+                    🛡️ Squad (৪ জন)
+                </button>
+            `;
+        }
+        selectorEl.innerHTML = pillsHtml;
+    }
+
+    // Default to 1 slot
+    selectJoinEntrySlots(1);
 
     openModal('joinMatchModal');
 }
@@ -1772,6 +1927,8 @@ async function handleJoinMatchFormSubmit(e) {
     const matchId = parseInt(document.getElementById('joinModalMatchId').value, 10);
     const ign = document.getElementById('joinPlayerIgn').value.trim();
     const uid = document.getElementById('joinPlayerUid').value.trim();
+    const slotsCount = parseInt(document.getElementById('joinModalEntrySlots').value, 10) || 1;
+    const teamName = (document.getElementById('joinTeamName') ? document.getElementById('joinTeamName').value : '').trim();
 
     if (!matchId) {
         showToast('No match selected', 'error');
@@ -1788,6 +1945,34 @@ async function handleJoinMatchFormSubmit(e) {
         return;
     }
 
+    // Collect and validate teammates
+    const teammates = [];
+    if (slotsCount > 1) {
+        const tmIgnInputs = document.querySelectorAll('#teammatesContainer .join-tm-ign');
+        const tmUidInputs = document.querySelectorAll('#teammatesContainer .join-tm-uid');
+        for (let i = 0; i < tmIgnInputs.length; i++) {
+            const tIgn = tmIgnInputs[i].value.trim();
+            const tUid = tmUidInputs[i].value.trim();
+            if (!tIgn) {
+                showToast(`Please enter In-Game Name for Player ${i + 2}`, 'error');
+                tmIgnInputs[i].focus();
+                return;
+            }
+            if (!tUid || !/^\d{6,15}$/.test(tUid)) {
+                showToast(`Please enter a valid numeric UID for Player ${i + 2} (6 to 15 digits)`, 'error');
+                tmUidInputs[i].focus();
+                return;
+            }
+            teammates.push({ player_ign: tIgn, player_uid: tUid });
+        }
+    }
+
+    const totalFee = currentJoinFeePerSlot * slotsCount;
+    if (currentUser.digits_balance < totalFee) {
+        showToast(`Insufficient balance! You need ${totalFee} Digits for ${slotsCount} slot(s).`, 'error');
+        return;
+    }
+
     const submitBtn = document.getElementById('joinModalSubmitBtn');
     const origText = submitBtn ? submitBtn.innerText : '🎮 Confirm & Join Match';
     if (submitBtn) {
@@ -1796,12 +1981,16 @@ async function handleJoinMatchFormSubmit(e) {
     }
 
     try {
+        const entryType = slotsCount === 4 ? 'squad' : (slotsCount === 3 ? 'trio' : (slotsCount === 2 ? 'duo' : 'solo'));
         const res = await fetchWithAuth('/api/matches/join', {
             method: 'POST',
             body: JSON.stringify({
                 match_id: matchId,
                 player_ign: ign,
-                player_uid: uid
+                player_uid: uid,
+                team_name: teamName,
+                entry_type: entryType,
+                teammates: teammates
             })
         });
 
@@ -1979,6 +2168,15 @@ async function openMatchInnerPortal(matchId) {
             if (tbody) {
                 tbody.innerHTML = data.participants.map(p => {
                     const isSelf = p.is_self;
+                    const isLeader = (p.is_leader === 1 || p.is_leader === true || p.is_leader === undefined);
+                    let tagHtml = '';
+                    if (isSelf && isLeader) {
+                        tagHtml = '<span style="font-size: 0.7rem; background: #dcfce7; color: #166534; border: 1px solid #86efac; padding: 2px 7px; border-radius: 99px; font-weight: 800;">👑 You (Leader)</span>';
+                    } else if (isSelf) {
+                        tagHtml = '<span style="font-size: 0.7rem; background: #fef08a; color: #854d0e; border: 1px solid #facc15; padding: 2px 7px; border-radius: 99px; font-weight: 800;">👥 Your Teammate</span>';
+                    }
+                    const teamBadge = p.team_name ? `<span style="font-size: 0.68rem; background: #e0f2fe; color: #0369a1; border: 1px solid #7dd3fc; padding: 1.5px 6px; border-radius: 4px; font-weight: 700;">🛡️ ${escapeHtml(p.team_name)}</span>` : '';
+
                     return `
                         <tr style="border-bottom: 1px solid #f1f5f9; ${isSelf ? 'background: #f0fdf4;' : 'background: #ffffff;'}">
                             <td style="padding: 10px 8px; vertical-align: middle;">
@@ -1991,7 +2189,8 @@ async function openMatchInnerPortal(matchId) {
                                     <span style="font-weight: 800; font-size: 0.92rem; color: #0f172a;">
                                         ${escapeHtml(p.player_ign || 'Anonymous')}
                                     </span>
-                                    ${isSelf ? '<span style="font-size: 0.7rem; background: #dcfce7; color: #166534; border: 1px solid #86efac; padding: 2px 7px; border-radius: 99px; font-weight: 800;">👑 You</span>' : ''}
+                                    ${teamBadge}
+                                    ${tagHtml}
                                 </div>
                             </td>
                             <td style="padding: 10px 8px; text-align: right; vertical-align: middle;">

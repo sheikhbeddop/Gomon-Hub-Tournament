@@ -410,14 +410,6 @@ def get_next_match_code(conn, match_type: str) -> str:
     return code
 
 def init_db():
-    # Always restore latest database state from MongoDB Atlas on startup (ensures 100% persistence across Render deploys)
-    if is_mongo_connected():
-        try:
-            print("[MongoDB] Startup: Synchronizing latest database from MongoDB Atlas...")
-            pull_mongo_to_sqlite()
-        except Exception as e:
-            print(f"[MongoDB Auto-Restore Notice] {e}")
-
     conn = get_db()
     with conn:
 
@@ -807,6 +799,14 @@ def init_db():
 
 
     conn.close()
+
+    # Always restore latest database state from MongoDB Atlas on startup AFTER all table schemas are 100% created (ensures 100% persistence across Render deploys)
+    if is_mongo_connected():
+        try:
+            print("[MongoDB] Startup: Synchronizing latest database from MongoDB Atlas...")
+            pull_mongo_to_sqlite()
+        except Exception as e:
+            print(f"[MongoDB Auto-Restore Notice] {e}")
 
 init_db()
 
@@ -2804,6 +2804,7 @@ async def admin_create_match(data: AdminMatchCreate, admin: dict = Depends(verif
         VALUES (?, NULL, 'MATCH_CREATED', 0, ?)
         """, (admin["id"], f"Created Match #{match_code} ({data.title.strip()})"))
     conn.close()
+    sync_db_async()
 
     await manager.broadcast({
         "type": "NEW_MATCH_CREATED",
@@ -2877,6 +2878,7 @@ async def admin_update_match(match_id: int, data: AdminMatchUpdate, current_user
             VALUES (?, ?, ?, 0, ?)
             """, (current_user["id"], match_id, audit_action, audit_reason))
     conn.close()
+    sync_db_async()
 
     if "room_id" in dict_data or "room_pass" in dict_data:
         await manager.broadcast({
@@ -3173,6 +3175,7 @@ async def admin_toggle_match_registration(match_id: int, admin: dict = Depends(v
         VALUES (?, ?, 'TOGGLE_REGISTRATION', 0, ?)
         """, (admin["id"], match_id, f"Registration toggled to {new_status} for Match #{match_id}"))
     conn.close()
+    sync_db_async()
     
     await manager.broadcast({
         "type": "MATCH_STATUS_UPDATED",

@@ -135,11 +135,6 @@ def push_sqlite_to_mongo(conn=None) -> bool:
 
             col = db[table]
             if not rows:
-                if table != "settings":
-                    if table == "users":
-                        col.delete_many({"role": {"$ne": "admin"}})
-                    else:
-                        col.delete_many({})
                 continue
 
             docs = []
@@ -158,34 +153,20 @@ def push_sqlite_to_mongo(conn=None) -> bool:
                     doc["_id"] = doc["category"]
                 elif "endpoint" in doc:
                     doc["_id"] = doc["endpoint"]
+                elif "trx_id" in doc:
+                    doc["_id"] = str(doc["trx_id"])
+                elif "match_number" in doc:
+                    doc["_id"] = str(doc["match_number"])
+                elif "match_type" in doc:
+                    doc["_id"] = str(doc["match_type"])
+                else:
+                    doc["_id"] = str(list(doc.values())[0]) if doc else hashlib.md5(json.dumps(doc, default=str).encode()).hexdigest()
                 docs.append(doc)
 
             # Upsert into MongoDB
             import pymongo
             for d in docs:
                 col.replace_one({"_id": d["_id"]}, d, upsert=True)
-
-            # Purge deleted records from MongoDB collections so deleted ghosts never return
-            if docs:
-                current_ids = [d["_id"] for d in docs]
-                all_valid_ids = []
-                for cid in current_ids:
-                    all_valid_ids.append(cid)
-                    if isinstance(cid, int):
-                        all_valid_ids.append(str(cid))
-                    elif str(cid).isdigit():
-                        all_valid_ids.append(int(cid))
-                col.delete_many({
-                    "$and": [
-                        {"_id": {"$nin": all_valid_ids}},
-                        {"id": {"$nin": all_valid_ids}}
-                    ]
-                })
-            elif table != "settings":
-                if table == "users":
-                    col.delete_many({"role": {"$ne": "admin"}})
-                else:
-                    col.delete_many({})
 
         # Store binary snapshot via GridFS (completely eliminates 16MB BSON size limit)
         actual_db_path = DB_PATH
@@ -292,17 +273,8 @@ def pull_mongo_to_sqlite(target_path=DB_PATH) -> bool:
                 col = db[table]
                 docs = list(col.find())
                 
-                # Reconcile deletions for matches, participations, match_results, and users so deleted records NEVER resurrect
-                if table in ["users", "matches", "participations", "match_results", "purged_match_numbers", "deposits", "withdrawals"]:
-                    if not docs:
-                        if table not in ["users", "settings"]:
-                            conn.execute(f"DELETE FROM {table}")
-                        continue
-                    else:
-                        valid_ids = [int(d["_id"]) for d in docs if isinstance(d.get("_id"), int) or (isinstance(d.get("_id"), str) and str(d.get("_id")).isdigit())]
-                        if valid_ids and "id" in col_names:
-                            placeholders = ", ".join(["?"] * len(valid_ids))
-                            conn.execute(f"DELETE FROM {table} WHERE id NOT IN ({placeholders})", valid_ids)
+                if not docs:
+                    continue
 
                 if not docs:
                     continue

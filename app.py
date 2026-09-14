@@ -195,6 +195,10 @@ def get_db():
     conn = sqlite3.connect(DB_PATH, timeout=30.0, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL;")
+    conn.execute("PRAGMA synchronous=NORMAL;")
+    conn.execute("PRAGMA cache_size=-64000;")
+    conn.execute("PRAGMA temp_store=MEMORY;")
+    conn.execute("PRAGMA mmap_size=268435456;")
     conn.execute("PRAGMA busy_timeout=30000;")
     conn.execute("PRAGMA foreign_keys=ON;")
     return conn
@@ -708,6 +712,13 @@ def init_db():
         try:
             conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_matches_match_code ON matches(match_code)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_deposits_trx_id ON deposits(trx_id)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_matches_status ON matches(status)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_participations_user_id ON participations(user_id)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_participations_match_id ON participations(match_id)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_deposits_user_status ON deposits(user_id, status)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_withdrawals_user_status ON withdrawals(user_id, status)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_users_phone ON users(phone)")
         except Exception:
             pass
 
@@ -1672,8 +1683,10 @@ async def join_match(data: Optional[JoinMatchRequest] = None, match_id: Optional
             if already:
                 raise HTTPException(status_code=400, detail="You have already joined this match!")
 
-            joined_count = conn.execute("SELECT COUNT(*) FROM participations WHERE match_id = ?", (match_id,)).fetchone()[0]
-            remaining_slots = match["total_slots"] - joined_count
+            # Atomic slot availability check
+            taken_rows = conn.execute("SELECT slot_number FROM participations WHERE match_id = ?", (match_id,)).fetchall()
+            taken_slots = set(r[0] for r in taken_rows if r[0] is not None)
+            remaining_slots = match["total_slots"] - len(taken_slots)
             if num_slots > remaining_slots:
                 raise HTTPException(
                     status_code=400, 
@@ -1681,31 +1694,46 @@ async def join_match(data: Optional[JoinMatchRequest] = None, match_id: Optional
                 )
 
             total_fee = match["entry_fee"] * num_slots
-            user_fresh = conn.execute("SELECT digits_balance FROM users WHERE id = ?", (user_id,)).fetchone()
-            if user_fresh["digits_balance"] < total_fee:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"পর্যাপ্ত ডিজিট নেই! (Insufficient Digits). {num_slots}টি স্লটের মোট ফি {total_fee} ডিজিট। আপনার ব্যালেন্স {user_fresh['digits_balance']} ডিজিট। অনুগ্রহ করে bKash দিয়ে রিচার্জ করুন।"
+            # 1. Atomic balance check & deduction (100% race-condition proof)
+            if total_fee > 0:
+                cur_bal_upd = conn.execute(
+                    "UPDATE users SET digits_balance = digits_balance - ? WHERE id = ? AND digits_balance >= ?",
+                    (total_fee, user_id, total_fee)
                 )
+                if cur_bal_upd.rowcount == 0:
+                    fresh_u = conn.execute("SELECT digits_balance FROM users WHERE id = ?", (user_id,)).fetchone()
+                    cur_bal = fresh_u["digits_balance"] if fresh_u else 0
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"পর্যাপ্ত ডিজিট নেই! (Insufficient Digits). {num_slots}টি স্লটের মোট ফি {total_fee} ডিজিট। আপনার ব্যালেন্স {cur_bal} ডিজিট। অনুগ্রহ করে bKash দিয়ে রিচার্জ করুন।"
+                    )
 
-            new_balance = user_fresh["digits_balance"] - total_fee
-            conn.execute("UPDATE users SET digits_balance = ? WHERE id = ?", (new_balance, user_id))
+            # 2. Conflict-free sequential slot assignment
+            assigned_slots = []
+            candidate_slot = 1
+            while len(assigned_slots) < num_slots and candidate_slot <= match["total_slots"]:
+                if candidate_slot not in taken_slots:
+                    assigned_slots.append(candidate_slot)
+                candidate_slot += 1
 
-            # Sequential slot assignment for leader and all teammates
-            leader_slot = joined_count + 1
+            if len(assigned_slots) < num_slots:
+                raise HTTPException(status_code=400, detail="পর্যাপ্ত স্লট খালি নেই! অনুগ্রহ করে পেইজ রিফ্রেশ করে আবার চেষ্টা করুন।")
+
+            leader_slot = assigned_slots[0]
             conn.execute("""
             INSERT INTO participations (match_id, user_id, slot_number, player_ign, player_uid, team_name, is_leader)
             VALUES (?, ?, ?, ?, ?, ?, 1)
             """, (match_id, user_id, leader_slot, player_ign, str(player_uid), team_name))
 
-            assigned_slots = [leader_slot]
             for i, tm in enumerate(valid_teammates):
-                tm_slot = leader_slot + 1 + i
-                assigned_slots.append(tm_slot)
+                tm_slot = assigned_slots[1 + i]
                 conn.execute("""
                 INSERT INTO participations (match_id, user_id, slot_number, player_ign, player_uid, team_name, is_leader)
                 VALUES (?, ?, ?, ?, ?, ?, 0)
                 """, (match_id, user_id, tm_slot, tm["player_ign"], str(tm["player_uid"]), team_name))
+
+            fresh_bal = conn.execute("SELECT digits_balance FROM users WHERE id = ?", (user_id,)).fetchone()
+            new_balance = fresh_bal["digits_balance"] if fresh_bal else 0
 
             m_code = match["match_code"] if ("match_code" in match.keys() and match["match_code"]) else f"MATCH-{match_id}"
             slot_desc = f"Slot #{leader_slot}" if num_slots == 1 else f"Slots #{leader_slot}-#{assigned_slots[-1]}"
@@ -1714,6 +1742,9 @@ async def join_match(data: Optional[JoinMatchRequest] = None, match_id: Optional
             VALUES (NULL, ?, 'MATCH_ENTRY_FEE', ?, ?)
             """, (user_id, -total_fee, f"Joined Match #{m_code} ({slot_desc}): {match['title']}"))
 
+    except sqlite3.IntegrityError:
+        conn.close()
+        raise HTTPException(status_code=400, detail="একই সময়ে অন্য একজন খেলোয়াড় এই স্লটটি বুক করে ফেলেছেন! অনুগ্রহ করে পুনরায় চেষ্টা করুন।")
     except HTTPException:
         conn.close()
         raise
@@ -1721,10 +1752,16 @@ async def join_match(data: Optional[JoinMatchRequest] = None, match_id: Optional
         conn.close()
         raise HTTPException(status_code=500, detail=str(e))
 
+    # Instantly persist to MongoDB Atlas GridFS & collections
+    try:
+        sync_db_async()
+    except Exception:
+        pass
+
     await manager.broadcast({
         "type": "MATCH_SLOT_UPDATE",
         "match_id": match_id,
-        "new_joined_count": joined_count + num_slots
+        "new_joined_count": len(taken_slots) + num_slots
     })
 
     await manager.send_to_user(user_id, {
@@ -2603,32 +2640,34 @@ async def admin_review_deposit(deposit_id: int, action: str, admin: dict = Depen
         raise HTTPException(status_code=400, detail="Action must be approve or reject")
 
     conn = get_db()
-    with conn:
-        deposit = conn.execute("SELECT * FROM deposits WHERE id = ?", (deposit_id,)).fetchone()
-        if not deposit:
-            conn.close()
-            raise HTTPException(status_code=404, detail="Deposit record not found")
-        if deposit["status"] != "pending":
-            conn.close()
-            raise HTTPException(status_code=400, detail="Deposit is already processed")
+    try:
+        with conn:
+            deposit = conn.execute("SELECT * FROM deposits WHERE id = ?", (deposit_id,)).fetchone()
+            if not deposit:
+                raise HTTPException(status_code=404, detail="Deposit record not found")
+            if deposit["status"] != "pending":
+                raise HTTPException(status_code=400, detail="Deposit is already processed")
 
-        new_status = "approved" if action == "approve" else "rejected"
-        conn.execute("""
-        UPDATE deposits SET status = ?, reviewed_at = CURRENT_TIMESTAMP WHERE id = ?
-        """, (new_status, deposit_id))
+            new_status = "approved" if action == "approve" else "rejected"
+            cur = conn.execute("""
+            UPDATE deposits SET status = ?, reviewed_at = CURRENT_TIMESTAMP 
+            WHERE id = ? AND status = 'pending'
+            """, (new_status, deposit_id))
+            if cur.rowcount == 0:
+                raise HTTPException(status_code=400, detail="Deposit is already processed or not pending")
 
-        new_balance = None
-        if action == "approve":
-            conn.execute("UPDATE users SET digits_balance = digits_balance + ? WHERE id = ?", (deposit["amount"], deposit["user_id"]))
-            u = conn.execute("SELECT digits_balance FROM users WHERE id = ?", (deposit["user_id"],)).fetchone()
-            new_balance = u["digits_balance"] if u else 0
+            new_balance = None
+            if action == "approve":
+                conn.execute("UPDATE users SET digits_balance = digits_balance + ? WHERE id = ?", (deposit["amount"], deposit["user_id"]))
+                u = conn.execute("SELECT digits_balance FROM users WHERE id = ?", (deposit["user_id"],)).fetchone()
+                new_balance = u["digits_balance"] if u else 0
 
-            conn.execute("""
-            INSERT INTO audit_logs (admin_id, target_user_id, action, amount, reason)
-            VALUES (?, ?, 'DEPOSIT_APPROVED', ?, ?)
-            """, (admin["id"], deposit["user_id"], deposit["amount"], f"Approved bKash TrxID: {deposit['trx_id']}"))
-
-    conn.close()
+                conn.execute("""
+                INSERT INTO audit_logs (admin_id, target_user_id, action, amount, reason)
+                VALUES (?, ?, 'DEPOSIT_APPROVED', ?, ?)
+                """, (admin["id"], deposit["user_id"], deposit["amount"], f"Approved bKash TrxID: {deposit['trx_id']}"))
+    finally:
+        conn.close()
 
     if action == "approve" and new_balance is not None:
         await manager.send_to_user(deposit["user_id"], {
@@ -2678,37 +2717,39 @@ async def admin_review_withdrawal(withdrawal_id: int, action: str, admin: dict =
         raise HTTPException(status_code=400, detail="Action must be approve or reject")
 
     conn = get_db()
-    with conn:
-        withdrawal = conn.execute("SELECT * FROM withdrawals WHERE id = ?", (withdrawal_id,)).fetchone()
-        if not withdrawal:
-            conn.close()
-            raise HTTPException(status_code=404, detail="Withdrawal record not found")
-        if withdrawal["status"] != "pending":
-            conn.close()
-            raise HTTPException(status_code=400, detail="Withdrawal is already processed")
+    try:
+        with conn:
+            withdrawal = conn.execute("SELECT * FROM withdrawals WHERE id = ?", (withdrawal_id,)).fetchone()
+            if not withdrawal:
+                raise HTTPException(status_code=404, detail="Withdrawal record not found")
+            if withdrawal["status"] != "pending":
+                raise HTTPException(status_code=400, detail="Withdrawal is already processed")
 
-        new_status = "approved" if action == "approve" else "rejected"
-        conn.execute("""
-        UPDATE withdrawals SET status = ?, reviewed_at = CURRENT_TIMESTAMP WHERE id = ?
-        """, (new_status, withdrawal_id))
+            new_status = "approved" if action == "approve" else "rejected"
+            cur = conn.execute("""
+            UPDATE withdrawals SET status = ?, reviewed_at = CURRENT_TIMESTAMP 
+            WHERE id = ? AND status = 'pending'
+            """, (new_status, withdrawal_id))
+            if cur.rowcount == 0:
+                raise HTTPException(status_code=400, detail="Withdrawal is already processed or not pending")
 
-        new_balance = None
-        if action == "approve":
-            conn.execute("""
-            INSERT INTO audit_logs (admin_id, target_user_id, action, amount, reason)
-            VALUES (?, ?, 'WITHDRAW_APPROVED', ?, ?)
-            """, (admin["id"], withdrawal["user_id"], withdrawal["amount"], f"Approved withdrawal of {withdrawal['amount']} BDT to bKash {withdrawal['bkash_number']}"))
-        else:
-            # Refund the digits back to user's balance atomically
-            conn.execute("UPDATE users SET digits_balance = digits_balance + ? WHERE id = ?", (withdrawal["amount"], withdrawal["user_id"]))
-            u = conn.execute("SELECT digits_balance FROM users WHERE id = ?", (withdrawal["user_id"],)).fetchone()
-            new_balance = u["digits_balance"] if u else 0
-            conn.execute("""
-            INSERT INTO audit_logs (admin_id, target_user_id, action, amount, reason)
-            VALUES (?, ?, 'WITHDRAW_REJECTED_REFUND', ?, ?)
-            """, (admin["id"], withdrawal["user_id"], withdrawal["amount"], f"Rejected withdrawal, refunded {withdrawal['amount']} BDT to user"))
-
-    conn.close()
+            new_balance = None
+            if action == "approve":
+                conn.execute("""
+                INSERT INTO audit_logs (admin_id, target_user_id, action, amount, reason)
+                VALUES (?, ?, 'WITHDRAW_APPROVED', ?, ?)
+                """, (admin["id"], withdrawal["user_id"], withdrawal["amount"], f"Approved withdrawal of {withdrawal['amount']} BDT to bKash {withdrawal['bkash_number']}"))
+            else:
+                # Refund the digits back to user's balance atomically
+                conn.execute("UPDATE users SET digits_balance = digits_balance + ? WHERE id = ?", (withdrawal["amount"], withdrawal["user_id"]))
+                u = conn.execute("SELECT digits_balance FROM users WHERE id = ?", (withdrawal["user_id"],)).fetchone()
+                new_balance = u["digits_balance"] if u else 0
+                conn.execute("""
+                INSERT INTO audit_logs (admin_id, target_user_id, action, amount, reason)
+                VALUES (?, ?, 'WITHDRAW_REJECTED_REFUND', ?, ?)
+                """, (admin["id"], withdrawal["user_id"], withdrawal["amount"], f"Rejected withdrawal, refunded {withdrawal['amount']} BDT to user"))
+    finally:
+        conn.close()
 
     if action == "approve":
         await manager.send_to_user(withdrawal["user_id"], {

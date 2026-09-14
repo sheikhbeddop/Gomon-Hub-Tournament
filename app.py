@@ -498,6 +498,20 @@ def init_db():
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
 
+        CREATE TABLE IF NOT EXISTS incoming_payments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            trx_id TEXT UNIQUE NOT NULL,
+            amount INTEGER NOT NULL,
+            sender_phone TEXT DEFAULT '',
+            gateway TEXT DEFAULT 'bkash',
+            raw_sms TEXT DEFAULT '',
+            status TEXT DEFAULT 'unclaimed',
+            claimed_by_user_id INTEGER DEFAULT NULL,
+            claimed_at DATETIME DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS idx_incoming_payments_trx ON incoming_payments(trx_id);
+
         CREATE TABLE IF NOT EXISTS withdrawals (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL,
@@ -695,6 +709,16 @@ def init_db():
             except Exception:
                 pass
 
+        # Migration: Ensure deposits table has reviewed_by_name and gateway columns
+        for col, ctype in [
+            ("reviewed_by_name", "TEXT DEFAULT ''"),
+            ("gateway", "TEXT DEFAULT 'bkash'")
+        ]:
+            try:
+                conn.execute(f"ALTER TABLE deposits ADD COLUMN {col} {ctype}")
+            except Exception:
+                pass
+
         # Migration: Ensure match_code column and match_code_sequences exist
         try:
             conn.execute("ALTER TABLE matches ADD COLUMN match_code TEXT")
@@ -760,6 +784,7 @@ def init_db():
         conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('admin_withdraw_number', '01988279285 (Personal)')")
         conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('notice', 'স্বাগতম! GOMON HUB টুর্নামেন্টে অংশ নিতে bKash এ ডিপোজিট করে সিডিউল থেকে জয়েন করুন!')")
         conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('site_title', 'GOMON HUB TOURNAMENT')")
+        conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('sms_webhook_secret', 'gomon_auto_secret_2026')")
 
         # Create Default Master Admin if not exists
         admin_row = conn.execute("SELECT id FROM users WHERE role = 'admin' LIMIT 1").fetchone()
@@ -776,22 +801,8 @@ def init_db():
             except Exception:
                 pass
 
-        # Purge legacy fake test accounts permanently so they never reappear
+        # Clean up orphaned records if any
         try:
-            conn.execute("""
-            DELETE FROM users 
-            WHERE username LIKE 'aud_%' 
-               OR username LIKE 'min50_%' 
-               OR username LIKE 'with_user_%' 
-               OR username LIKE 'p1_joined_%' 
-               OR username LIKE 'p2_outsider_%' 
-               OR username LIKE 'mod_%'
-            """)
-            conn.execute("""
-            DELETE FROM matches 
-            WHERE title LIKE 'Audit%' 
-               OR title LIKE 'Security%'
-            """)
             conn.execute("DELETE FROM withdrawals WHERE user_id NOT IN (SELECT id FROM users)")
             conn.execute("DELETE FROM deposits WHERE user_id NOT IN (SELECT id FROM users)")
         except Exception:
@@ -1788,8 +1799,212 @@ async def join_match(data: Optional[JoinMatchRequest] = None, match_id: Optional
     }
 
 # -------------------------------------------------------------
-# Digits & bKash Deposit System
+# Digits & bKash Deposit System (Auto SMS Gateway + Manual Approval)
 # -------------------------------------------------------------
+def parse_sms_payment(sms_text: str, default_gateway: str = "bkash", sender_name: str = "") -> Optional[dict]:
+    """
+    Parses incoming SMS notifications from bKash, Nagad, Rocket, etc.
+    Extracts: trx_id, amount, sender_phone, gateway, raw_sms.
+    Returns None if valid TrxID and positive amount cannot be verified.
+    """
+    if not sms_text or not isinstance(sms_text, str):
+        return None
+
+    text = sms_text.strip()
+    if len(text) < 8:
+        return None
+
+    combined_lower = f"{sender_name} {text}".lower()
+    gateway = default_gateway.lower() if default_gateway else "bkash"
+    if "nagad" in combined_lower or "txnid" in combined_lower:
+        gateway = "nagad"
+    elif "rocket" in combined_lower:
+        gateway = "rocket"
+    elif "bkash" in combined_lower or "trxid" in combined_lower:
+        gateway = "bkash"
+
+    # Extract TrxID / TxnID
+    trx_match = re.search(r'(?:TrxID|TxnID|Trx\s*ID|Txn\s*ID|Transaction\s*ID|Trx|Txn)[:\s]+([A-Za-z0-9]{7,18})', text, re.IGNORECASE)
+    trx_id = None
+    if trx_match:
+        trx_id = trx_match.group(1).strip().upper()
+    else:
+        tokens = re.findall(r'\b([A-Z0-9]{8,14})\b', text)
+        for tok in tokens:
+            if not tok.isdigit() and any(c.isalpha() for c in tok) and any(c.isdigit() for c in tok):
+                trx_id = tok.upper()
+                break
+
+    if not trx_id or len(trx_id) < 7:
+        return None
+
+    # Extract Amount with strict hierarchy (never capture Fee or Balance)
+    amount = 0
+    amt_patterns = [
+        r'(?:received|cash in)\s*(?:deposit of|amount)?\s*[:\s]*(?:Tk\.?|BDT)?\s*([0-9,]+(?:\.[0-9]{1,2})?)',
+        r'(?<!fee\s)(?<!balance\s)\bamount\s*[:\s]*(?:Tk\.?|BDT)?\s*([0-9,]+(?:\.[0-9]{1,2})?)',
+        r'(?:Tk\.?|BDT)\s*([0-9,]+(?:\.[0-9]{1,2})?)\s*(?:received|cash in|deposited)',
+    ]
+    for pat in amt_patterns:
+        m = re.search(pat, text, re.IGNORECASE)
+        if m:
+            try:
+                cand = int(float(m.group(1).replace(",", "")))
+                if cand > 0:
+                    amount = cand
+                    break
+            except Exception:
+                continue
+
+    if amount <= 0:
+        return None
+
+    phone_match = re.search(r'(?:from|sender)\s*(?:no\.?)?\s*[:\s]*(01[3-9]\d{8})', text, re.IGNORECASE)
+    sender_phone = phone_match.group(1) if phone_match else ""
+
+    return {
+        "trx_id": trx_id,
+        "amount": amount,
+        "sender_phone": sender_phone,
+        "gateway": gateway,
+        "raw_sms": text
+    }
+
+
+async def process_incoming_payment(trx_id: str, amount: int, sender_phone: str = "", gateway: str = "bkash", raw_sms: str = "") -> dict:
+    clean_trx = trx_id.strip().upper().replace(" ", "")
+    conn = get_db()
+    approved_amount = 0
+    matched_user_id = None
+    matched_dep_id = None
+    new_bal = None
+    status_result = "unclaimed_saved"
+    message = ""
+
+    try:
+        with conn:
+            existing_inc = conn.execute("SELECT id, status FROM incoming_payments WHERE UPPER(trx_id) = ?", (clean_trx,)).fetchone()
+            if existing_inc:
+                if existing_inc["status"] == "claimed":
+                    return {
+                        "status": "already_claimed",
+                        "trx_id": clean_trx,
+                        "message": "Payment already processed and claimed previously."
+                    }
+                inc_id = existing_inc["id"]
+            else:
+                cur = conn.execute("""
+                    INSERT INTO incoming_payments (trx_id, amount, sender_phone, gateway, raw_sms, status)
+                    VALUES (?, ?, ?, ?, ?, 'unclaimed')
+                """, (clean_trx, amount, sender_phone, gateway, raw_sms))
+                inc_id = cur.lastrowid
+
+            # Check if pending deposit is waiting for this TrxID
+            dep = conn.execute("""
+                SELECT id, user_id, amount, status, bkash_number 
+                FROM deposits 
+                WHERE UPPER(trx_id) = ? AND status = 'pending'
+            """, (clean_trx,)).fetchone()
+
+            if dep:
+                if amount < dep["amount"]:
+                    conn.execute("""
+                        INSERT INTO audit_logs (admin_id, target_user_id, action, amount, reason)
+                        VALUES (0, ?, 'DEPOSIT_AMOUNT_MISMATCH', ?, ?)
+                    """, (dep["user_id"], amount, f"SMS amount {amount} Tk is less than requested deposit {dep['amount']} Tk. TrxID: {clean_trx}. Kept pending for manual review."))
+                    return {
+                        "status": "amount_mismatch",
+                        "trx_id": clean_trx,
+                        "sms_amount": amount,
+                        "deposit_amount": dep["amount"],
+                        "message": f"পেমেন্টের পরিমাণ কম ({amount} < {dep['amount']})। ম্যানুয়াল রিভিউর জন্য পেন্ডিং রাখা হলো।"
+                    }
+
+                # Sender phone verification (if phone present in SMS, verify it matches deposit phone)
+                user_phone = (dep["bkash_number"] or "").strip()
+                if sender_phone and user_phone and sender_phone != user_phone:
+                    conn.execute("""
+                        INSERT INTO audit_logs (admin_id, target_user_id, action, amount, reason)
+                        VALUES (0, ?, 'DEPOSIT_PHONE_MISMATCH', ?, ?)
+                    """, (dep["user_id"], dep["amount"], f"Sender phone mismatch (User: {user_phone}, SMS: {sender_phone}). TrxID: {clean_trx}. Kept pending for manual review."))
+                    return {
+                        "status": "phone_mismatch",
+                        "trx_id": clean_trx,
+                        "message": "প্রেরক বিকাশ নম্বর মেলেনি। নিরাপত্তার জন্য ম্যানুয়াল রিভিউর অপেক্ষায় রাখা হলো।"
+                    }
+
+                approved_amount = dep["amount"]
+                matched_user_id = dep["user_id"]
+                matched_dep_id = dep["id"]
+
+                conn.execute("""
+                    UPDATE deposits 
+                    SET status = 'approved', reviewed_by_name = 'AUTO_BOT', reviewed_at = CURRENT_TIMESTAMP, gateway = ? 
+                    WHERE id = ? AND status = 'pending'
+                """, (gateway, dep["id"]))
+
+                conn.execute("""
+                    UPDATE incoming_payments 
+                    SET status = 'claimed', claimed_by_user_id = ?, claimed_at = CURRENT_TIMESTAMP 
+                    WHERE id = ?
+                """, (matched_user_id, inc_id))
+
+                conn.execute("UPDATE users SET digits_balance = digits_balance + ? WHERE id = ?", (approved_amount, matched_user_id))
+
+                conn.execute("""
+                    INSERT INTO audit_logs (admin_id, target_user_id, action, amount, reason)
+                    VALUES (0, ?, 'DEPOSIT_AUTO_APPROVED', ?, ?)
+                """, (matched_user_id, approved_amount, f"Auto-Approved via SMS Webhook ({gateway.upper()}). TrxID: {clean_trx}"))
+
+                fresh = conn.execute("SELECT digits_balance FROM users WHERE id = ?", (matched_user_id,)).fetchone()
+                new_bal = fresh["digits_balance"] if fresh else 0
+                status_result = "auto_approved"
+                message = f"ডিপোজিট সফলভাবে স্বয়ংক্রিয় অনুমোদিত হয়েছে (+{approved_amount} ডিজিট)।"
+            else:
+                status_result = "unclaimed_saved"
+                message = "পেমেন্ট রেকর্ড সেভ হয়েছে। ইউজার TrxID সাবমিট করলে স্বয়ংক্রিয়ভাবে ব্যালেন্স যোগ হবে।"
+    finally:
+        conn.close()
+
+    if status_result == "auto_approved" and matched_user_id:
+        try:
+            await manager.send_to_user(matched_user_id, {
+                "type": "BALANCE_UPDATED",
+                "digits_balance": new_bal,
+                "notice": f"🎉 আপনার {approved_amount} টাকার ডিপোজিট স্বয়ংক্রিয়ভাবে অনুমোদিত হয়েছে! ওয়ালেটে ডিজিট যোগ করা হয়েছে।"
+            })
+        except Exception:
+            pass
+        try:
+            await manager.broadcast({"type": "ADMIN_DASHBOARD_UPDATE"})
+        except Exception:
+            pass
+        try:
+            sync_db_async()
+        except Exception:
+            pass
+
+        return {
+            "status": "auto_approved",
+            "deposit_id": matched_dep_id,
+            "user_id": matched_user_id,
+            "amount": approved_amount,
+            "trx_id": clean_trx,
+            "message": message
+        }
+    else:
+        try:
+            sync_db_async()
+        except Exception:
+            pass
+        return {
+            "status": status_result,
+            "trx_id": clean_trx,
+            "amount": amount,
+            "message": message
+        }
+
+
 @app.post("/api/wallet/deposit", dependencies=[Depends(check_rate_limit("deposit", 10, 60, "খুব দ্রুত ডিপোজিট রিকোয়েস্ট পাঠানো হচ্ছে! অনুগ্রহ করে কিছুক্ষণ অপেক্ষা করুন।"))])
 async def submit_deposit(data: DepositRequest, user: dict = Depends(get_current_user)):
     # 1. Clean inputs
@@ -1815,25 +2030,25 @@ async def submit_deposit(data: DepositRequest, user: dict = Depends(get_current_
         raise HTTPException(status_code=400, detail="সঠিক ১১ ডিজিটের বিকাশ নাম্বার দিন (যেমন: 017XXXXXXXX)")
 
     # 4. Validate Transaction ID (TrxID) format
-    # bKash TrxIDs are alphanumeric, typically 8 to 14 characters (standard 10 characters e.g. BLA491J3KP)
     if len(clean_trx) < 8 or len(clean_trx) > 16:
         raise HTTPException(status_code=400, detail="সঠিক বিকাশ ট্রানজেকশন আইডি (TrxID) দিন। TrxID সাধারণত ৮ থেকে ১২ ক্যারেক্টারের হয় (যেমন: BLA491J3KP)")
 
     if not re.match(r"^[A-Z0-9]{8,16}$", clean_trx):
         raise HTTPException(status_code=400, detail="ট্রানজেকশন আইডিতে শুধুমাত্র ইংরেজি বড় হাতের অক্ষর ও সংখ্যা থাকতে হবে (কোনো স্পেস বা চিহ্ন নয়)")
 
-    # Prevent phone number mistakenly typed into TrxID field
     if clean_trx.startswith("01") and clean_trx.isdigit() and len(clean_trx) == 11:
         raise HTTPException(status_code=400, detail="আপনি ট্রানজেকশন আইডির ঘরে ফোন নাম্বার দিয়েছেন! অনুগ্রহ করে বিকাশ মেসেজ থেকে প্রাপ্ত TrxID (যেমন: BLA491J3KP) দিন।")
 
-    # Reject dummy repetitive patterns like 00000000, 11111111, AAAAAAAA
     if len(set(clean_trx)) <= 2:
         raise HTTPException(status_code=400, detail="অকার্যকর বা ফেক ট্রানজেকশন আইডি গ্রহণযোগ্য নয়। সঠিক TrxID দিন।")
 
     conn = get_db()
+    is_auto_approved = False
+    new_bal = 0
+
     try:
         with conn:
-            # 5. Prevent Old / Duplicate Transaction ID across active & historical purged records
+            # 5. Prevent Old / Duplicate Transaction ID
             used_prev = conn.execute("SELECT trx_id FROM used_trx_ids WHERE UPPER(trx_id) = ?", (clean_trx,)).fetchone()
             if used_prev:
                 raise HTTPException(status_code=400, detail="এই ট্রানজেকশন আইডি (TrxID) দিয়ে ইতিপূর্বে ডিপোজিট সম্পন্ন বা যাচাই করা হয়েছে! পুরোনো আইডি গ্রহণযোগ্য নয়।")
@@ -1842,36 +2057,290 @@ async def submit_deposit(data: DepositRequest, user: dict = Depends(get_current_
             if existing:
                 raise HTTPException(status_code=400, detail="এই ট্রানজেকশন আইডি (TrxID) দিয়ে ইতিমধ্যে ডিপোজিট রিকোয়েস্ট পাঠানো হয়েছে! পুরোনো আইডি গ্রহণযোগ্য নয়।")
 
-            try:
-                conn.execute("""
-                INSERT INTO deposits (user_id, bkash_number, amount, trx_id, status)
-                VALUES (?, ?, ?, ?, 'pending')
-                """, (user["id"], phone, amount, clean_trx))
+            # 6. Check if matching SMS already arrived in incoming_payments
+            incoming = conn.execute("""
+                SELECT id, amount, gateway, status, sender_phone 
+                FROM incoming_payments 
+                WHERE UPPER(trx_id) = ? AND status = 'unclaimed'
+            """, (clean_trx,)).fetchone()
 
-                conn.execute("""
-                INSERT INTO used_trx_ids (trx_id, user_id, amount)
-                VALUES (?, ?, ?)
-                ON CONFLICT(trx_id) DO NOTHING
-                """, (clean_trx, user["id"], amount))
-            except sqlite3.IntegrityError:
-                raise HTTPException(status_code=400, detail="এই ট্রানজেকশন আইডি (TrxID) দিয়ে ইতিমধ্যে ডিপোজিট রিকোয়েস্ট পাঠানো হয়েছে! অনুগ্রহ করে অ্যাডমিনের অনুমোদনের অপেক্ষা করুন।")
+            if incoming and incoming["amount"] >= amount:
+                # Anti-theft: check if sender_phone matches user phone
+                inc_phone = (incoming["sender_phone"] or "").strip()
+                if inc_phone and phone and inc_phone != phone:
+                    # Sender phone mismatch -> keep pending for manual review so nobody can steal TrxID
+                    try:
+                        conn.execute("""
+                        INSERT INTO deposits (user_id, bkash_number, amount, trx_id, status, gateway)
+                        VALUES (?, ?, ?, ?, 'pending', ?)
+                        """, (user["id"], phone, amount, clean_trx, incoming["gateway"] or "bkash"))
+
+                        conn.execute("""
+                        INSERT INTO used_trx_ids (trx_id, user_id, amount)
+                        VALUES (?, ?, ?)
+                        ON CONFLICT(trx_id) DO NOTHING
+                        """, (clean_trx, user["id"], amount))
+
+                        conn.execute("""
+                        INSERT INTO audit_logs (admin_id, target_user_id, action, amount, reason)
+                        VALUES (0, ?, 'DEPOSIT_PHONE_MISMATCH', ?, ?)
+                        """, (user["id"], amount, f"Sender phone mismatch (User: {phone}, SMS: {inc_phone}). TrxID: {clean_trx}. Kept pending for manual review."))
+                    except sqlite3.IntegrityError:
+                        raise HTTPException(status_code=400, detail="এই ট্রানজেকশন আইডি (TrxID) দিয়ে ইতিমধ্যে ডিপোজিট রিকোয়েস্ট পাঠানো হয়েছে!")
+                    is_auto_approved = False
+                else:
+                    # Phone matches or SMS had no phone -> INSTANT AUTO-APPROVAL!
+                    try:
+                        gateway_name = incoming["gateway"] or "bkash"
+                        conn.execute("""
+                            INSERT INTO deposits (user_id, bkash_number, amount, trx_id, status, reviewed_by_name, reviewed_at, gateway)
+                            VALUES (?, ?, ?, ?, 'approved', 'AUTO_BOT', CURRENT_TIMESTAMP, ?)
+                        """, (user["id"], phone, amount, clean_trx, gateway_name))
+
+                        conn.execute("""
+                            INSERT INTO used_trx_ids (trx_id, user_id, amount)
+                            VALUES (?, ?, ?)
+                            ON CONFLICT(trx_id) DO NOTHING
+                        """, (clean_trx, user["id"], amount))
+
+                        conn.execute("""
+                            UPDATE incoming_payments 
+                            SET status = 'claimed', claimed_by_user_id = ?, claimed_at = CURRENT_TIMESTAMP 
+                            WHERE id = ?
+                        """, (user["id"], incoming["id"]))
+
+                        conn.execute("UPDATE users SET digits_balance = digits_balance + ? WHERE id = ?", (amount, user["id"]))
+
+                        conn.execute("""
+                            INSERT INTO audit_logs (admin_id, target_user_id, action, amount, reason)
+                            VALUES (0, ?, 'DEPOSIT_AUTO_APPROVED', ?, ?)
+                        """, (user["id"], amount, f"Instant Auto-Approved via SMS ({gateway_name.upper()}). TrxID: {clean_trx}"))
+
+                        fresh = conn.execute("SELECT digits_balance FROM users WHERE id = ?", (user["id"],)).fetchone()
+                        new_bal = fresh["digits_balance"] if fresh else 0
+                        is_auto_approved = True
+                    except sqlite3.IntegrityError:
+                        raise HTTPException(status_code=400, detail="এই ট্রানজেকশন আইডি (TrxID) দিয়ে ইতিমধ্যে ডিপোজিট প্রসেস করা হয়েছে!")
+            else:
+                # Normal pending flow (stays pending for admin manual review)
+                if incoming and incoming["amount"] < amount:
+                    conn.execute("""
+                        INSERT INTO audit_logs (admin_id, target_user_id, action, amount, reason)
+                        VALUES (0, ?, 'DEPOSIT_AMOUNT_MISMATCH', ?, ?)
+                    """, (user["id"], amount, f"User claimed {amount} Tk but SMS received only {incoming['amount']} Tk. TrxID: {clean_trx}. Kept pending for manual review."))
+
+                try:
+                    conn.execute("""
+                    INSERT INTO deposits (user_id, bkash_number, amount, trx_id, status, gateway)
+                    VALUES (?, ?, ?, ?, 'pending', 'bkash')
+                    """, (user["id"], phone, amount, clean_trx))
+
+                    conn.execute("""
+                    INSERT INTO used_trx_ids (trx_id, user_id, amount)
+                    VALUES (?, ?, ?)
+                    ON CONFLICT(trx_id) DO NOTHING
+                    """, (clean_trx, user["id"], amount))
+                except sqlite3.IntegrityError:
+                    raise HTTPException(status_code=400, detail="এই ট্রানজেকশন আইডি (TrxID) দিয়ে ইতিমধ্যে ডিপোজিট রিকোয়েস্ট পাঠানো হয়েছে! অনুগ্রহ করে অ্যাডমিনের অনুমোদনের অপেক্ষা করুন।")
+                is_auto_approved = False
     finally:
         conn.close()
 
-    # Instantly notify admin dashboard plates and persist to MongoDB
-    try:
-        await manager.broadcast({"type": "ADMIN_DASHBOARD_UPDATE"})
-    except Exception:
-        pass
-    try:
-        sync_db_async()
-    except Exception:
-        pass
+    if is_auto_approved:
+        try:
+            await manager.send_to_user(user["id"], {
+                "type": "BALANCE_UPDATED",
+                "digits_balance": new_bal,
+                "notice": f"🎉 আপনার {amount} টাকা পেমেন্ট স্বয়ংক্রিয়ভাবে অনুমোদিত হয়েছে! ওয়ালেটে ডিজিট যোগ করা হয়েছে।"
+            })
+        except Exception:
+            pass
+        try:
+            await manager.broadcast({"type": "ADMIN_DASHBOARD_UPDATE"})
+        except Exception:
+            pass
+        try:
+            sync_db_async()
+        except Exception:
+            pass
 
+        return {
+            "success": True,
+            "auto_approved": True,
+            "new_balance": new_bal,
+            "message": f"🎉 পেমেন্ট সফলভাবে ভেরিফাই হয়েছে! আপনার ওয়ালেটে {amount} ডিজিট যোগ করা হয়েছে।"
+        }
+    else:
+        try:
+            await manager.broadcast({"type": "ADMIN_DASHBOARD_UPDATE"})
+        except Exception:
+            pass
+        try:
+            sync_db_async()
+        except Exception:
+            pass
+
+        return {
+            "success": True,
+            "auto_approved": False,
+            "message": f"{amount} টাকার ডিপোজিট রিকোয়েস্ট সফল হয়েছে! অ্যাডমিন পেমেন্ট চেক করে কিছুক্ষণের মধ্যে ডিজিট যোগ করে দিবে।"
+        }
+
+
+# -------------------------------------------------------------
+# SMS Gateway Webhook & Auto-Deposit Management
+# -------------------------------------------------------------
+@app.post("/api/webhooks/incoming-sms", dependencies=[Depends(check_rate_limit("sms_webhook", 60, 60, "খুব দ্রুত এসএমএস রিকোয়েস্ট পাঠানো হচ্ছে! কিছুক্ষণ পর চেষ্টা করুন।"))])
+async def webhook_incoming_sms(request: Request):
+    """
+    Webhook endpoint to receive incoming payment SMS from Android apps (MacroDroid / SMS Forwarder).
+    Verifies secret key, extracts TrxID and Amount, and auto-approves deposit.
+    """
+    conn = get_db()
+    sec_row = conn.execute("SELECT value FROM settings WHERE key = 'sms_webhook_secret'").fetchone()
+    conn.close()
+    valid_secret = sec_row["value"] if sec_row else "gomon_auto_secret_2026"
+
+    # Extract secret from Query, Header, or Body
+    query_secret = request.query_params.get("secret")
+    header_secret = request.headers.get("x-webhook-secret")
+    auth_header = request.headers.get("authorization", "")
+    bearer_secret = auth_header.replace("Bearer ", "").strip() if "Bearer " in auth_header else None
+
+    content_type = request.headers.get("content-type", "")
+    body_data = {}
+    raw_body_text = ""
+
+    try:
+        if "application/json" in content_type:
+            body_data = await request.json()
+        elif "application/x-www-form-urlencoded" in content_type or "multipart/form-data" in content_type:
+            form = await request.form()
+            body_data = dict(form)
+        else:
+            raw_bytes = await request.body()
+            raw_body_text = raw_bytes.decode("utf-8", errors="ignore")
+            try:
+                body_data = json.loads(raw_body_text)
+            except Exception:
+                pass
+    except Exception:
+        raw_bytes = await request.body()
+        raw_body_text = raw_bytes.decode("utf-8", errors="ignore")
+
+    body_secret = body_data.get("secret") if isinstance(body_data, dict) else None
+    provided_secret = query_secret or header_secret or bearer_secret or body_secret
+
+    if not provided_secret or not hmac.compare_digest(provided_secret.strip(), valid_secret.strip()):
+        raise HTTPException(status_code=403, detail="Invalid or missing SMS webhook secret key")
+
+    trx_id = None
+    amount = 0
+    sender_phone = ""
+    gateway = "bkash"
+    raw_sms = ""
+
+    if isinstance(body_data, dict):
+        if body_data.get("trx_id") and body_data.get("amount"):
+            trx_id = str(body_data["trx_id"]).strip().upper()
+            try:
+                amount = int(float(body_data["amount"]))
+            except Exception:
+                amount = 0
+            sender_phone = str(body_data.get("sender_phone") or body_data.get("sender") or "").strip()
+            gateway = str(body_data.get("gateway") or "bkash").lower()
+            raw_sms = str(body_data.get("raw_sms") or body_data.get("sms_content") or "")
+
+    if not trx_id or amount <= 0:
+        sms_text = ""
+        if isinstance(body_data, dict):
+            sms_text = body_data.get("sms_content") or body_data.get("body") or body_data.get("text") or body_data.get("message") or body_data.get("sms") or ""
+            if not sender_phone:
+                sender_phone = str(body_data.get("sender") or body_data.get("from") or body_data.get("phone") or "")
+        if not sms_text:
+            sms_text = raw_body_text
+
+        parsed = parse_sms_payment(sms_text, default_gateway="bkash")
+        if not parsed:
+            return JSONResponse(
+                status_code=200,
+                content={
+                    "success": False,
+                    "status": "unparsed",
+                    "message": "SMS received but could not extract valid TrxID or amount. Safely ignored to protect funds."
+                }
+            )
+
+        trx_id = parsed["trx_id"]
+        amount = parsed["amount"]
+        gateway = parsed["gateway"]
+        if not sender_phone:
+            sender_phone = parsed["sender_phone"]
+        raw_sms = parsed["raw_sms"]
+
+    result = await process_incoming_payment(
+        trx_id=trx_id,
+        amount=amount,
+        sender_phone=sender_phone,
+        gateway=gateway,
+        raw_sms=raw_sms
+    )
+    return {"success": True, "result": result}
+
+
+@app.get("/api/admin/incoming-payments")
+def admin_get_incoming_payments(admin: dict = Depends(verify_moderator_or_admin)):
+    conn = get_db()
+    rows = conn.execute("""
+        SELECT p.*, u.username as claimed_by_username 
+        FROM incoming_payments p
+        LEFT JOIN users u ON p.claimed_by_user_id = u.id
+        ORDER BY p.id DESC LIMIT 30
+    """).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+@app.post("/api/admin/test-sms-webhook")
+async def admin_test_sms_webhook(data: dict, admin: dict = Depends(verify_admin)):
+    raw_sms = data.get("raw_sms", "").strip()
+    if not raw_sms:
+        raise HTTPException(status_code=400, detail="মেসেজের টেক্সট দিন")
+    parsed = parse_sms_payment(raw_sms)
+    if not parsed:
+        raise HTTPException(status_code=400, detail="মেসেজ থেকে TrxID বা টাকার পরিমাণ পাওয়া যায়নি! সঠিক ফরম্যাটের এসএমএস দিন।")
+    res = await process_incoming_payment(
+        trx_id=parsed["trx_id"],
+        amount=parsed["amount"],
+        sender_phone=parsed["sender_phone"],
+        gateway=parsed["gateway"],
+        raw_sms=parsed["raw_sms"]
+    )
+    return {"success": True, "parsed": parsed, "result": res}
+
+
+@app.get("/api/admin/sms-gateway-info")
+def admin_get_sms_gateway_info(admin: dict = Depends(verify_admin)):
+    conn = get_db()
+    sec = conn.execute("SELECT value FROM settings WHERE key = 'sms_webhook_secret'").fetchone()
+    conn.close()
     return {
-        "success": True,
-        "message": f"{amount} টাকার ডিপোজিট রিকোয়েস্ট সফল হয়েছে! অ্যাডমিন পেমেন্ট চেক করে কিছুক্ষণের মধ্যে ডিজিট যোগ করে দিবে।"
+        "secret": sec["value"] if sec else "gomon_auto_secret_2026",
+        "endpoint": "/api/webhooks/incoming-sms"
     }
+
+
+@app.post("/api/admin/sms-gateway-secret")
+async def admin_update_sms_gateway_secret(data: dict, admin: dict = Depends(verify_admin)):
+    new_sec = str(data.get("secret", "")).strip()
+    if len(new_sec) < 8:
+        raise HTTPException(status_code=400, detail="সিক্রেট কি কমপক্ষে ৮ অক্ষরের হতে হবে")
+    conn = get_db()
+    with conn:
+        conn.execute("INSERT INTO settings (key, value) VALUES ('sms_webhook_secret', ?) ON CONFLICT(key) DO UPDATE SET value = ?", (new_sec, new_sec))
+    conn.close()
+    sync_db_async()
+    return {"success": True, "secret": new_sec}
 
 @app.get("/api/wallet/history")
 def get_wallet_history(user: dict = Depends(get_current_user)):
@@ -2650,9 +3119,10 @@ async def admin_review_deposit(deposit_id: int, action: str, admin: dict = Depen
 
             new_status = "approved" if action == "approve" else "rejected"
             cur = conn.execute("""
-            UPDATE deposits SET status = ?, reviewed_at = CURRENT_TIMESTAMP 
+            UPDATE deposits 
+            SET status = ?, reviewed_at = CURRENT_TIMESTAMP, reviewed_by_name = ? 
             WHERE id = ? AND status = 'pending'
-            """, (new_status, deposit_id))
+            """, (new_status, admin["username"], deposit_id))
             if cur.rowcount == 0:
                 raise HTTPException(status_code=400, detail="Deposit is already processed or not pending")
 
@@ -2662,10 +3132,22 @@ async def admin_review_deposit(deposit_id: int, action: str, admin: dict = Depen
                 u = conn.execute("SELECT digits_balance FROM users WHERE id = ?", (deposit["user_id"],)).fetchone()
                 new_balance = u["digits_balance"] if u else 0
 
+                # Mark corresponding incoming payment as claimed if it exists
+                conn.execute("""
+                UPDATE incoming_payments 
+                SET status = 'claimed', claimed_by_user_id = ?, claimed_at = CURRENT_TIMESTAMP 
+                WHERE UPPER(trx_id) = ? AND status = 'unclaimed'
+                """, (deposit["user_id"], deposit["trx_id"].upper()))
+
                 conn.execute("""
                 INSERT INTO audit_logs (admin_id, target_user_id, action, amount, reason)
                 VALUES (?, ?, 'DEPOSIT_APPROVED', ?, ?)
-                """, (admin["id"], deposit["user_id"], deposit["amount"], f"Approved bKash TrxID: {deposit['trx_id']}"))
+                """, (admin["id"], deposit["user_id"], deposit["amount"], f"Approved bKash TrxID: {deposit['trx_id']} (Admin: {admin['username']})"))
+            else:
+                conn.execute("""
+                INSERT INTO audit_logs (admin_id, target_user_id, action, amount, reason)
+                VALUES (?, ?, 'DEPOSIT_REJECTED', 0, ?)
+                """, (admin["id"], deposit["user_id"], f"Rejected bKash TrxID: {deposit['trx_id']} (Admin: {admin['username']})"))
     finally:
         conn.close()
 

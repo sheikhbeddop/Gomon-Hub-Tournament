@@ -96,7 +96,8 @@ TABLES_TO_COLLECTIONS = [
     "match_results",
     "banned_records",
     "purged_match_numbers",
-    "used_trx_ids"
+    "used_trx_ids",
+    "incoming_payments"
 ]
 
 import threading
@@ -163,10 +164,17 @@ def push_sqlite_to_mongo(conn=None) -> bool:
                     doc["_id"] = str(list(doc.values())[0]) if doc else hashlib.md5(json.dumps(doc, default=str).encode()).hexdigest()
                 docs.append(doc)
 
-            # Upsert into MongoDB
+            # High-performance bulk upsert into MongoDB (1 network round-trip instead of thousands)
             import pymongo
-            for d in docs:
-                col.replace_one({"_id": d["_id"]}, d, upsert=True)
+            if docs:
+                try:
+                    bulk_ops = [pymongo.ReplaceOne({"_id": d["_id"]}, d, upsert=True) for d in docs]
+                    batch_size = 1000
+                    for i in range(0, len(bulk_ops), batch_size):
+                        col.bulk_write(bulk_ops[i:i + batch_size], ordered=False)
+                except Exception:
+                    for d in docs:
+                        col.replace_one({"_id": d["_id"]}, d, upsert=True)
 
         # Store binary snapshot via GridFS (completely eliminates 16MB BSON size limit)
         actual_db_path = DB_PATH

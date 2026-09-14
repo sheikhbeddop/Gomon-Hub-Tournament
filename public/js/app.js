@@ -101,6 +101,7 @@ function playSound(type) {
 // -------------------------------------------------------------
 function showToast(message, type = 'info') {
     const container = document.getElementById('toastContainer');
+    if (!container) return;
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
     
@@ -108,7 +109,13 @@ function showToast(message, type = 'info') {
     if (type === 'success') icon = '✅';
     if (type === 'error') icon = '❌';
 
-    toast.innerHTML = `<span>${icon}</span><div>${message}</div>`;
+    const iconSpan = document.createElement('span');
+    iconSpan.textContent = icon;
+    const msgDiv = document.createElement('div');
+    msgDiv.textContent = message;
+
+    toast.appendChild(iconSpan);
+    toast.appendChild(msgDiv);
     container.appendChild(toast);
 
     setTimeout(() => {
@@ -246,8 +253,11 @@ async function loadPublicInfo() {
         const elTitle = document.getElementById('siteTitleNav');
         if (elTitle && data.site_title) elTitle.innerText = data.site_title;
 
-        const elNotice = document.getElementById('announcementText');
-        if (elNotice && data.notice) elNotice.innerText = data.notice;
+        if (data.notice) {
+            document.querySelectorAll('#announcementText, .notice-text-bn').forEach(el => {
+                el.innerText = data.notice;
+            });
+        }
 
         const setBk = document.getElementById('settingAdminBkash');
         if (setBk) setBk.value = adminBkashNumber;
@@ -2713,14 +2723,29 @@ function renderDepositHistory(deposits) {
     if (!deposits || deposits.length === 0) {
         content = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 14px;">No deposit history found</td></tr>`;
     } else {
-        content = deposits.map(d => `
+        content = deposits.map(d => {
+            let statusBadge = '';
+            if (d.status === 'approved') {
+                if (d.reviewed_by_name === 'AUTO_BOT') {
+                    statusBadge = `<span class="badge-status approved" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.4); font-weight: 700; display: inline-flex; align-items: center; gap: 4px;">⚡ Auto Approved</span>`;
+                } else {
+                    statusBadge = `<span class="badge-status approved" style="font-weight: 700;">✅ Approved</span>`;
+                }
+            } else if (d.status === 'rejected') {
+                statusBadge = `<span class="badge-status rejected" style="font-weight: 700;">❌ Rejected</span>`;
+            } else {
+                statusBadge = `<span class="badge-status pending" style="font-weight: 700;">⏳ Pending</span>`;
+            }
+
+            return `
             <tr>
                 <td>${d.created_at ? d.created_at.split(' ')[0] : '-'}</td>
                 <td style="font-weight: 700; color: var(--neon-amber);">${d.amount} 🪙</td>
                 <td style="font-family: monospace; font-weight: 700; color: #0284c7;">${escapeHtml(d.trx_id)}</td>
-                <td><span class="badge-status ${d.status}">${d.status}</span></td>
+                <td>${statusBadge}</td>
             </tr>
-        `).join('');
+            `;
+        }).join('');
     }
 
     targets.forEach(tbody => {
@@ -2754,6 +2779,7 @@ async function loadAdminOverview() {
             renderPendingDeposits(data.pending_deposits_list);
             renderPendingWithdrawals(data.pending_withdrawals_list);
             loadAdminUsers();
+            loadAdminIncomingPayments();
         }
     } catch (e) {
         console.error(e);
@@ -4051,6 +4077,157 @@ async function handleAdminChangePassword(e) {
 }
 
 // -------------------------------------------------------------
+// Auto-Deposit SMS Gateway Frontend Handlers
+// -------------------------------------------------------------
+async function initSmsGatewayCard() {
+    const urlInput = document.getElementById('smsWebhookUrlInput');
+    if (urlInput) {
+        urlInput.value = `${window.location.origin}/api/webhooks/incoming-sms`;
+    }
+    try {
+        const res = await fetch('/api/admin/sms-gateway-info', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.ok) {
+            const data = await res.json();
+            const secInput = document.getElementById('smsWebhookSecretInput');
+            if (secInput) secInput.value = data.secret || 'gomon_auto_secret_2026';
+        }
+    } catch (e) {
+        console.error('Failed to load SMS gateway info', e);
+    }
+    loadAdminIncomingPayments();
+}
+
+function copySmsWebhookUrl() {
+    const urlInput = document.getElementById('smsWebhookUrlInput');
+    if (urlInput && urlInput.value) {
+        navigator.clipboard.writeText(urlInput.value);
+        showToast('Webhook URL কপি করা হয়েছে!', 'success');
+    }
+}
+
+function copySmsWebhookSecret() {
+    const secInput = document.getElementById('smsWebhookSecretInput');
+    if (secInput && secInput.value) {
+        navigator.clipboard.writeText(secInput.value);
+        showToast('Secret Key কপি করা হয়েছে!', 'success');
+    }
+}
+
+async function saveSmsWebhookSecret() {
+    const secInput = document.getElementById('smsWebhookSecretInput');
+    const secret = secInput ? secInput.value.trim() : '';
+    if (!secret || secret.length < 8) {
+        showToast('Secret Key কমপক্ষে ৮ অক্ষরের হতে হবে', 'warning');
+        return;
+    }
+    try {
+        const res = await fetch('/api/admin/sms-gateway-secret', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ secret })
+        });
+        const data = await res.json();
+        if (res.ok) {
+            showToast('Secret Key সফলভাবে সেভ হয়েছে!', 'success');
+        } else {
+            showToast(data.detail || 'সেভ করতে ব্যর্থ হয়েছে', 'error');
+        }
+    } catch (e) {
+        showToast('সার্ভার এরর', 'error');
+    }
+}
+
+async function runAdminSmsTest() {
+    const textInput = document.getElementById('testSmsTextInput');
+    const resBox = document.getElementById('testSmsResultBox');
+    const raw_sms = textInput ? textInput.value.trim() : '';
+    if (!raw_sms) {
+        showToast('টেস্ট করার জন্য মেসেজ টেক্সট দিন', 'warning');
+        return;
+    }
+    if (resBox) {
+        resBox.style.display = 'block';
+        resBox.innerHTML = '<span style="color: #38bdf8;">⏳ এসএমএস প্রসেস করা হচ্ছে...</span>';
+    }
+    try {
+        const res = await fetch('/api/admin/test-sms-webhook', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ raw_sms })
+        });
+        const data = await res.json();
+        if (res.ok) {
+            playSound('coin');
+            showToast('টেস্ট এসএমএস সফলভাবে এক্সিকিউট হয়েছে!', 'success');
+            if (resBox) {
+                resBox.innerHTML = `
+                    <div style="background: rgba(16,185,129,0.15); border: 1px solid #10b981; padding: 8px 12px; border-radius: 6px; color: #10b981;">
+                        <b>✅ টেস্ট ফলাফল:</b> TrxID: <code>${escapeHtml(data.parsed.trx_id)}</code> | টাকা: <b>${data.parsed.amount} BDT</b> | গেটওয়ে: <b>${data.parsed.gateway.toUpperCase()}</b><br>
+                        স্ট্যাটাস: <b>${data.result.status}</b> - ${escapeHtml(data.result.message || '')}
+                    </div>
+                `;
+            }
+            loadAdminIncomingPayments();
+            loadAdminOverview();
+        } else {
+            if (resBox) {
+                resBox.innerHTML = `
+                    <div style="background: rgba(239,68,68,0.15); border: 1px solid #ef4444; padding: 8px 12px; border-radius: 6px; color: #ef4444;">
+                        <b>❌ ত্রুটি:</b> ${escapeHtml(data.detail || 'এসএমএস পার্স করতে পারেনি')}
+                    </div>
+                `;
+            }
+        }
+    } catch (e) {
+        if (resBox) {
+            resBox.innerHTML = '<span style="color: #ef4444;">সার্ভারের সাথে কানেক্ট করা যায়নি।</span>';
+        }
+    }
+}
+
+async function loadAdminIncomingPayments() {
+    const tbody = document.getElementById('adminIncomingPaymentsBody');
+    if (!tbody || !token) return;
+    try {
+        const res = await fetch('/api/admin/incoming-payments', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.ok) {
+            const list = await res.json();
+            if (!list || list.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 12px;">এখনো কোনো এসএমএস রিসিভ হয়নি</td></tr>';
+                return;
+            }
+            tbody.innerHTML = list.map(item => `
+                <tr>
+                    <td>${item.created_at ? item.created_at.split(' ')[0] + ' ' + (item.created_at.split(' ')[1] || '').substring(0, 5) : '-'}</td>
+                    <td><span class="badge-status" style="background: rgba(2, 132, 199, 0.15); color: #38bdf8; text-transform: uppercase;">${escapeHtml(item.gateway || 'bkash')}</span></td>
+                    <td style="font-family: monospace;">${escapeHtml(item.sender_phone || '-')}</td>
+                    <td style="font-weight: 800; color: var(--neon-amber);">${item.amount} 🪙</td>
+                    <td style="font-family: monospace; font-weight: 700; color: var(--neon-cyan);">${escapeHtml(item.trx_id)}</td>
+                    <td>
+                        <span class="badge-status ${item.status === 'claimed' ? 'approved' : 'pending'}">
+                            ${item.status === 'claimed' ? '✅ Claimed' : '⏳ Unclaimed'}
+                        </span>
+                    </td>
+                    <td>${item.claimed_by_username ? `<b>@${escapeHtml(item.claimed_by_username)}</b>` : '<span style="color: var(--text-muted);">-</span>'}</td>
+                </tr>
+            `).join('');
+        }
+    } catch (e) {
+        console.error('Error loading incoming payments', e);
+    }
+}
+
+// -------------------------------------------------------------
 // Real-Time WebSockets Engine
 // -------------------------------------------------------------
 function initWebSocket() {
@@ -4160,12 +4337,14 @@ function handleWsMessage(data) {
     } else if (data.type === 'ADMIN_ANNOUNCEMENT') {
         playSound('alert');
         showToast(`🚨 ${data.title}: ${data.message}`, 'error');
-        const notifBar = document.getElementById('announcementText');
-        if (notifBar) notifBar.innerText = `${data.title}: ${data.message}`;
+        document.querySelectorAll('#announcementText, .notice-text-bn').forEach(el => {
+            el.innerText = `${data.title}: ${data.message}`;
+        });
     } else if (data.type === 'SETTINGS_UPDATED') {
         if (data.notice !== undefined) {
-            const notifBar = document.getElementById('announcementText');
-            if (notifBar) notifBar.innerText = data.notice;
+            document.querySelectorAll('#announcementText, .notice-text-bn').forEach(el => {
+                el.innerText = data.notice;
+            });
             showToast('📢 Live notice updated!', 'info');
         }
         if (data.site_title) {
@@ -4406,6 +4585,8 @@ function switchAdminSection(sectionId) {
         if (currentUser && currentUser.role === 'admin') loadModeratorScoreboard();
     } else if (sectionId === 'history') {
         loadAdminMatchHistory();
+    } else if (sectionId === 'settings') {
+        initSmsGatewayCard();
     }
 }
 
@@ -4683,7 +4864,7 @@ function switchProfileCategory(category) {
         if (secDeposit) secDeposit.style.display = 'block';
         if (btnDetails) btnDetails.classList.remove('active');
         if (btnDeposit) btnDeposit.classList.add('active');
-        loadWalletHistory();
+        openWalletModal();
     } else {
         if (secDetails) secDetails.style.display = 'block';
         if (secDeposit) secDeposit.style.display = 'none';
@@ -5288,26 +5469,31 @@ async function handlePushUpdateSubmit(e) {
     const notes = document.getElementById('adminUpdateNotesInput').value.trim();
 
     try {
+        const activeToken = token || localStorage.getItem('ff_token') || localStorage.getItem('token');
         const res = await fetch('/api/admin/push-update', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
+                'Authorization': `Bearer ${activeToken}`
             },
             body: JSON.stringify({ version, notes })
         });
-        const data = await res.json();
+        let data = {};
+        try {
+            data = await res.json();
+        } catch (_) {}
+
         if (res.ok) {
-            showToast(data.message, 'success');
+            showToast(data.message || 'ভার্সন আপডেট সফলভাবে ব্রডকাস্ট হয়েছে!', 'success');
             playSound('alert');
             const badge = document.getElementById('adminCurrentVersionBadge');
             if (badge) badge.innerText = version;
             document.getElementById('adminNewVersionInput').value = incrementVersion(version);
         } else {
-            showToast(data.detail || 'Failed to release update', 'error');
+            showToast(data.detail || data.message || `Failed to release update (${res.status})`, 'error');
         }
     } catch (e) {
-        showToast('Unable to connect to server', 'error');
+        showToast('সার্ভারের সাথে সংযোগ পাওয়া যায়নি। অনুগ্রহ করে ইন্টারনেট কানেকশন চেক করে আবার চেষ্টা করুন।', 'error');
     }
 }
 

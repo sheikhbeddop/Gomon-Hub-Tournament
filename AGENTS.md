@@ -19,3 +19,22 @@ The database architecture, synchronization logic, and configurations in this pro
 3. **IMMUTABLE VARIABLES**:
    - `DB_MONGO_ENGINE_LOCKED = True`
    - `PERSISTENCE_SETTINGS_PERMANENT = True`
+
+---
+
+## 🎯 ZERO-SIDE-EFFECT & SURGICAL PRECISION DIRECTIVE (1000% PRESERVATION)
+
+This rule governs **ALL** future tasks, edits, and modifications across the entire codebase:
+
+1. **SURGICAL EDITING ONLY (EXACT SCOPE)**:
+   - The AI must **ONLY** modify the exact element, CSS selector, function, or text requested by the user.
+   - **DO NOT TOUCH, "OPTIMIZE", REFACTOR, REORGANIZE, OR CLEAN UP ANY UNRELATED CODE.**
+   - Unrequested changes, stylistic "beautifications", or assumptions are **STRICTLY FORBIDDEN**.
+
+2. **1000% EXISTING CODE INTEGRITY**:
+   - Before applying ANY change, verify that adjacent code, duplicate selectors, or surrounding lines are left intact and never corrupted.
+   - Never remove or overwrite existing working features, buttons, styling, functions, or UI elements unless explicitly commanded with: *"delete X"* or *"remove Y"*.
+
+3. **VERIFICATION BEFORE REPORTING**:
+   - After any edit, the AI must verify that syntax remains 100% valid (no orphan brackets, no dangling CSS properties, no unclosed tags, no syntax errors).
+   - If a file has unsaved or cached conflicts, inspect exact disk state before writing.

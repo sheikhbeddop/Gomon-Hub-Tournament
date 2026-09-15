@@ -661,10 +661,13 @@ async function handleLoginSubmit(e) {
     }
 
     try {
+        const pinInput = document.getElementById('loginAdminPin');
+        const pinVal = pinInput ? pinInput.value.trim() : '';
+
         const res = await fetch('/api/auth/login', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username: u, password: p })
+            body: JSON.stringify({ username: u, password: p, admin_pin: pinVal })
         });
         const data = await res.json();
         if (res.ok) {
@@ -682,6 +685,11 @@ async function handleLoginSubmit(e) {
             showToast(`Welcome back, ${currentUser.username}! Login successful.`, 'success');
             playSound('success');
 
+            // Reset admin PIN field if visible
+            const pinGrp = document.getElementById('loginAdminPinGroup');
+            if (pinGrp) pinGrp.style.display = 'none';
+            if (pinInput) pinInput.value = '';
+
             // Safe isolated post-login initialization
             sessionStorage.removeItem('welcome_notice_dismissed');
             try { openWelcomeNotice(true); } catch(e) {}
@@ -696,7 +704,15 @@ async function handleLoginSubmit(e) {
                 try { loadAdminOverview(); } catch(e) { console.error('Error in loadAdminOverview:', e); }
             }
         } else {
-            const errMsg = data.detail || 'Invalid username or password. Please try again.';
+            let errMsg = data.detail || 'Invalid username or password. Please try again.';
+            if (errMsg.startsWith("ADMIN_PIN_REQUIRED:")) {
+                const pinGrp = document.getElementById('loginAdminPinGroup');
+                if (pinGrp) {
+                    pinGrp.style.display = 'flex';
+                    if (pinInput) pinInput.focus();
+                }
+                errMsg = errMsg.replace("ADMIN_PIN_REQUIRED:", "");
+            }
             showLoginError(errMsg);
         }
     } catch (err) {
@@ -4051,15 +4067,27 @@ async function quickUpdateWithdrawNumber() {
 async function handleAdminChangePassword(e) {
     if (e) e.preventDefault();
     const currPass = (document.getElementById('adminCurrentPassword') ? document.getElementById('adminCurrentPassword').value : '').trim();
+    const newUsername = (document.getElementById('adminNewUsername') ? document.getElementById('adminNewUsername').value : '').trim();
     const newPass = (document.getElementById('adminNewPassword') ? document.getElementById('adminNewPassword').value : '').trim();
     const confPass = (document.getElementById('adminConfirmPassword') ? document.getElementById('adminConfirmPassword').value : '').trim();
+    const newPin = (document.getElementById('adminNewPin') ? document.getElementById('adminNewPin').value : '').trim();
 
-    if (newPass.length < 4) {
+    if (!newUsername && !newPass && !newPin) {
+        showToast('পরিবর্তনের জন্য অন্তত নতুন ইউজারনেম, পাসওয়ার্ড বা ৬ ডিজিটের পিন দিন', 'warning');
+        return;
+    }
+
+    if (newPass && newPass.length < 4) {
         showToast('নতুন পাসওয়ার্ড কমপক্ষে ৪ অক্ষরের হতে হবে', 'warning');
         return;
     }
-    if (confPass && newPass !== confPass) {
+    if (newPass && confPass && newPass !== confPass) {
         showToast('নতুন পাসওয়ার্ড এবং কনফার্ম পাসওয়ার্ড মিলছে না!', 'error');
+        return;
+    }
+
+    if (newPin && newPin.length !== 6) {
+        showToast('সিকিউরিটি পিন অবশ্যই ৬ ডিজিটের হতে হবে!', 'warning');
         return;
     }
 
@@ -4069,12 +4097,20 @@ async function handleAdminChangePassword(e) {
     try {
         const res = await apiRequest('/api/admin/change-password', 'POST', {
             current_password: currPass,
-            new_password: newPass,
-            confirm_password: confPass
+            new_username: newUsername || undefined,
+            new_password: newPass || undefined,
+            confirm_password: confPass || undefined,
+            new_admin_pin: newPin || undefined
         });
 
         if (res && res.success) {
-            showToast(res.message || 'এডমিন পাসওয়ার্ড সফলভাবে পরিবর্তিত হয়েছে!', 'success');
+            showToast(res.message || 'এডমিন সিকিউরিটি সফলভাবে আপডেট হয়েছে!', 'success');
+            if (res.new_username && currentUser) {
+                currentUser.username = res.new_username;
+                localStorage.setItem('ff_user', JSON.stringify(currentUser));
+                const badge = document.getElementById('adminMasterIdBadge');
+                if (badge) badge.innerText = `Master ID: @${res.new_username}`;
+            }
             if (res.token) {
                 token = res.token;
                 localStorage.setItem('token', res.token);
@@ -4083,11 +4119,11 @@ async function handleAdminChangePassword(e) {
             const form = document.getElementById('adminChangePasswordForm');
             if (form) form.reset();
         } else {
-            showToast((res && (res.detail || res.message)) || 'পাসওয়ার্ড পরিবর্তন ব্যর্থ হয়েছে', 'error');
+            showToast((res && (res.detail || res.message)) || 'সিকিউরিটি আপডেট ব্যর্থ হয়েছে', 'error');
         }
     } catch (e) {
         console.error('Admin password change error', e);
-        showToast(e.message || 'পাসওয়ার্ড পরিবর্তন করতে সমস্যা হয়েছে', 'error');
+        showToast(e.message || 'সিকিউরিটি আপডেট করতে সমস্যা হয়েছে', 'error');
     } finally {
         if (btn) btn.disabled = false;
     }

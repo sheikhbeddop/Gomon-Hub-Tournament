@@ -2658,6 +2658,33 @@
         </div>
     </div>
 
+    <!-- MODAL: MATCH PRIZE BREAKDOWN (POPUP) -->
+    <div class="modal-overlay" id="prizeBreakdownModal" onclick="closeModal('prizeBreakdownModal')" style="z-index: 999999;">
+        <div class="modal-card" onclick="event.stopPropagation()" style="max-width: 420px; width: 92%; background: #ffffff; color: #0f172a; border-radius: 16px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); border: 1px solid #e2e8f0; overflow: hidden; margin: auto;">
+            <div style="background: linear-gradient(135deg, #f59e0b, #d97706); color: #ffffff; padding: 14px 18px; display: flex; align-items: center; justify-content: space-between;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 1.3rem;">🏆</span>
+                    <div>
+                        <h3 style="margin: 0; font-size: 1.1rem; font-weight: 900; font-family: 'Rajdhani', sans-serif; letter-spacing: 0.5px;">TOTAL WINPRIZE</h3>
+                        <div id="prizeModalSubtitle" style="font-size: 0.72rem; color: #fef3c7; font-weight: 600; margin-top: 1px;">Full Prize Breakdown</div>
+                    </div>
+                </div>
+                <button type="button" style="background: rgba(0,0,0,0.15); border: none; color: #ffffff; width: 28px; height: 28px; border-radius: 50%; cursor: pointer; font-size: 1.1rem; display: flex; align-items: center; justify-content: center;" onclick="closeModal('prizeBreakdownModal')">&times;</button>
+            </div>
+            <div style="padding: 16px;">
+                <div style="background: #fffbeb; border: 1px solid #fef3c7; border-radius: 10px; padding: 10px 12px; margin-bottom: 12px; font-size: 0.76rem; color: #92400e; line-height: 1.4;">
+                    📌 কাস্টমে নিজের জায়গায় বসতে হবে বাধ্যতামূলক। কোনো সমস্যা হলে ম্যাচ শেষ হওয়ার ৩ ঘণ্টার মধ্যে সাপোর্টে যোগাযোগ করবেন।
+                </div>
+                <div id="prizeBreakdownList" style="display: flex; flex-direction: column; gap: 8px;">
+                    <!-- Dynamically populated by openPrizeBreakdownModal -->
+                </div>
+            </div>
+            <div style="padding: 10px 16px 14px; background: #f8fafc; border-top: 1px solid #f1f5f9; text-align: center;">
+                <button type="button" class="btn btn-outline" style="width: 100%; padding: 8px; font-size: 0.85rem; font-weight: 800; border-color: #cbd5e1; color: #0f172a;" onclick="closeModal('prizeBreakdownModal')">Got It</button>
+            </div>
+        </div>
+    </div>
+
     <!-- MODAL: ADMIN REPLACE PLAYER IN MATCH -->
     <div class="modal-overlay" id="adminReplacePlayerModal" onclick="closeModal('adminReplacePlayerModal')">
         <div class="modal-card" onclick="event.stopPropagation()" style="max-width: 440px; background: #ffffff; color: #0f172a; border-radius: 14px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1); border: 1px solid #e2e8f0; overflow: hidden;">

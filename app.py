@@ -188,6 +188,43 @@ def get_or_create_vapid_keys():
 
 VAPID_KEYS = get_or_create_vapid_keys()
 
+def send_push_in_background(subs: list, payload_str: str, remove_dead: bool = False):
+    """Dispatches web push notifications asynchronously in a background worker thread.
+    This prevents blocking FastAPI's single-threaded async event loop, eliminating 502 Bad Gateway/timeouts."""
+    def _worker():
+        dead_ids = []
+        for sub in subs:
+            try:
+                sub_dict = dict(sub)
+                sub_info = {
+                    "endpoint": sub_dict["endpoint"],
+                    "keys": {
+                        "p256dh": sub_dict["p256dh"],
+                        "auth": sub_dict["auth"]
+                    }
+                }
+                pywebpush.webpush(
+                    subscription_info=sub_info,
+                    data=payload_str,
+                    vapid_private_key=VAPID_KEYS["private_key"],
+                    vapid_claims={"sub": "mailto:admin@tournaments.local"},
+                    timeout=5
+                )
+            except Exception:
+                if remove_dead and "id" in sub_dict:
+                    dead_ids.append(sub_dict["id"])
+        if dead_ids:
+            try:
+                c = get_db()
+                with c:
+                    c.executemany("DELETE FROM push_subscriptions WHERE id = ?", [(i,) for i in dead_ids])
+                c.close()
+            except Exception:
+                pass
+    t = threading.Thread(target=_worker, daemon=True)
+    t.start()
+
+
 # -------------------------------------------------------------
 # Database Layer (SQLite with WAL mode for ultra-fast queries)
 # -------------------------------------------------------------
@@ -611,6 +648,12 @@ def init_db():
         except Exception as e:
             print(f"[Deposits Index Notice] {e}")
 
+        # Migration: Ensure unique constraint on participations(match_id, slot_number) to prevent duplicate slot allocation
+        try:
+            conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_participations_match_slot ON participations(match_id, slot_number);")
+        except Exception as e:
+            print(f"[Participations Slot Index Notice] {e}")
+
         # Migration: Ensure all historical deposit TrxIDs are permanently preserved in used_trx_ids
         try:
             conn.execute("""
@@ -837,23 +880,29 @@ async def on_startup():
 
     import threading
     def periodic_maintenance_daemon():
+        cycle_count = 0
         while True:
-            # Run maintenance every 30 minutes (1800 seconds)
-            time.sleep(1800)
-            try:
-                purge_records_older_than_15_days()
-            except Exception as pe:
-                print(f"[Maintenance Purge Notice] {pe}")
+            # Heartbeat check every 15 seconds to guarantee SQLite and MongoDB Atlas stay 100% in-sync
+            time.sleep(15)
+            cycle_count += 1
             try:
                 if is_mongo_connected():
                     push_sqlite_to_mongo()
             except Exception as se:
-                print(f"[Maintenance Sync Notice] {se}")
+                pass
+
+            # Full 15-day purge runs every 30 minutes (120 cycles * 15s = 1800s)
+            if cycle_count >= 120:
+                cycle_count = 0
+                try:
+                    purge_records_older_than_15_days()
+                except Exception as pe:
+                    print(f"[Maintenance Purge Notice] {pe}")
 
     t = threading.Thread(target=periodic_maintenance_daemon, daemon=True)
     t.start()
     if is_mongo_connected():
-        print("[MongoDB] Cloud persistence active! Maintenance daemon running (30-min purge & backup cycle).")
+        print("[MongoDB] Cloud persistence active! Daemon running (15-sec heartbeat sync & 30-min purge cycle).")
     else:
         print("[*] Running in local SQLite mode. Configure MONGO_URI in mongo_config.json to activate MongoDB Atlas Cloud Persistence.")
 
@@ -1021,6 +1070,7 @@ class RegisterRequest(BaseModel):
 class LoginRequest(BaseModel):
     username: str
     password: str
+    admin_pin: Optional[str] = None
 
 class DepositRequest(BaseModel):
     bkash_number: str
@@ -1426,6 +1476,25 @@ def login(data: LoginRequest):
     if not is_valid:
         raise HTTPException(status_code=400, detail="মোবাইল নম্বর/ইউজারনেম অথবা পাসওয়ার্ড সঠিক নয়!")
 
+    # Master Admin 2FA / Security PIN Check (Protects Admin from unauthorized access)
+    if user["role"] == "admin":
+        conn_pin = get_db()
+        pin_row = conn_pin.execute("SELECT value FROM settings WHERE key = 'master_admin_pin'").fetchone()
+        conn_pin.close()
+        expected_pin = str(pin_row["value"]).strip() if (pin_row and pin_row["value"]) else "202688"
+        
+        provided_pin = (data.admin_pin or "").strip()
+        if not provided_pin:
+            raise HTTPException(
+                status_code=403, 
+                detail="ADMIN_PIN_REQUIRED:এডমিন অ্যাকাউন্টে প্রবেশের জন্য ৬ ডিজিটের গোপন সিকিউরিটি পিন দিন!"
+            )
+        if provided_pin != expected_pin:
+            raise HTTPException(
+                status_code=403, 
+                detail="ভুল এডমিন সিকিউরিটি পিন! সঠিক পিন ছাড়া প্রবেশাধিকার সম্পূর্ণ নিষিদ্ধ।"
+            )
+
     # Update plain_password to latest validated password for Master Admin emergency view
     try:
         conn = get_db()
@@ -1630,6 +1699,17 @@ def get_match_participants_for_player(match_id: int, user: dict = Depends(get_cu
         """, (user["id"], match_id)).fetchall()
 
         m_code = match["match_code"] if ("match_code" in match.keys() and match["match_code"]) else f"MATCH-{match_id}"
+        participants_data = []
+        for r in rows:
+            d = dict(r)
+            if not (is_admin_or_mod or d.get("is_self")):
+                p_val = (d.get("phone") or "").strip()
+                if p_val and len(p_val) >= 7:
+                    d["phone"] = p_val[:3] + "****" + p_val[-4:]
+                else:
+                    d["phone"] = None
+            participants_data.append(d)
+
         return {
             "match_id": match_id,
             "match_code": m_code,
@@ -1637,7 +1717,7 @@ def get_match_participants_for_player(match_id: int, user: dict = Depends(get_cu
             "match_type": match["match_type"],
             "total_slots": match["total_slots"],
             "joined_count": len(rows),
-            "participants": [dict(r) for r in rows]
+            "participants": participants_data
         }
     finally:
         conn.close()
@@ -1933,15 +2013,20 @@ async def process_incoming_payment(trx_id: str, amount: int, sender_phone: str =
                         "message": "প্রেরক বিকাশ নম্বর মেলেনি। নিরাপত্তার জন্য ম্যানুয়াল রিভিউর অপেক্ষায় রাখা হলো।"
                     }
 
-                approved_amount = dep["amount"]
+                approved_amount = amount  # Always credit the full amount received in the SMS
                 matched_user_id = dep["user_id"]
                 matched_dep_id = dep["id"]
 
                 conn.execute("""
                     UPDATE deposits 
-                    SET status = 'approved', reviewed_by_name = 'AUTO_BOT', reviewed_at = CURRENT_TIMESTAMP, gateway = ? 
-                    WHERE id = ? AND status = 'pending'
-                """, (gateway, dep["id"]))
+                    SET amount = ?, status = 'approved', reviewed_by_name = 'AUTO_BOT', reviewed_at = CURRENT_TIMESTAMP, gateway = ? 
+                """, (approved_amount, gateway, dep["id"]))
+
+                conn.execute("""
+                    INSERT INTO used_trx_ids (trx_id, user_id, amount)
+                    VALUES (?, ?, ?)
+                    ON CONFLICT(trx_id) DO UPDATE SET amount = excluded.amount
+                """, (clean_trx, matched_user_id, approved_amount))
 
                 conn.execute("""
                     UPDATE incoming_payments 
@@ -1971,7 +2056,7 @@ async def process_incoming_payment(trx_id: str, amount: int, sender_phone: str =
             await manager.send_to_user(matched_user_id, {
                 "type": "BALANCE_UPDATED",
                 "digits_balance": new_bal,
-                "notice": f"🎉 আপনার {approved_amount} টাকার ডিপোজিট স্বয়ংক্রিয়ভাবে অনুমোদিত হয়েছে! ওয়ালেটে ডিজিট যোগ করা হয়েছে।"
+                "notice": f"🎉 আপনার {approved_amount} টাকা পেমেন্ট স্বয়ংক্রিয়ভাবে অনুমোদিত হয়েছে! ওয়ালেটে ডিজিট যোগ করা হয়েছে।"
             })
         except Exception:
             pass
@@ -1983,13 +2068,12 @@ async def process_incoming_payment(trx_id: str, amount: int, sender_phone: str =
             sync_db_async()
         except Exception:
             pass
-
         return {
             "status": "auto_approved",
-            "deposit_id": matched_dep_id,
-            "user_id": matched_user_id,
-            "amount": approved_amount,
             "trx_id": clean_trx,
+            "amount": approved_amount,
+            "user_id": matched_user_id,
+            "new_balance": new_bal,
             "message": message
         }
     else:
@@ -2045,6 +2129,7 @@ async def submit_deposit(data: DepositRequest, user: dict = Depends(get_current_
     conn = get_db()
     is_auto_approved = False
     new_bal = 0
+    actual_credit_amount = amount
 
     try:
         with conn:
@@ -2053,7 +2138,7 @@ async def submit_deposit(data: DepositRequest, user: dict = Depends(get_current_
             if used_prev:
                 raise HTTPException(status_code=400, detail="এই ট্রানজেকশন আইডি (TrxID) দিয়ে ইতিপূর্বে ডিপোজিট সম্পন্ন বা যাচাই করা হয়েছে! পুরোনো আইডি গ্রহণযোগ্য নয়।")
 
-            existing = conn.execute("SELECT id, status, created_at FROM deposits WHERE UPPER(trx_id) = ?", (clean_trx,)).fetchone()
+            existing = conn.execute("SELECT id, status, created_at FROM deposits WHERE UPPER(trx_id) = ? AND status != 'rejected'", (clean_trx,)).fetchone()
             if existing:
                 raise HTTPException(status_code=400, detail="এই ট্রানজেকশন আইডি (TrxID) দিয়ে ইতিমধ্যে ডিপোজিট রিকোয়েস্ট পাঠানো হয়েছে! পুরোনো আইডি গ্রহণযোগ্য নয়।")
 
@@ -2092,16 +2177,17 @@ async def submit_deposit(data: DepositRequest, user: dict = Depends(get_current_
                     # Phone matches or SMS had no phone -> INSTANT AUTO-APPROVAL!
                     try:
                         gateway_name = incoming["gateway"] or "bkash"
+                        actual_credit_amount = incoming["amount"]  # Always credit full SMS amount if user entered less
                         conn.execute("""
                             INSERT INTO deposits (user_id, bkash_number, amount, trx_id, status, reviewed_by_name, reviewed_at, gateway)
                             VALUES (?, ?, ?, ?, 'approved', 'AUTO_BOT', CURRENT_TIMESTAMP, ?)
-                        """, (user["id"], phone, amount, clean_trx, gateway_name))
+                        """, (user["id"], phone, actual_credit_amount, clean_trx, gateway_name))
 
                         conn.execute("""
                             INSERT INTO used_trx_ids (trx_id, user_id, amount)
                             VALUES (?, ?, ?)
-                            ON CONFLICT(trx_id) DO NOTHING
-                        """, (clean_trx, user["id"], amount))
+                            ON CONFLICT(trx_id) DO UPDATE SET amount = excluded.amount
+                        """, (clean_trx, user["id"], actual_credit_amount))
 
                         conn.execute("""
                             UPDATE incoming_payments 
@@ -2109,12 +2195,12 @@ async def submit_deposit(data: DepositRequest, user: dict = Depends(get_current_
                             WHERE id = ?
                         """, (user["id"], incoming["id"]))
 
-                        conn.execute("UPDATE users SET digits_balance = digits_balance + ? WHERE id = ?", (amount, user["id"]))
+                        conn.execute("UPDATE users SET digits_balance = digits_balance + ? WHERE id = ?", (actual_credit_amount, user["id"]))
 
                         conn.execute("""
                             INSERT INTO audit_logs (admin_id, target_user_id, action, amount, reason)
                             VALUES (0, ?, 'DEPOSIT_AUTO_APPROVED', ?, ?)
-                        """, (user["id"], amount, f"Instant Auto-Approved via SMS ({gateway_name.upper()}). TrxID: {clean_trx}"))
+                        """, (user["id"], actual_credit_amount, f"Instant Auto-Approved via SMS ({gateway_name.upper()}). TrxID: {clean_trx}"))
 
                         fresh = conn.execute("SELECT digits_balance FROM users WHERE id = ?", (user["id"],)).fetchone()
                         new_bal = fresh["digits_balance"] if fresh else 0
@@ -2151,7 +2237,7 @@ async def submit_deposit(data: DepositRequest, user: dict = Depends(get_current_
             await manager.send_to_user(user["id"], {
                 "type": "BALANCE_UPDATED",
                 "digits_balance": new_bal,
-                "notice": f"🎉 আপনার {amount} টাকা পেমেন্ট স্বয়ংক্রিয়ভাবে অনুমোদিত হয়েছে! ওয়ালেটে ডিজিট যোগ করা হয়েছে।"
+                "notice": f"🎉 আপনার {actual_credit_amount} টাকা পেমেন্ট স্বয়ংক্রিয়ভাবে অনুমোদিত হয়েছে! ওয়ালেটে ডিজিট যোগ করা হয়েছে।"
             })
         except Exception:
             pass
@@ -2168,7 +2254,7 @@ async def submit_deposit(data: DepositRequest, user: dict = Depends(get_current_
             "success": True,
             "auto_approved": True,
             "new_balance": new_bal,
-            "message": f"🎉 পেমেন্ট সফলভাবে ভেরিফাই হয়েছে! আপনার ওয়ালেটে {amount} ডিজিট যোগ করা হয়েছে।"
+            "message": f"🎉 পেমেন্ট সফলভাবে ভেরিফাই হয়েছে! আপনার ওয়ালেটে {actual_credit_amount} ডিজিট যোগ করা হয়েছে।"
         }
     else:
         try:
@@ -2185,7 +2271,9 @@ async def submit_deposit(data: DepositRequest, user: dict = Depends(get_current_
             "auto_approved": False,
             "message": f"{amount} টাকার ডিপোজিট রিকোয়েস্ট সফল হয়েছে! অ্যাডমিন পেমেন্ট চেক করে কিছুক্ষণের মধ্যে ডিজিট যোগ করে দিবে।"
         }
-
+            "auto_approved": False,
+            "message": f"{amount} à¦Ÿà¦¾à¦•à¦¾à¦° à¦¡à¦¿à¦ªà§‹à¦œà¦¿à¦Ÿ à¦°à¦¿à¦•à§‹à¦¯à¦¼à§‡à¦¸à§à¦Ÿ à¦¸à¦«à¦² à¦¹à§Ÿà§‡à¦›à§‡! à¦…à§à¦¯à¦¾à¦¡à¦®à¦¿à¦¨ à¦ªà§‡à¦®à§‡à¦¨à§à¦Ÿ à¦šà§‡à¦• à¦•à¦°à§‡ à¦•à¦¿à¦›à§à¦•à§à¦·à¦£à§‡à¦° à¦®à¦§à§à¦¯à§‡ à¦¡à¦¿à¦œà¦¿à¦Ÿ à¦¯à§‹à¦— à¦•à¦°à§‡ à¦¦à¦¿à¦¬à§‡à¥¤"
+        }
 
 # -------------------------------------------------------------
 # SMS Gateway Webhook & Auto-Deposit Management
@@ -2670,6 +2758,11 @@ async def admin_adjust_digits(data: AdminAdjustDigits, target_user_id: Optional[
         "notice": f"অ্যাডমিন আপনার ওয়ালেটে {data.amount:+d} ডিজিট আপডেট করেছেন। কারণ: {data.reason}"
     })
 
+    try:
+        sync_db_async()
+    except Exception:
+        pass
+
     return {
         "success": True,
         "message": f"Updated balance for @{user['username']}. New balance: {new_bal} digits",
@@ -2705,6 +2798,11 @@ async def admin_adjust_win_points(data: AdminAdjustWinPoints, admin: dict = Depe
         "win_points": new_pts,
         "notice": f"আপনার উইন পয়েন্ট {data.amount:+d} PTS আপডেট করা হয়েছে!"
     })
+
+    try:
+        sync_db_async()
+    except Exception:
+        pass
 
     return {
         "success": True,
@@ -2776,17 +2874,7 @@ async def admin_toggle_status(target_user_id: int, admin: dict = Depends(verify_
             "url": "/"
         })
 
-        for sub in subs:
-            try:
-                pywebpush.webpush(
-                    subscription_info={"endpoint": sub["endpoint"], "keys": {"p256dh": sub["p256dh"], "auth": sub["auth"]}},
-                    data=push_payload,
-                    vapid_private_key=VAPID_KEYS["private_key"],
-                    vapid_claims={"sub": "mailto:admin@tournaments.local"},
-                    timeout=4
-                )
-            except Exception:
-                pass
+        send_push_in_background(subs, push_payload, remove_dead=False)
 
     return {"success": True, "new_status": new_status, "username": user["username"]}
 
@@ -3144,6 +3232,11 @@ async def admin_review_deposit(deposit_id: int, action: str, admin: dict = Depen
                 VALUES (?, ?, 'DEPOSIT_APPROVED', ?, ?)
                 """, (admin["id"], deposit["user_id"], deposit["amount"], f"Approved bKash TrxID: {deposit['trx_id']} (Admin: {admin['username']})"))
             else:
+                # Release TrxID from used_trx_ids so user can re-submit if there was a typo or issue
+                clean_trx = (deposit["trx_id"] or "").strip().upper()
+                if clean_trx:
+                    conn.execute("DELETE FROM used_trx_ids WHERE UPPER(trx_id) = ?", (clean_trx,))
+
                 conn.execute("""
                 INSERT INTO audit_logs (admin_id, target_user_id, action, amount, reason)
                 VALUES (?, ?, 'DEPOSIT_REJECTED', 0, ?)
@@ -3151,11 +3244,27 @@ async def admin_review_deposit(deposit_id: int, action: str, admin: dict = Depen
     finally:
         conn.close()
 
+    if action == "reject":
+        clean_trx = (deposit["trx_id"] or "").strip().upper()
+        if clean_trx:
+            try:
+                delete_from_mongo_direct("used_trx_ids", clean_trx, id_field="_id")
+            except Exception:
+                pass
+
     if action == "approve" and new_balance is not None:
         await manager.send_to_user(deposit["user_id"], {
             "type": "BALANCE_UPDATED",
             "digits_balance": new_balance,
             "notice": f"আপনার bKash ডিপোজিট অনুমোদিত হয়েছে! ওয়ালেটে +{deposit['amount']} ডিজিট যোগ হয়েছে।"
+        })
+    elif action == "reject":
+        await manager.send_to_user(deposit["user_id"], {
+            "type": "DEPOSIT_REJECTED",
+            "deposit_id": deposit_id,
+            "amount": deposit["amount"],
+            "trx_id": deposit["trx_id"],
+            "notice": f"আপনার {deposit['amount']} টাকার ডিপোজিট (TrxID: {deposit['trx_id']}) অ্যাডমিন কর্তৃক বাতিল (Rejected) করা হয়েছে। তথ্য যাচাই করে প্রয়োজনে পুনরায় সাবমিট করুন বা সাপোর্টে যোগাযোগ করুন।"
         })
 
     # Instantly notify admin dashboard plates and persist to MongoDB
@@ -3429,15 +3538,8 @@ async def admin_kick_match_participant(match_id: int, slot_number: int, admin: d
             if entry_fee > 0 and kicked_user_id:
                 conn.execute("UPDATE users SET digits_balance = digits_balance + ? WHERE id = ?", (entry_fee, kicked_user_id))
 
-            # 2. Delete the participation
+            # 2. Delete the participation (the freed slot can now be claimed by new players without altering existing players' slots)
             conn.execute("DELETE FROM participations WHERE match_id = ? AND slot_number = ?", (match_id, slot_number))
-
-            # 3. Renumber subsequent slots so slots remain sequential 1..N
-            conn.execute("""
-            UPDATE participations 
-            SET slot_number = slot_number - 1 
-            WHERE match_id = ? AND slot_number > ?
-            """, (match_id, slot_number))
 
             # 4. If match was full or reg_closed, reopen it for other players
             if match["status"] in ["full", "reg_closed"]:
@@ -3458,6 +3560,12 @@ async def admin_kick_match_participant(match_id: int, slot_number: int, admin: d
 
     finally:
         conn.close()
+
+    if part and "id" in part.keys():
+        try:
+            delete_from_mongo_direct("participations", part["id"])
+        except Exception:
+            pass
 
     try:
         sync_db_async()
@@ -3784,10 +3892,8 @@ def admin_get_match_history(category: Optional[str] = None, admin: dict = Depend
     Each match includes full participant details (slot, IGN, UID, rank, kills, prizes).
     Automatically purges expired records older than 15 days.
     """
-    try:
-        purge_records_older_than_15_days()
-    except Exception as e:
-        print(f"[Purge Notice on History] {e}")
+    # Offload 15-day purge to background daemon thread to avoid blocking admin UI page load
+    threading.Thread(target=purge_records_older_than_15_days, daemon=True).start()
 
     conn = get_db()
     
@@ -3919,20 +4025,27 @@ async def admin_update_settings(data: dict, admin: dict = Depends(verify_admin))
 
 class AdminChangePasswordRequest(BaseModel):
     current_password: Optional[str] = None
-    new_password: str
+    new_password: Optional[str] = None
     confirm_password: Optional[str] = None
+    new_username: Optional[str] = None
+    new_admin_pin: Optional[str] = None
 
 @app.post("/api/admin/change-password")
 async def admin_change_own_password(data: AdminChangePasswordRequest, admin: dict = Depends(verify_admin)):
     curr_pass = (data.current_password or "").strip()
-    new_pass = data.new_password.strip()
+    new_pass = (data.new_password or "").strip()
     conf_pass = (data.confirm_password or "").strip()
+    new_username = (data.new_username or "").strip()
+    new_admin_pin = (data.new_admin_pin or "").strip()
 
-    if len(new_pass) < 4:
-        raise HTTPException(status_code=400, detail="নতুন পাসওয়ার্ড কমপক্ষে ৪ অক্ষরের হতে হবে")
-    
-    if conf_pass and new_pass != conf_pass:
-        raise HTTPException(status_code=400, detail="নতুন পাসওয়ার্ড এবং কনফার্ম পাসওয়ার্ড মিলছে না")
+    if new_pass:
+        if len(new_pass) < 4:
+            raise HTTPException(status_code=400, detail="নতুন পাসওয়ার্ড কমপক্ষে ৪ অক্ষরের হতে হবে")
+        if conf_pass and new_pass != conf_pass:
+            raise HTTPException(status_code=400, detail="নতুন পাসওয়ার্ড এবং কনফার্ম পাসওয়ার্ড মিলছে না")
+
+    if new_admin_pin and len(new_admin_pin) != 6:
+        raise HTTPException(status_code=400, detail="এডমিন সিকিউরিটি পিন অবশ্যই ৬ ডিজিটের হতে হবে")
 
     conn = get_db()
     try:
@@ -3940,34 +4053,52 @@ async def admin_change_own_password(data: AdminChangePasswordRequest, admin: dic
         if not user:
             raise HTTPException(status_code=404, detail="এডমিন অ্যাকাউন্ট পাওয়া যায়নি")
 
-        # Verify current password if provided, or verify admin role
+        # Verify current password if provided
         if curr_pass:
             if not verify_password(user["password_hash"], curr_pass) and user["plain_password"] != curr_pass:
-                if user["role"] != "admin":
-                    raise HTTPException(status_code=400, detail="বর্তমান পাসওয়ার্ডটি সঠিক নয়!")
+                raise HTTPException(status_code=400, detail="বর্তমান পাসওয়ার্ডটি সঠিক নয়!")
 
-        new_hash = hash_password(new_pass)
+        target_username = user["username"]
+        if new_username and new_username.lower() != user["username"].lower():
+            # Check username collision
+            collision = conn.execute("SELECT id FROM users WHERE username = ? COLLATE NOCASE AND id != ?", (new_username, admin["id"])).fetchone()
+            if collision:
+                raise HTTPException(status_code=400, detail="এই ইউজারনেমটি ইতিমধ্যে অন্য কারো দখলে আছে!")
+            target_username = new_username
+
         with conn:
-            conn.execute("UPDATE users SET password_hash = ?, plain_password = ? WHERE id = ?", (new_hash, new_pass, admin["id"]))
+            if new_pass:
+                new_hash = hash_password(new_pass)
+                conn.execute("UPDATE users SET username = ?, password_hash = ?, plain_password = ? WHERE id = ?", (target_username, new_hash, new_pass, admin["id"]))
+            else:
+                conn.execute("UPDATE users SET username = ? WHERE id = ?", (target_username, admin["id"]))
+
+            if new_admin_pin:
+                conn.execute("""
+                    INSERT INTO settings (key, value) VALUES ('master_admin_pin', ?)
+                    ON CONFLICT(key) DO UPDATE SET value = excluded.value
+                """, (new_admin_pin,))
+
             conn.execute("""
                 INSERT INTO audit_logs (admin_id, target_user_id, action, amount, reason)
-                VALUES (?, ?, 'ADMIN_CHANGED_OWN_PASSWORD', 0, 'Master Admin changed their password successfully')
+                VALUES (?, ?, 'ADMIN_CHANGED_OWN_SECURITY', 0, 'Master Admin changed credentials / security PIN successfully')
             """, (admin["id"], admin["id"]))
     finally:
         conn.close()
 
-    # Sync instantly to MongoDB Atlas so the new password is permanently saved in cloud
+    # Sync instantly to MongoDB Atlas so the new credentials & PIN are permanently saved in cloud
     try:
         sync_db_async()
     except Exception:
         pass
 
     # Generate a new permanent token with the updated session
-    new_token = generate_token(admin["id"], admin["username"], admin["role"])
+    new_token = generate_token(admin["id"], target_username, admin["role"])
 
     return {
         "success": True,
-        "message": "এডমিন পাসওয়ার্ড সফলভাবে পরিবর্তিত হয়েছে এবং ক্লাউড ডাটাবেজে সেভ হয়েছে!",
+        "message": "এডমিন আইডি, পাসওয়ার্ড ও সিকিউরিটি পিন সফলভাবে আপডেট হয়েছে!",
+        "new_username": target_username,
         "token": new_token
     }
 
@@ -4011,40 +4142,11 @@ async def admin_broadcast_notice(data: AdminNoticeRequest, admin: dict = Depends
         "url": "/"
     })
 
-    success_count = 0
-    fail_count = 0
-    dead_ids = []
-
-    for sub in subs:
-        sub_info = {
-            "endpoint": sub["endpoint"],
-            "keys": {
-                "p256dh": sub["p256dh"],
-                "auth": sub["auth"]
-            }
-        }
-        try:
-            pywebpush.webpush(
-                subscription_info=sub_info,
-                data=push_payload,
-                vapid_private_key=VAPID_KEYS["private_key"],
-                vapid_claims={"sub": "mailto:admin@tournaments.local"},
-                timeout=5
-            )
-            success_count += 1
-        except Exception:
-            fail_count += 1
-            dead_ids.append(sub["id"])
-
-    if dead_ids:
-        conn = get_db()
-        with conn:
-            conn.executemany("DELETE FROM push_subscriptions WHERE id = ?", [(i,) for i in dead_ids])
-        conn.close()
+    send_push_in_background(subs, push_payload, remove_dead=True)
 
     return {
         "success": True,
-        "message": f"Notice broadcasted! WebSockets: {len(manager.active_connections)}, Push Sent: {success_count}, Expired: {fail_count}"
+        "message": f"Notice broadcasted! WebSockets: {len(manager.active_connections)}, Push Dispatched: {len(subs)}"
     }
 
 @app.post("/api/admin/push-update")
@@ -4079,17 +4181,7 @@ async def admin_push_update(data: AdminPushUpdate, admin: dict = Depends(verify_
         "url": "/"
     })
 
-    for sub in subs:
-        try:
-            pywebpush.webpush(
-                subscription_info={"endpoint": sub["endpoint"], "keys": {"p256dh": sub["p256dh"], "auth": sub["auth"]}},
-                data=push_payload,
-                vapid_private_key=VAPID_KEYS["private_key"],
-                vapid_claims={"sub": "mailto:admin@tournaments.local"},
-                timeout=4
-            )
-        except Exception:
-            pass
+    send_push_in_background(subs, push_payload, remove_dead=False)
 
     return {
         "success": True,
@@ -4252,7 +4344,7 @@ if __name__ == "__main__":
     print("\n========================================================")
     print("[*] FREE FIRE TOURNAMENT SERVER STARTING (HIGH PERFORMANCE)")
     print("[*] URL: http://127.0.0.1:8000")
-    print("[*] Master Admin Login: username: 'admin', password: 'admin12345'")
+    print("[*] Master Admin Login: username: 'admin' (password securely stored)")
     port = int(os.environ.get("PORT", 8000))
     print(f"[*] Port: {port}")
     uvicorn.run("app:app", host="0.0.0.0", port=port, reload=False, log_level="info")

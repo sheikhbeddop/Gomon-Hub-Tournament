@@ -1776,19 +1776,76 @@ function renderMatches() {
         const fmt = getMatchFormatInfo(m);
         const catName = getMatchCategoryDisplay(m.match_type);
 
+        const isRoomReleased = !!(m.room_id && m.room_id !== 'JOIN TO VIEW' && m.room_id !== 'NOT RELEASED YET' && !m.room_id.includes('দেওয়া হবে') && !m.room_id.includes('মিনিট আগে'));
+        const safeRoomId = escapeHtml(m.room_id || '');
+        const safeRoomPass = escapeHtml(m.room_pass || '');
+        const jsRoomId = String(m.room_id || '').replace(/'/g, "\\'");
+        const jsRoomPass = String(m.room_pass || '').replace(/'/g, "\\'");
+
         let actionHtml = '';
         if (hasJoined) {
-            actionHtml = `
-                <div style="display: flex; flex-direction: column; gap: 6px;">
-                    <div style="display: flex; align-items: center; justify-content: space-between; background: #ecfdf5; border: 1px solid #86efac; border-radius: 8px; padding: 6px 10px;">
-                        <span style="font-size: 0.8rem; color: #166534; font-weight: 800;">✅ You are Registered</span>
-                        <span style="font-family: 'Rajdhani', sans-serif; font-size: 0.95rem; font-weight: 800; color: #047857;">Slot #${m.my_slot || 1}</span>
+            if (isRoomReleased) {
+                actionHtml = `
+                    <div style="display: flex; flex-direction: column; gap: 6px;">
+                        <div class="room-instant-box">
+                            <div class="room-instant-box-header">
+                                <span class="room-live-badge">
+                                    <span class="room-pulse-green"></span>
+                                    Room ID Released!
+                                </span>
+                                <span style="font-family: 'Rajdhani', sans-serif; font-size: 0.88rem; font-weight: 900; background: #10b981; color: #022c22; padding: 2px 8px; border-radius: 6px;">
+                                    Slot #${m.my_slot || 1} (Fixed)
+                                </span>
+                            </div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
+                                <div style="background: rgba(255,255,255,0.06); border: 1px solid rgba(56, 189, 248, 0.35); border-radius: 8px; padding: 6px 8px;">
+                                    <div style="font-size: 0.68rem; color: #94a3b8; font-weight: 700; text-transform: uppercase;">Room ID</div>
+                                    <div style="font-family: 'Rajdhani', monospace; font-size: 1.15rem; font-weight: 900; color: #38bdf8; letter-spacing: 1px; margin: 2px 0 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${safeRoomId}</div>
+                                    <button type="button" class="btn-copy-chip btn-copy-chip-id" onclick="copyTextDirect('${jsRoomId}', 'Room ID')">
+                                        📋 Copy ID
+                                    </button>
+                                </div>
+                                <div style="background: rgba(255,255,255,0.06); border: 1px solid rgba(0, 245, 155, 0.35); border-radius: 8px; padding: 6px 8px;">
+                                    <div style="font-size: 0.68rem; color: #94a3b8; font-weight: 700; text-transform: uppercase;">Password</div>
+                                    <div style="font-family: 'Rajdhani', monospace; font-size: 1.15rem; font-weight: 900; color: #00f59b; letter-spacing: 1px; margin: 2px 0 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${safeRoomPass}</div>
+                                    <button type="button" class="btn-copy-chip btn-copy-chip-pass" onclick="copyTextDirect('${jsRoomPass}', 'Password')">
+                                        📋 Copy Pass
+                                    </button>
+                                </div>
+                            </div>
+                            <div style="display: flex; gap: 6px;">
+                                <button type="button" class="btn btn-outline" style="flex: 1; padding: 6px 8px; font-size: 0.74rem; font-weight: 800; border-color: rgba(255,255,255,0.25); color: #e2e8f0; border-radius: 6px;" onclick="openMatchInnerPortal(${m.id})">
+                                    👥 Room Details & Players
+                                </button>
+                                <button type="button" class="btn btn-outline" style="padding: 6px 12px; font-size: 0.74rem; font-weight: 800; border-color: #f59e0b; color: #f59e0b; border-radius: 6px;" onclick="openPrizeBreakdownModal(${m.id})">
+                                    🏆 Prize
+                                </button>
+                            </div>
+                        </div>
                     </div>
-                    <button class="btn btn-neon" style="width: 100%; padding: 8px 12px; font-size: 0.86rem; font-weight: 800; border-radius: 8px;" onclick="openMatchInnerPortal(${m.id})">
-                        🔑 View Room & Players
-                    </button>
-                </div>
-            `;
+                `;
+            } else {
+                actionHtml = `
+                    <div style="display: flex; flex-direction: column; gap: 6px;">
+                        <div style="display: flex; align-items: center; justify-content: space-between; background: #ecfdf5; border: 1px solid #86efac; border-radius: 8px; padding: 6px 10px;">
+                            <span style="font-size: 0.8rem; color: #166534; font-weight: 800;">✅ You are Registered</span>
+                            <span style="font-family: 'Rajdhani', sans-serif; font-size: 0.95rem; font-weight: 800; color: #047857;">Slot #${m.my_slot || 1} (Fixed)</span>
+                        </div>
+                        <div style="background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 6px 10px; font-size: 0.74rem; color: #92400e; font-weight: 700; display: flex; align-items: center; gap: 6px;">
+                            <span>⏳</span>
+                            <span>আইডি ও পাসওয়ার্ড ম্যাচ শুরুর ২-৫ মিনিট আগে এখানে আসবে</span>
+                        </div>
+                        <div style="display: flex; gap: 6px;">
+                            <button class="btn btn-neon" style="flex: 2; padding: 8px 10px; font-size: 0.84rem; font-weight: 800; border-radius: 8px;" onclick="openMatchInnerPortal(${m.id})">
+                                🔑 Room Details & Players
+                            </button>
+                            <button type="button" class="btn btn-outline" style="flex: 1; padding: 8px 6px; font-size: 0.78rem; font-weight: 700; border-color: #f59e0b; color: #b45309; background: #fffbeb; border-radius: 8px;" onclick="openPrizeBreakdownModal(${m.id})">
+                                🏆 Prize
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }
         } else if (isAdminOrMod) {
             actionHtml = `
                 <div style="display: flex; flex-direction: column; gap: 6px;">
@@ -1796,9 +1853,25 @@ function renderMatches() {
                         <span style="font-size: 0.78rem; color: #0369a1; font-weight: 700;">🛡️ Admin/Mod Access</span>
                         <span style="font-size: 0.75rem; color: #0284c7; font-weight: 800;">${m.joined_count || 0}/${m.total_slots || 48} Players</span>
                     </div>
-                    <button class="btn btn-neon" style="width: 100%; padding: 8px 12px; font-size: 0.86rem; font-weight: 800; border-radius: 8px; background: linear-gradient(135deg, #0284c7, #0369a1);" onclick="openMatchInnerPortal(${m.id})">
-                        👥 View Room & Players (UID)
-                    </button>
+                    ${isRoomReleased ? `
+                    <div style="background: #0f172a; border: 1px solid #38bdf8; border-radius: 8px; padding: 7px 10px; color: #fff; font-size: 0.78rem; margin-bottom: 2px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                            <span>ID: <b style="color: #38bdf8; font-family: monospace;">${safeRoomId}</b></span>
+                            <button type="button" style="background: #0284c7; border: none; color: #fff; padding: 2px 8px; border-radius: 4px; cursor: pointer; font-size: 0.72rem; font-weight: 700;" onclick="copyTextDirect('${jsRoomId}', 'Room ID')">📋 Copy</button>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <span>Pass: <b style="color: #00f59b; font-family: monospace;">${safeRoomPass}</b></span>
+                            <button type="button" style="background: #059669; border: none; color: #fff; padding: 2px 8px; border-radius: 4px; cursor: pointer; font-size: 0.72rem; font-weight: 700;" onclick="copyTextDirect('${jsRoomPass}', 'Password')">📋 Copy</button>
+                        </div>
+                    </div>` : ''}
+                    <div style="display: flex; gap: 6px;">
+                        <button class="btn btn-neon" style="flex: 2; padding: 8px 12px; font-size: 0.86rem; font-weight: 800; border-radius: 8px; background: linear-gradient(135deg, #0284c7, #0369a1);" onclick="openMatchInnerPortal(${m.id})">
+                            👥 View Room & Players
+                        </button>
+                        <button type="button" class="btn btn-outline" style="flex: 1; padding: 8px 6px; font-size: 0.78rem; font-weight: 700; border-color: #f59e0b; color: #b45309; background: #fffbeb; border-radius: 8px;" onclick="openPrizeBreakdownModal(${m.id})">
+                            🏆 Prize
+                        </button>
+                    </div>
                 </div>
             `;
         } else if (m.status === 'reg_closed') {
@@ -1808,17 +1881,25 @@ function renderMatches() {
                         <span style="font-size: 0.78rem; color: #94a3b8; font-weight: 600;">⭕ Not Joined</span>
                         <span style="font-size: 0.75rem; color: #ef4444; font-weight: 700;">Registration Closed</span>
                     </div>
-                    <button class="btn btn-outline" style="width: 100%; opacity: 0.75; cursor: not-allowed; border-color: #ef4444; color: #ef4444; font-size: 0.8rem; font-weight: 700;" disabled>🔒 Registration Closed (Join Required to View)</button>
+                    <button class="btn btn-outline" style="width: 100%; opacity: 0.75; cursor: not-allowed; border-color: #ef4444; color: #ef4444; font-size: 0.8rem; font-weight: 700;" disabled>🔒 Registration Closed</button>
+                    <div style="display: flex; gap: 6px;">
+                        <button type="button" class="btn btn-outline" style="flex: 1; padding: 6px 8px; font-size: 0.78rem; font-weight: 700; border-radius: 7px; color: #475569; border-color: #cbd5e1;" onclick="openMatchInnerPortal(${m.id})">
+                            🔑 Room Details ∨
+                        </button>
+                        <button type="button" class="btn btn-outline" style="flex: 1; padding: 6px 8px; font-size: 0.78rem; font-weight: 700; border-radius: 7px; color: #b45309; border-color: #fde68a; background: #fffbeb;" onclick="openPrizeBreakdownModal(${m.id})">
+                            🏆 Prize Details ∨
+                        </button>
+                    </div>
                 </div>
             `;
         } else if (m.status === 'completed') {
             actionHtml = `
                 <div style="display: flex; flex-direction: column; gap: 6px;">
                     <div style="display: flex; align-items: center; justify-content: space-between; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 5px 10px;">
-                        <span style="font-size: 0.78rem; color: #94a3b8; font-weight: 600;">⭕ Not Joined</span>
-                        <span style="font-size: 0.75rem; color: #10b981; font-weight: 700;">Concluded</span>
+                        <span style="font-size: 0.78rem; color: #94a3b8; font-weight: 600;">⭕ Concluded</span>
+                        <span style="font-size: 0.75rem; color: #10b981; font-weight: 700;">Completed</span>
                     </div>
-                    <button class="btn btn-outline" style="width: 100%; opacity: 0.75; cursor: not-allowed; border-color: #10b981; color: #10b981; font-size: 0.82rem; font-weight: 700;" disabled>🏁 Concluded</button>
+                    <button class="btn btn-outline" style="width: 100%; border-color: #10b981; color: #10b981; font-size: 0.82rem; font-weight: 700;" onclick="openPrizeBreakdownModal(${m.id})">🏁 View Results & Prizes</button>
                 </div>
             `;
         } else if (isFull) {
@@ -1826,9 +1907,17 @@ function renderMatches() {
                 <div style="display: flex; flex-direction: column; gap: 6px;">
                     <div style="display: flex; align-items: center; justify-content: space-between; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 5px 10px;">
                         <span style="font-size: 0.78rem; color: #94a3b8; font-weight: 600;">⭕ Not Joined</span>
-                        <span style="font-size: 0.75rem; color: #ef4444; font-weight: 700;">Slots Full</span>
+                        <span style="font-size: 0.75rem; color: #ef4444; font-weight: 700;">Slots Full (48/48)</span>
                     </div>
-                    <button class="btn btn-outline" style="width: 100%; opacity: 0.6; cursor: not-allowed; font-size: 0.8rem; font-weight: 700;" disabled>🔒 All Slots Full (Join Required to View)</button>
+                    <button class="btn btn-outline" style="width: 100%; opacity: 0.7; cursor: not-allowed; font-size: 0.84rem; font-weight: 800; border-color: #cbd5e1; color: #64748b;" disabled>🔒 Match Full</button>
+                    <div style="display: flex; gap: 6px;">
+                        <button type="button" class="btn btn-outline" style="flex: 1; padding: 6px 8px; font-size: 0.78rem; font-weight: 700; border-radius: 7px; color: #475569; border-color: #cbd5e1;" onclick="openMatchInnerPortal(${m.id})">
+                            🔑 Room Details ∨
+                        </button>
+                        <button type="button" class="btn btn-outline" style="flex: 1; padding: 6px 8px; font-size: 0.78rem; font-weight: 700; border-radius: 7px; color: #b45309; border-color: #fde68a; background: #fffbeb;" onclick="openPrizeBreakdownModal(${m.id})">
+                            🏆 Prize Details ∨
+                        </button>
+                    </div>
                 </div>
             `;
         } else {
@@ -1838,9 +1927,17 @@ function renderMatches() {
                         <span style="font-size: 0.78rem; color: #64748b; font-weight: 600;">⭕ You have not joined yet</span>
                         <span style="font-size: 0.75rem; color: #0284c7; font-weight: 700;">Fee: ${m.entry_fee} Digits</span>
                     </div>
-                    <button class="btn btn-neon" style="width: 100%; padding: 8px 6px; font-size: 0.86rem; font-weight: 800; border-radius: 8px;" onclick="openJoinMatchModal(${m.id}, '${escapeHtml(m.title)}', ${m.entry_fee})">
+                    <button class="btn btn-neon" style="width: 100%; padding: 9px 6px; font-size: 0.88rem; font-weight: 800; border-radius: 8px;" onclick="openJoinMatchModal(${m.id}, '${escapeHtml(m.title)}', ${m.entry_fee})">
                         🎮 Join Match (${m.entry_fee} 🪙)
                     </button>
+                    <div style="display: flex; gap: 6px;">
+                        <button type="button" class="btn btn-outline" style="flex: 1; padding: 6px 8px; font-size: 0.78rem; font-weight: 700; border-radius: 7px; color: #334155; border-color: #cbd5e1; background: #f8fafc; display: flex; align-items: center; justify-content: center; gap: 4px;" onclick="openMatchInnerPortal(${m.id})">
+                            🔑 Room Details ∨
+                        </button>
+                        <button type="button" class="btn btn-outline" style="flex: 1; padding: 6px 8px; font-size: 0.78rem; font-weight: 700; border-radius: 7px; color: #b45309; border-color: #fde68a; background: #fffbeb; display: flex; align-items: center; justify-content: center; gap: 4px;" onclick="openPrizeBreakdownModal(${m.id})">
+                            🏆 Prize Details ∨
+                        </button>
+                    </div>
                 </div>
             `;
         }
@@ -2219,6 +2316,65 @@ function copyInnerRoomInfo(type) {
     }
 }
 
+function copyTextDirect(val, label = 'Copied!') {
+    if (!val || val === 'NOT RELEASED YET' || val.includes('দেওয়া হবে') || val.includes('release') || val.includes('JOIN')) {
+        showToast('Room ID & Password are not released yet', 'info');
+        return;
+    }
+    const clean = String(val).trim();
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(clean).then(() => {
+            showToast(`✅ ${label}: ${clean}`, 'success');
+            try { playSound('success'); } catch(e) {}
+        }).catch(() => {
+            prompt('Copy to clipboard (Ctrl+C):', clean);
+        });
+    } else {
+        prompt('Copy to clipboard (Ctrl+C):', clean);
+    }
+}
+
+function openPrizeBreakdownModal(matchId) {
+    const m = (allMatches || []).find(x => x.id === matchId);
+    if (!m) return;
+    const sub = document.getElementById('prizeModalSubtitle');
+    if (sub) sub.innerText = `${m.title || 'Free Fire Match'} (#${m.match_code || ('MATCH-' + m.id)})`;
+    const list = document.getElementById('prizeBreakdownList');
+    if (list) {
+        const pool = parseInt(m.prize_pool, 10) || 0;
+        const kill = parseInt(m.per_kill, 10) || 0;
+        const winner = Math.round(pool * 0.5) || pool || 90;
+        const second = Math.round(pool * 0.3) || Math.round(winner * 0.55);
+        const third = Math.round(pool * 0.2) || Math.round(winner * 0.25);
+
+        list.innerHTML = `
+            <div style="display: flex; align-items: center; justify-content: space-between; background: #fefce8; border: 1.5px solid #fef08a; border-radius: 10px; padding: 10px 14px;">
+                <span style="font-weight: 800; color: #854d0e; font-size: 0.88rem; display: flex; align-items: center; gap: 6px;">👑 Winner (1st Position)</span>
+                <span style="font-family: 'Rajdhani', sans-serif; font-size: 1.15rem; font-weight: 900; color: #b45309;">৳${winner}</span>
+            </div>
+            ${second > 0 ? `
+            <div style="display: flex; align-items: center; justify-content: space-between; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px 14px;">
+                <span style="font-weight: 800; color: #475569; font-size: 0.86rem; display: flex; align-items: center; gap: 6px;">🥈 2nd Position</span>
+                <span style="font-family: 'Rajdhani', sans-serif; font-size: 1.05rem; font-weight: 800; color: #1e293b;">৳${second}</span>
+            </div>` : ''}
+            ${third > 0 ? `
+            <div style="display: flex; align-items: center; justify-content: space-between; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px 14px;">
+                <span style="font-weight: 800; color: #78350f; font-size: 0.86rem; display: flex; align-items: center; gap: 6px;">🥉 3rd Position</span>
+                <span style="font-family: 'Rajdhani', sans-serif; font-size: 1.05rem; font-weight: 800; color: #1e293b;">৳${third}</span>
+            </div>` : ''}
+            <div style="display: flex; align-items: center; justify-content: space-between; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; padding: 10px 14px;">
+                <span style="font-weight: 800; color: #1e40af; font-size: 0.86rem; display: flex; align-items: center; gap: 6px;">🎖️ Per Kill Bounty</span>
+                <span style="font-family: 'Rajdhani', sans-serif; font-size: 1.05rem; font-weight: 800; color: #1d4ed8;">৳${kill}</span>
+            </div>
+            <div style="display: flex; align-items: center; justify-content: space-between; background: #fdf2f8; border: 1px solid #fbcfe8; border-radius: 10px; padding: 10px 14px;">
+                <span style="font-weight: 800; color: #9d174d; font-size: 0.86rem; display: flex; align-items: center; gap: 6px;">🪙 Total Prize Pool</span>
+                <span style="font-family: 'Rajdhani', sans-serif; font-size: 1.1rem; font-weight: 900; color: #be185d;">৳${pool}</span>
+            </div>
+        `;
+    }
+    openModal('prizeBreakdownModal');
+}
+
 async function openMatchInnerPortal(matchId) {
     if (!currentUser) {
         showToast('Please sign in to view match details and room credentials', 'info');
@@ -2558,6 +2714,11 @@ function renderMyMatches() {
     grid.innerHTML = joinedMatches.map(m => {
         const slotsPercent = Math.min(100, Math.round(((m.joined_count || 0) / (m.total_slots || 48)) * 100));
         const fmt = getMatchFormatInfo(m);
+        const isRoomReleased = !!(m.room_id && m.room_id !== 'JOIN TO VIEW' && m.room_id !== 'NOT RELEASED YET' && !m.room_id.includes('দেওয়া হবে') && !m.room_id.includes('মিনিট আগে'));
+        const safeRoomId = escapeHtml(m.room_id || '');
+        const safeRoomPass = escapeHtml(m.room_pass || '');
+        const jsRoomId = String(m.room_id || '').replace(/'/g, "\\'");
+        const jsRoomPass = String(m.room_pass || '').replace(/'/g, "\\'");
 
         return `
             <div class="match-card" style="border: 1px solid rgba(0, 245, 155, 0.35); box-shadow: 0 4px 20px rgba(0, 245, 155, 0.08);">
@@ -2600,15 +2761,60 @@ function renderMyMatches() {
                 </div>
 
                 <div class="match-card-footer" style="display: flex; flex-direction: column; gap: 6px;">
+                    ${isRoomReleased ? `
+                    <div class="room-instant-box">
+                        <div class="room-instant-box-header">
+                            <span class="room-live-badge">
+                                <span class="room-pulse-green"></span>
+                                Room ID Released!
+                            </span>
+                            <span style="font-family: 'Rajdhani', sans-serif; font-size: 0.88rem; font-weight: 900; background: #10b981; color: #022c22; padding: 2px 8px; border-radius: 6px;">
+                                Slot #${m.my_slot || 1} (Fixed)
+                            </span>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
+                            <div style="background: rgba(255,255,255,0.06); border: 1px solid rgba(56, 189, 248, 0.35); border-radius: 8px; padding: 6px 8px;">
+                                <div style="font-size: 0.68rem; color: #94a3b8; font-weight: 700; text-transform: uppercase;">Room ID</div>
+                                <div style="font-family: 'Rajdhani', monospace; font-size: 1.15rem; font-weight: 900; color: #38bdf8; letter-spacing: 1px; margin: 2px 0 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${safeRoomId}</div>
+                                <button type="button" class="btn-copy-chip btn-copy-chip-id" onclick="copyTextDirect('${jsRoomId}', 'Room ID')">
+                                    📋 Copy ID
+                                </button>
+                            </div>
+                            <div style="background: rgba(255,255,255,0.06); border: 1px solid rgba(0, 245, 155, 0.35); border-radius: 8px; padding: 6px 8px;">
+                                <div style="font-size: 0.68rem; color: #94a3b8; font-weight: 700; text-transform: uppercase;">Password</div>
+                                <div style="font-family: 'Rajdhani', monospace; font-size: 1.15rem; font-weight: 900; color: #00f59b; letter-spacing: 1px; margin: 2px 0 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${safeRoomPass}</div>
+                                <button type="button" class="btn-copy-chip btn-copy-chip-pass" onclick="copyTextDirect('${jsRoomPass}', 'Password')">
+                                    📋 Copy Pass
+                                </button>
+                            </div>
+                        </div>
+                        <div style="display: flex; gap: 6px;">
+                            <button type="button" class="btn btn-outline" style="flex: 1; padding: 6px 8px; font-size: 0.74rem; font-weight: 800; border-color: rgba(255,255,255,0.25); color: #e2e8f0; border-radius: 6px;" onclick="openMatchInnerPortal(${m.id})">
+                                👥 Full Details & Players
+                            </button>
+                            <button type="button" class="btn btn-outline" style="padding: 6px 12px; font-size: 0.74rem; font-weight: 800; border-color: #f59e0b; color: #f59e0b; border-radius: 6px;" onclick="openPrizeBreakdownModal(${m.id})">
+                                🏆 Prize
+                            </button>
+                        </div>
+                    </div>` : `
                     <div style="display: flex; flex-direction: column; gap: 6px;">
                         <div style="display: flex; align-items: center; justify-content: space-between; background: rgba(0, 245, 155, 0.08); border: 1px solid rgba(0, 245, 155, 0.25); border-radius: 8px; padding: 6px 10px;">
                             <span style="font-size: 0.8rem; color: #a7f3d0; font-weight: 700;">🎯 Your Assigned Slot:</span>
                             <span style="font-family: 'Rajdhani', sans-serif; font-size: 0.95rem; font-weight: 800; color: #00f59b;">#${m.my_slot || 1} (Fixed)</span>
                         </div>
-                        <button class="btn btn-neon" style="width: 100%; padding: 9px 12px; font-size: 0.86rem; font-weight: 800; border-radius: 8px;" onclick="openMatchInnerPortal(${m.id})">
-                            🔑 View Room & Players
-                        </button>
-                    </div>
+                        <div style="background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 6px 10px; font-size: 0.74rem; color: #92400e; font-weight: 700; display: flex; align-items: center; gap: 6px;">
+                            <span>⏳</span>
+                            <span>আইডি ও পাসওয়ার্ড ম্যাচ শুরুর ২-৫ মিনিট আগে এখানে আসবে</span>
+                        </div>
+                        <div style="display: flex; gap: 6px;">
+                            <button class="btn btn-neon" style="flex: 2; padding: 8px 10px; font-size: 0.84rem; font-weight: 800; border-radius: 8px;" onclick="openMatchInnerPortal(${m.id})">
+                                🔑 View Room & Players
+                            </button>
+                            <button type="button" class="btn btn-outline" style="flex: 1; padding: 8px 6px; font-size: 0.78rem; font-weight: 700; border-color: #f59e0b; color: #b45309; background: #fffbeb; border-radius: 8px;" onclick="openPrizeBreakdownModal(${m.id})">
+                                🏆 Prize
+                            </button>
+                        </div>
+                    </div>`}
                     <div class="match-countdown-pill" data-match-time="${escapeHtml(m.match_time || '')}" data-match-status="${escapeHtml(m.status || '')}">
                         <span class="countdown-pulse-dot"></span>
                         <span class="countdown-timer-text">⏰ Starts in: calculating...</span>

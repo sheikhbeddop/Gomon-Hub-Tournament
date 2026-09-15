@@ -2334,45 +2334,186 @@ function copyTextDirect(val, label = 'Copied!') {
     }
 }
 
+let currentPrizeModalMatchId = null;
+let isPrizeEditMode = false;
+
+function calcTotalPrizePool() {
+    const w = parseInt(document.getElementById('matchPrizeWinner')?.value, 10) || 0;
+    const s = parseInt(document.getElementById('matchPrizeSecond')?.value, 10) || 0;
+    const t = parseInt(document.getElementById('matchPrizeThird')?.value, 10) || 0;
+    const totalEl = document.getElementById('matchPrizePool');
+    if (totalEl) {
+        totalEl.value = w + s + t;
+    }
+}
+
 function openPrizeBreakdownModal(matchId) {
+    currentPrizeModalMatchId = matchId;
+    isPrizeEditMode = false;
     const m = (allMatches || []).find(x => x.id === matchId);
     if (!m) return;
     const sub = document.getElementById('prizeModalSubtitle');
     if (sub) sub.innerText = `${m.title || 'Free Fire Match'} (#${m.match_code || ('MATCH-' + m.id)})`;
+
+    const isAdminOrMod = (currentUser && (currentUser.role === 'admin' || currentUser.role === 'moderator'));
+    const btnEdit = document.getElementById('btnAdminEditPrize');
+    if (btnEdit) {
+        btnEdit.style.display = isAdminOrMod ? 'inline-block' : 'none';
+        btnEdit.innerText = '✏️ Edit Prize';
+        btnEdit.style.background = '#fffbeb';
+        btnEdit.style.color = '#b45309';
+        btnEdit.style.borderColor = '#f59e0b';
+    }
+
+    renderPrizeBreakdownView(m);
+    openModal('prizeBreakdownModal');
+}
+
+function renderPrizeBreakdownView(m) {
     const list = document.getElementById('prizeBreakdownList');
-    if (list) {
+    if (!list) return;
+
+    const pool = parseInt(m.prize_pool, 10) || 0;
+    const kill = parseInt(m.per_kill, 10) || 0;
+
+    let winner = 0, second = 0, third = 0;
+    if (m.prize_breakdown) {
+        winner = parseInt(m.prize_breakdown.winner, 10) || 0;
+        second = parseInt(m.prize_breakdown.second, 10) || 0;
+        third = parseInt(m.prize_breakdown.third, 10) || 0;
+    } else {
+        winner = Math.round(pool * 0.5) || pool || 90;
+        second = Math.round(pool * 0.3) || Math.round(winner * 0.55);
+        third = Math.round(pool * 0.2) || Math.round(winner * 0.25);
+    }
+
+    list.innerHTML = `
+        <div style="display: flex; align-items: center; justify-content: space-between; background: #fefce8; border: 1.5px solid #fef08a; border-radius: 10px; padding: 10px 14px;">
+            <span style="font-weight: 800; color: #854d0e; font-size: 0.88rem; display: flex; align-items: center; gap: 6px;">👑 Winner (1st Position)</span>
+            <span style="font-family: 'Rajdhani', sans-serif; font-size: 1.15rem; font-weight: 900; color: #b45309;">৳${winner}</span>
+        </div>
+        ${second > 0 ? `
+        <div style="display: flex; align-items: center; justify-content: space-between; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px 14px;">
+            <span style="font-weight: 800; color: #475569; font-size: 0.86rem; display: flex; align-items: center; gap: 6px;">🥈 2nd Position</span>
+            <span style="font-family: 'Rajdhani', sans-serif; font-size: 1.05rem; font-weight: 800; color: #1e293b;">৳${second}</span>
+        </div>` : ''}
+        ${third > 0 ? `
+        <div style="display: flex; align-items: center; justify-content: space-between; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px 14px;">
+            <span style="font-weight: 800; color: #78350f; font-size: 0.86rem; display: flex; align-items: center; gap: 6px;">🥉 3rd Position</span>
+            <span style="font-family: 'Rajdhani', sans-serif; font-size: 1.05rem; font-weight: 800; color: #1e293b;">৳${third}</span>
+        </div>` : ''}
+        <div style="display: flex; align-items: center; justify-content: space-between; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; padding: 10px 14px;">
+            <span style="font-weight: 800; color: #1e40af; font-size: 0.86rem; display: flex; align-items: center; gap: 6px;">🎖️ Per Kill Bounty</span>
+            <span style="font-family: 'Rajdhani', sans-serif; font-size: 1.05rem; font-weight: 800; color: #1d4ed8;">৳${kill}</span>
+        </div>
+        <div style="display: flex; align-items: center; justify-content: space-between; background: #fdf2f8; border: 1px solid #fbcfe8; border-radius: 10px; padding: 10px 14px;">
+            <span style="font-weight: 800; color: #9d174d; font-size: 0.86rem; display: flex; align-items: center; gap: 6px;">🪙 Total Prize Pool</span>
+            <span style="font-family: 'Rajdhani', sans-serif; font-size: 1.1rem; font-weight: 900; color: #be185d;">৳${pool}</span>
+        </div>
+    `;
+}
+
+function toggleAdminPrizeEdit() {
+    if (!currentPrizeModalMatchId) return;
+    const m = (allMatches || []).find(x => x.id === currentPrizeModalMatchId);
+    if (!m) return;
+
+    const list = document.getElementById('prizeBreakdownList');
+    const btnEdit = document.getElementById('btnAdminEditPrize');
+    if (!list || !btnEdit) return;
+
+    if (!isPrizeEditMode) {
+        // Enter edit mode
+        isPrizeEditMode = true;
+        btnEdit.innerText = '💾 Save Prize';
+        btnEdit.style.background = '#10b981';
+        btnEdit.style.color = '#ffffff';
+        btnEdit.style.borderColor = '#059669';
+
         const pool = parseInt(m.prize_pool, 10) || 0;
         const kill = parseInt(m.per_kill, 10) || 0;
-        const winner = Math.round(pool * 0.5) || pool || 90;
-        const second = Math.round(pool * 0.3) || Math.round(winner * 0.55);
-        const third = Math.round(pool * 0.2) || Math.round(winner * 0.25);
+        let winner = 0, second = 0, third = 0;
+        if (m.prize_breakdown) {
+            winner = parseInt(m.prize_breakdown.winner, 10) || 0;
+            second = parseInt(m.prize_breakdown.second, 10) || 0;
+            third = parseInt(m.prize_breakdown.third, 10) || 0;
+        } else {
+            winner = Math.round(pool * 0.5) || pool || 90;
+            second = Math.round(pool * 0.3) || Math.round(winner * 0.55);
+            third = Math.round(pool * 0.2) || Math.round(winner * 0.25);
+        }
 
         list.innerHTML = `
-            <div style="display: flex; align-items: center; justify-content: space-between; background: #fefce8; border: 1.5px solid #fef08a; border-radius: 10px; padding: 10px 14px;">
-                <span style="font-weight: 800; color: #854d0e; font-size: 0.88rem; display: flex; align-items: center; gap: 6px;">👑 Winner (1st Position)</span>
-                <span style="font-family: 'Rajdhani', sans-serif; font-size: 1.15rem; font-weight: 900; color: #b45309;">৳${winner}</span>
-            </div>
-            ${second > 0 ? `
-            <div style="display: flex; align-items: center; justify-content: space-between; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px 14px;">
-                <span style="font-weight: 800; color: #475569; font-size: 0.86rem; display: flex; align-items: center; gap: 6px;">🥈 2nd Position</span>
-                <span style="font-family: 'Rajdhani', sans-serif; font-size: 1.05rem; font-weight: 800; color: #1e293b;">৳${second}</span>
-            </div>` : ''}
-            ${third > 0 ? `
-            <div style="display: flex; align-items: center; justify-content: space-between; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px 14px;">
-                <span style="font-weight: 800; color: #78350f; font-size: 0.86rem; display: flex; align-items: center; gap: 6px;">🥉 3rd Position</span>
-                <span style="font-family: 'Rajdhani', sans-serif; font-size: 1.05rem; font-weight: 800; color: #1e293b;">৳${third}</span>
-            </div>` : ''}
-            <div style="display: flex; align-items: center; justify-content: space-between; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; padding: 10px 14px;">
-                <span style="font-weight: 800; color: #1e40af; font-size: 0.86rem; display: flex; align-items: center; gap: 6px;">🎖️ Per Kill Bounty</span>
-                <span style="font-family: 'Rajdhani', sans-serif; font-size: 1.05rem; font-weight: 800; color: #1d4ed8;">৳${kill}</span>
-            </div>
-            <div style="display: flex; align-items: center; justify-content: space-between; background: #fdf2f8; border: 1px solid #fbcfe8; border-radius: 10px; padding: 10px 14px;">
-                <span style="font-weight: 800; color: #9d174d; font-size: 0.86rem; display: flex; align-items: center; gap: 6px;">🪙 Total Prize Pool</span>
-                <span style="font-family: 'Rajdhani', sans-serif; font-size: 1.1rem; font-weight: 900; color: #be185d;">৳${pool}</span>
+            <div style="background: #f8fafc; border: 1.5px dashed #cbd5e1; border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 10px;">
+                <div style="font-size: 0.78rem; font-weight: 800; color: #0f172a;">🛠️ Edit Prizes for Match #${m.match_code || m.id}</div>
+                <div>
+                    <label style="font-size: 0.72rem; color: #b45309; font-weight: 800;">👑 1st (Winner) [BDT]</label>
+                    <input type="number" id="editPrizeWinner" class="form-input" value="${winner}" style="padding: 6px 10px; font-size: 0.85rem; font-weight: 800;">
+                </div>
+                <div>
+                    <label style="font-size: 0.72rem; color: #475569; font-weight: 700;">🥈 2nd Position [BDT]</label>
+                    <input type="number" id="editPrizeSecond" class="form-input" value="${second}" style="padding: 6px 10px; font-size: 0.85rem;">
+                </div>
+                <div>
+                    <label style="font-size: 0.72rem; color: #78350f; font-weight: 700;">🥉 3rd Position [BDT]</label>
+                    <input type="number" id="editPrizeThird" class="form-input" value="${third}" style="padding: 6px 10px; font-size: 0.85rem;">
+                </div>
+                <div>
+                    <label style="font-size: 0.72rem; color: #1d4ed8; font-weight: 700;">🎖️ Per Kill Bounty [BDT]</label>
+                    <input type="number" id="editPrizePerKill" class="form-input" value="${kill}" style="padding: 6px 10px; font-size: 0.85rem;">
+                </div>
+                <div>
+                    <label style="font-size: 0.72rem; color: #9d174d; font-weight: 800;">🪙 Total Prize Pool [BDT]</label>
+                    <input type="number" id="editPrizePool" class="form-input" value="${pool}" style="padding: 6px 10px; font-size: 0.85rem; font-weight: 800;">
+                </div>
             </div>
         `;
+    } else {
+        saveAdminPrizeEdit(m);
     }
-    openModal('prizeBreakdownModal');
+}
+
+async function saveAdminPrizeEdit(m) {
+    const winner = parseInt(document.getElementById('editPrizeWinner')?.value, 10) || 0;
+    const second = parseInt(document.getElementById('editPrizeSecond')?.value, 10) || 0;
+    const third = parseInt(document.getElementById('editPrizeThird')?.value, 10) || 0;
+    const per_kill = parseInt(document.getElementById('editPrizePerKill')?.value, 10) || 0;
+    const prize_pool = parseInt(document.getElementById('editPrizePool')?.value, 10) || 0;
+
+    try {
+        const res = await fetchWithAuth(`/api/admin/matches/${m.id}/prize-breakdown`, {
+            method: 'PUT',
+            body: JSON.stringify({
+                winner,
+                second,
+                third,
+                per_kill,
+                prize_pool
+            })
+        });
+        const data = await res.json();
+        if (res.ok) {
+            showToast('Prize details updated successfully!', 'success');
+            m.prize_breakdown = data.breakdown;
+            m.per_kill = per_kill;
+            m.prize_pool = prize_pool;
+            isPrizeEditMode = false;
+            const btnEdit = document.getElementById('btnAdminEditPrize');
+            if (btnEdit) {
+                btnEdit.innerText = '✏️ Edit Prize';
+                btnEdit.style.background = '#fffbeb';
+                btnEdit.style.color = '#b45309';
+                btnEdit.style.borderColor = '#f59e0b';
+            }
+            renderPrizeBreakdownView(m);
+            renderMatches();
+            renderMyMatches();
+        } else {
+            showToast(data.detail || 'Update failed', 'error');
+        }
+    } catch (e) {
+        showToast('Network error while updating prize', 'error');
+    }
 }
 
 async function openMatchInnerPortal(matchId) {
@@ -4003,10 +4144,14 @@ async function handleCreateMatchSubmit(e) {
     const match_type = document.getElementById('matchType').value;
     const map_name = document.getElementById('matchMap').value;
     const match_time = document.getElementById('matchTime').value.replace('T', ' ');
-    const total_slots = parseInt(document.getElementById('matchSlots').value);
-    const entry_fee = parseInt(document.getElementById('matchEntryFee').value);
-    const prize_pool = parseInt(document.getElementById('matchPrizePool').value);
-    const per_kill = parseInt(document.getElementById('matchPerKill').value);
+    const total_slots = parseInt(document.getElementById('matchSlots').value, 10);
+    const entry_fee = parseInt(document.getElementById('matchEntryFee').value, 10);
+    const prize_pool = parseInt(document.getElementById('matchPrizePool').value, 10);
+    const per_kill = parseInt(document.getElementById('matchPerKill').value, 10);
+
+    const winner_prize = parseInt(document.getElementById('matchPrizeWinner')?.value, 10) || 0;
+    const second_prize = parseInt(document.getElementById('matchPrizeSecond')?.value, 10) || 0;
+    const third_prize = parseInt(document.getElementById('matchPrizeThird')?.value, 10) || 0;
 
     try {
         const res = await fetch('/api/admin/matches', {
@@ -4015,7 +4160,19 @@ async function handleCreateMatchSubmit(e) {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${token}`
             },
-            body: JSON.stringify({ title, match_type, map_name, match_time, total_slots, entry_fee, prize_pool, per_kill })
+            body: JSON.stringify({
+                title,
+                match_type,
+                map_name,
+                match_time,
+                total_slots,
+                entry_fee,
+                prize_pool,
+                per_kill,
+                winner_prize,
+                second_prize,
+                third_prize
+            })
         });
         if (res.ok) {
             closeModal('createMatchModal');

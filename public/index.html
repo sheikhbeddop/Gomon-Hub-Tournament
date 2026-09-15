@@ -2327,16 +2327,38 @@
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
                         <div class="form-group">
                             <label class="form-label">Entry Fee (BDT)</label>
-                            <input type="number" class="form-input" id="matchEntryFee" value="25" required>
+                            <input type="number" class="form-input" id="matchEntryFee" value="20" required>
                         </div>
                         <div class="form-group">
-                            <label class="form-label">Total Prize Pool (BDT)</label>
-                            <input type="number" class="form-input" id="matchPrizePool" value="600" required>
+                            <label class="form-label">Per Kill Bounty (BDT)</label>
+                            <input type="number" class="form-input" id="matchPerKill" value="12" required>
                         </div>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label">Per Kill Bounty (BDT)</label>
-                        <input type="number" class="form-input" id="matchPerKill" value="15" required>
+
+                    <!-- Prize Distribution Breakdown (1st, 2nd, 3rd) -->
+                    <div style="background: #fffbeb; border: 1.5px solid #fde68a; border-radius: 10px; padding: 12px; margin-bottom: 12px;">
+                        <div style="font-size: 0.84rem; font-weight: 800; color: #92400e; margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between;">
+                            <span style="display: flex; align-items: center; gap: 5px;">🏆 <b>Prize Breakdown (স্থান ভিত্তিক প্রাইজ লিস্ট)</b></span>
+                            <span style="font-size: 0.7rem; color: #b45309;">(অটো যোগ হবে)</span>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 10px;">
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label class="form-label" style="font-size: 0.72rem; color: #b45309; font-weight: 800;">👑 1st (Winner)</label>
+                                <input type="number" class="form-input" id="matchPrizeWinner" value="90" placeholder="e.g. 90" required oninput="calcTotalPrizePool()" style="padding: 7px 8px; font-size: 0.85rem; font-weight: 800;">
+                            </div>
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label class="form-label" style="font-size: 0.72rem; color: #475569; font-weight: 700;">🥈 2nd Position</label>
+                                <input type="number" class="form-input" id="matchPrizeSecond" value="50" placeholder="0" oninput="calcTotalPrizePool()" style="padding: 7px 8px; font-size: 0.85rem;">
+                            </div>
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label class="form-label" style="font-size: 0.72rem; color: #78350f; font-weight: 700;">🥉 3rd Position</label>
+                                <input type="number" class="form-input" id="matchPrizeThird" value="20" placeholder="0" oninput="calcTotalPrizePool()" style="padding: 7px 8px; font-size: 0.85rem;">
+                            </div>
+                        </div>
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label class="form-label" style="font-size: 0.74rem; color: #92400e; font-weight: 800;">🪙 Total Prize Pool (BDT)</label>
+                            <input type="number" class="form-input" id="matchPrizePool" value="160" required style="background: #ffffff; font-weight: 800; color: #b45309; padding: 8px 10px;">
+                        </div>
                     </div>
                     <button type="submit" class="btn btn-neon" style="width: 100%; padding: 12px; margin-top: 10px;">
                         Publish Match
@@ -2679,8 +2701,9 @@
                     <!-- Dynamically populated by openPrizeBreakdownModal -->
                 </div>
             </div>
-            <div style="padding: 10px 16px 14px; background: #f8fafc; border-top: 1px solid #f1f5f9; text-align: center;">
-                <button type="button" class="btn btn-outline" style="width: 100%; padding: 8px; font-size: 0.85rem; font-weight: 800; border-color: #cbd5e1; color: #0f172a;" onclick="closeModal('prizeBreakdownModal')">Got It</button>
+            <div style="padding: 10px 16px 14px; background: #f8fafc; border-top: 1px solid #f1f5f9; display: flex; gap: 8px;">
+                <button type="button" id="btnAdminEditPrize" class="btn btn-outline" style="display: none; flex: 1; padding: 8px; font-size: 0.85rem; font-weight: 800; border-color: #f59e0b; color: #b45309; background: #fffbeb;" onclick="toggleAdminPrizeEdit()">✏️ Edit Prize</button>
+                <button type="button" class="btn btn-outline" style="flex: 1; padding: 8px; font-size: 0.85rem; font-weight: 800; border-color: #cbd5e1; color: #0f172a;" onclick="closeModal('prizeBreakdownModal')">Got It</button>
             </div>
         </div>
     </div>

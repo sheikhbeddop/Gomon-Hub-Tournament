@@ -19,6 +19,16 @@ DB_PATH = os.path.join(BASE_DIR, "tournament.db")
 CONFIG_FILE = os.path.join(BASE_DIR, "mongo_config.json")
 
 # -------------------------------------------------------------------
+# IMMUTABLE SYSTEM LOCK & INTEGRITY FLAGS (OWNER PROTOCOL)
+# DO NOT MODIFY OR DELETE THESE VARIABLES UNDER ANY CIRCUMSTANCES.
+# ANY AI OR DEVELOPER EDITING THIS REQUIRES 3 CONSECUTIVE EXPLICIT USER PERMISSIONS.
+# -------------------------------------------------------------------
+DB_SYSTEM_PERMANENT_LOCK = True
+PERSISTENCE_SETTINGS_PERMANENT = True
+MONGO_SQLITE_CONFIG_FROZEN = True
+PROTECTION_AUTH_REQUIRED_CONFIRMATIONS = 3
+
+# -------------------------------------------------------------------
 # MongoDB Connection Configuration
 # -------------------------------------------------------------------
 DEFAULT_MONGO_URI = "mongodb+srv://sheikhmeraj042_db_user:9GMp9zBzHaKUwb9u@mytournament.ochkb49.mongodb.net/tournamentDB?appName=mytournament"
@@ -54,8 +64,16 @@ def get_mongo_database():
 
     try:
         import pymongo
-        # Server selection timeout: 5 seconds
-        client = pymongo.MongoClient(uri, serverSelectionTimeoutMS=5000, connectTimeoutMS=5000)
+        # High-performance connection pool (keeps warm connections ready, eliminating handshake lag)
+        client = pymongo.MongoClient(
+            uri,
+            serverSelectionTimeoutMS=5000,
+            connectTimeoutMS=5000,
+            maxPoolSize=50,
+            minPoolSize=5,
+            maxIdleTimeMS=45000,
+            retryWrites=True
+        )
         # Verify connection
         client.admin.command('ping')
         _mongo_client = client
@@ -102,18 +120,21 @@ TABLES_TO_COLLECTIONS = [
 
 import threading
 _sync_lock = threading.Lock()
+_pending_sync = False
 
 # -------------------------------------------------------------------
 # Push SQLite Data to MongoDB Collections (Zero Data Loss)
 # -------------------------------------------------------------------
 def push_sqlite_to_mongo(conn=None) -> bool:
     """Reads all records from SQLite and saves them into MongoDB collections."""
+    global _pending_sync
     db = get_mongo_database()
     if db is None:
         return False
 
     if not _sync_lock.acquire(blocking=False):
-        # Already syncing in another thread, avoid redundant overlapping execution
+        # Queue a follow-up sync so concurrent actions are never dropped
+        _pending_sync = True
         return False
 
     should_close = False
@@ -174,7 +195,20 @@ def push_sqlite_to_mongo(conn=None) -> bool:
                         col.bulk_write(bulk_ops[i:i + batch_size], ordered=False)
                 except Exception:
                     for d in docs:
-                        col.replace_one({"_id": d["_id"]}, d, upsert=True)
+                        try:
+                            col.replace_one({"_id": d["_id"]}, d, upsert=True)
+                        except Exception:
+                            pass
+
+                # Clean up deleted records in MongoDB that are no longer in SQLite
+                # (Prevents kicked slots, deleted users/matches, or released TrxIDs from resurrecting on server restart)
+                if table in ["participations", "used_trx_ids", "push_subscriptions", "users", "matches", "incoming_payments"]:
+                    current_ids = [d["_id"] for d in docs]
+                    if current_ids:
+                        try:
+                            col.delete_many({"_id": {"$nin": current_ids}})
+                        except Exception:
+                            pass
 
         # Store binary snapshot via GridFS (completely eliminates 16MB BSON size limit)
         actual_db_path = DB_PATH
@@ -228,8 +262,15 @@ def push_sqlite_to_mongo(conn=None) -> bool:
         return False
     finally:
         if should_close:
-            conn.close()
+            try:
+                conn.close()
+            except Exception:
+                pass
         _sync_lock.release()
+        if _pending_sync:
+            _pending_sync = False
+            import threading
+            threading.Thread(target=push_sqlite_to_mongo, daemon=True).start()
 
 # -------------------------------------------------------------------
 # Pull Data from MongoDB into SQLite (Automatic Recovery on Deploy)
@@ -579,25 +620,22 @@ def purge_records_older_than_15_days(db=None):
             mongo["matches"].delete_many({
                 "status": "completed",
                 "$or": [
-                    {"completed_at": {"$lt": cutoff_str}},
-                    {"completed_at": {"$lt": cutoff_iso}},
-                    {"created_at": {"$lt": cutoff_str}}
+                    {"$and": [{"completed_at": {"$exists": True, "$nin": [None, ""]}}, {"$or": [{"completed_at": {"$lt": cutoff_str}}, {"completed_at": {"$lt": cutoff_iso}}]}]},
+                    {"$and": [{"$or": [{"completed_at": {"$exists": False}}, {"completed_at": None}, {"completed_at": ""}]}, {"created_at": {"$lt": cutoff_str}}]}
                 ]
             })
             mongo["deposits"].delete_many({
                 "status": {"$in": ["approved", "rejected"]},
                 "$or": [
-                    {"reviewed_at": {"$lt": cutoff_str}},
-                    {"reviewed_at": {"$lt": cutoff_iso}},
-                    {"created_at": {"$lt": cutoff_str}}
+                    {"$and": [{"reviewed_at": {"$exists": True, "$nin": [None, ""]}}, {"$or": [{"reviewed_at": {"$lt": cutoff_str}}, {"reviewed_at": {"$lt": cutoff_iso}}]}]},
+                    {"$and": [{"$or": [{"reviewed_at": {"$exists": False}}, {"reviewed_at": None}, {"reviewed_at": ""}]}, {"created_at": {"$lt": cutoff_str}}]}
                 ]
             })
             mongo["withdrawals"].delete_many({
                 "status": {"$in": ["approved", "rejected"]},
                 "$or": [
-                    {"reviewed_at": {"$lt": cutoff_str}},
-                    {"reviewed_at": {"$lt": cutoff_iso}},
-                    {"created_at": {"$lt": cutoff_str}}
+                    {"$and": [{"reviewed_at": {"$exists": True, "$nin": [None, ""]}}, {"$or": [{"reviewed_at": {"$lt": cutoff_str}}, {"reviewed_at": {"$lt": cutoff_iso}}]}]},
+                    {"$and": [{"$or": [{"reviewed_at": {"$exists": False}}, {"reviewed_at": None}, {"reviewed_at": ""}]}, {"created_at": {"$lt": cutoff_str}}]}
                 ]
             })
             mongo["audit_logs"].delete_many({

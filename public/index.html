@@ -747,6 +747,9 @@
                                     <button type="button" class="btn btn-sm admin-only-card" onclick="openCreateUserModal()" style="background: linear-gradient(135deg, #10b981, #059669); color: #fff; font-weight: 700; border: none; border-radius: 6px; padding: 6px 14px; display: inline-flex; align-items: center; gap: 6px; cursor: pointer;">
                                         ➕ Create New Player
                                     </button>
+                                    <button type="button" class="btn btn-sm admin-only-card" onclick="openAdminAuditLogsModal()" style="background: linear-gradient(135deg, #6366f1, #4f46e5); color: #fff; font-weight: 700; border: none; border-radius: 6px; padding: 6px 14px; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; box-shadow: 0 2px 8px rgba(99, 102, 241, 0.25);">
+                                        📜 Audit Logs
+                                    </button>
                                 </div>
                             </div>
                             <div style="padding: 0 16px 10px; color: #64748b; font-size: 0.8rem;">
@@ -2184,6 +2187,11 @@
                         <span>⏱️ <b>Player is in Timeout!</b> Remaining: <b id="userActionTimeoutRem">0</b> mins</span>
                         <button type="button" class="btn btn-outline btn-xs" onclick="clearUserTimeoutFromModal()" style="border-color: #10b981; color: #059669; font-weight: 700;">✅ Unlock Account</button>
                     </div>
+                    <div style="margin-top: 12px; display: flex; gap: 8px;">
+                        <button type="button" class="btn btn-outline btn-xs" onclick="viewAuditLogsForCurrentUser()" style="border-color: #6366f1; color: #4f46e5; font-weight: 700; padding: 6px 12px; display: inline-flex; align-items: center; gap: 6px; border-radius: 6px; background: #eef2ff;">
+                            📜 View Player Balance History (অডিট লগ)
+                        </button>
+                    </div>
                 </div>
 
                 <!-- 2. SECTION: DIGITS ADJUST (+ / -) -->
@@ -2780,6 +2788,75 @@
         </div>
     </div>
 
+    <!-- MODAL 2.8: ADMIN AUDIT LOGS MODAL -->
+    <div class="modal-overlay" id="adminAuditLogsModal">
+        <div class="modal-box" style="max-width: 960px; width: 95%; max-height: 90vh; display: flex; flex-direction: column; padding: 0; overflow: hidden; border-radius: 14px; background: #ffffff; box-shadow: 0 20px 40px rgba(0,0,0,0.25);">
+            <div class="modal-header" style="border-bottom: 1px solid #e2e8f0; padding: 14px 20px; background: #f8fafc;">
+                <div>
+                    <h3 style="font-family: 'Rajdhani', sans-serif; font-size: 1.35rem; font-weight: 800; color: #0f172a; display: flex; align-items: center; gap: 8px; margin: 0;">
+                        <span>📜 System Audit Logs & Financial History</span>
+                    </h3>
+                    <div style="font-size: 0.82rem; color: #64748b; margin-top: 3px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;" id="auditLogsSubtitle">
+                        <span>Real-time records of balance transactions, refunds, entry fees, prizes & admin actions.</span>
+                    </div>
+                </div>
+                <button class="modal-close" onclick="closeModal('adminAuditLogsModal')">&times;</button>
+            </div>
+
+            <!-- Filters & Search Bar -->
+            <div style="padding: 12px 20px; background: #ffffff; border-bottom: 1px solid #e2e8f0; display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+                <div style="flex: 1; min-width: 220px;">
+                    <input type="text" id="adminAuditSearchInput" class="form-input" placeholder="Search reason, username, player ID, match code..." style="padding: 7px 12px; font-size: 0.84rem; width: 100%; box-sizing: border-box;" onkeyup="handleAuditSearchKey(event)">
+                </div>
+                <div style="min-width: 200px;">
+                    <select id="adminAuditActionFilter" class="form-input" style="padding: 7px 10px; font-size: 0.84rem; width: 100%; box-sizing: border-box;" onchange="filterAdminAuditLogs()">
+                        <option value="">All Actions (সকল অ্যাকশন)</option>
+                        <option value="MATCH_CANCEL_REFUND">Match Cancel Refund (ম্যাচ রিফান্ড)</option>
+                        <option value="PARTICIPANT_KICKED_REFUND">Kicked/Replaced Refund (স্লট রিফান্ড)</option>
+                        <option value="MATCH_ENTRY_FEE">Match Entry Fee (এন্ট্রি ফি)</option>
+                        <option value="MATCH_PRIZE_DISTRIBUTED">Match Prize (পুরস্কার বিতরণ)</option>
+                        <option value="DEPOSIT_APPROVED">Deposit Approved (ডিপোজিট)</option>
+                        <option value="DEPOSIT_AUTO_APPROVED">Deposit Auto (অটো ডিপোজিট)</option>
+                        <option value="WITHDRAW_REQUESTED">Withdraw Requested (উইথড্র আবেদন)</option>
+                        <option value="WITHDRAW_APPROVED">Withdraw Approved (উইথড্র সম্পন্ন)</option>
+                        <option value="WITHDRAW_REJECTED">Withdraw Rejected (উইথড্র বাতিল/রিফান্ড)</option>
+                        <option value="ADMIN_ADJUST_DIGITS">Admin Balance Adjust (ম্যানুয়াল অ্যাড)</option>
+                    </select>
+                </div>
+                <button type="button" class="btn btn-sm" onclick="filterAdminAuditLogs()" style="background: #4f46e5; color: #fff; font-weight: 700; border: none; border-radius: 6px; padding: 7px 14px; cursor: pointer;">
+                    🔍 Filter
+                </button>
+                <button type="button" class="btn btn-outline btn-sm" onclick="resetAdminAuditFilters()" style="padding: 7px 12px; font-size: 0.84rem; border-color: #cbd5e1; color: #475569; cursor: pointer;">
+                    🔄 Reset
+                </button>
+            </div>
+
+            <!-- Table Container -->
+            <div style="flex: 1; overflow-y: auto; padding: 12px 20px;">
+                <div class="table-wrapper" style="box-shadow: none; border: 1px solid #e2e8f0; border-radius: 8px;">
+                    <table class="custom-table" style="font-size: 0.82rem; width: 100%;">
+                        <thead>
+                            <tr style="background: #f8fafc;">
+                                <th style="padding: 9px 10px; white-space: nowrap;">Time (BST)</th>
+                                <th style="padding: 9px 10px; white-space: nowrap;">Player</th>
+                                <th style="padding: 9px 10px; white-space: nowrap;">Action</th>
+                                <th style="padding: 9px 10px; white-space: nowrap; text-align: right;">Amount</th>
+                                <th style="padding: 9px 10px;">Details / Note</th>
+                                <th style="padding: 9px 10px; white-space: nowrap;">By</th>
+                            </tr>
+                        </thead>
+                        <tbody id="adminAuditLogsTableBody">
+                            <tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 24px;">Loading audit logs...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer" style="padding: 10px 20px; border-top: 1px solid #e2e8f0; background: #f8fafc; display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; color: #64748b;">
+                <span id="auditLogsCountSummary">Showing 0 logs</span>
+                <button type="button" class="btn btn-outline btn-sm" onclick="closeModal('adminAuditLogsModal')" style="border-color: #cbd5e1; color: #334155;">Close</button>
+            </div>
+        </div>
+    </div>
 
     <!-- MODAL: IMPORTANT NOTICE POPUP (WELCOME MODAL) -->
     <div class="modal-overlay welcome-notice-overlay" id="welcomeNoticeModal" onclick="closeWelcomeNoticeOnBackdrop(event)" style="align-items: center !important; justify-content: center !important;">
@@ -2834,7 +2911,7 @@
     <!-- Toast Notification Container -->
     <div class="toast-container" id="toastContainer"></div>
 
-    <script src="/static/js/app.js?v=5.4.0"></script>
+    <script src="/static/js/app.js?v=5.4.1"></script>
 
 </body>
 </html>

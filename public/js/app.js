@@ -165,15 +165,8 @@ async function apiRequest(endpoint, method = 'GET', body = null) {
     return data;
 }
 
-let splashMinTimePassed = false;
-let splashDismissRequested = false;
-
-setTimeout(() => {
-    splashMinTimePassed = true;
-    if (splashDismissRequested) {
-        doDismissSplashScreen();
-    }
-}, 850);
+let splashMinTimePassed = true;
+let splashDismissRequested = true;
 
 function dismissSplashScreen() {
     splashDismissRequested = true;
@@ -1498,7 +1491,19 @@ function showMatchesSkeleton() {
     `).join('');
 }
 
+let isMatchesFetching = false;
+let lastMatchesFetchTimestamp = 0;
+
 async function loadMatches(silent = false) {
+    const now = Date.now();
+    // Prevent multiple rapid overlapping calls within 1200ms if matches are already loaded
+    if (!silent && now - lastMatchesFetchTimestamp < 1200 && allMatches && allMatches.length > 0) {
+        return;
+    }
+    if (isMatchesFetching) return;
+    isMatchesFetching = true;
+    lastMatchesFetchTimestamp = now;
+
     if (!silent && (!allMatches || allMatches.length === 0)) {
         showMatchesSkeleton();
     }
@@ -1515,6 +1520,8 @@ async function loadMatches(silent = false) {
         }
     } catch (e) {
         console.error('Failed to load matches', e);
+    } finally {
+        isMatchesFetching = false;
     }
 }
 

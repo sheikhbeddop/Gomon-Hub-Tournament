@@ -14,8 +14,12 @@
     <link rel="manifest" href="/manifest.json?v=4.2.0">
     <script>window.GOMON_HUB_LOGO = "/gomon_hub_logo.png";</script>
     <meta name="theme-color" content="#080b11">
-    <link rel="stylesheet" href="/static/css/style.css?v=5.4.0">
-    <link rel="stylesheet" href="/static/css/auth-components.css?v=5.4.0">
+    <!-- Fast Preconnect & Font Loading (Zero Render-Blocking) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Rajdhani:wght@600;700;800&display=swap">
+    <link rel="stylesheet" href="/static/css/style.css?v=5.4.1">
+    <link rel="stylesheet" href="/static/css/auth-components.css?v=5.4.1">
 
     <script>
         (function() {
@@ -2915,7 +2919,7 @@
     <!-- Toast Notification Container -->
     <div class="toast-container" id="toastContainer"></div>
 
-    <script src="/static/js/app.js?v=5.4.1"></script>
+    <script src="/static/js/app.js?v=5.4.2"></script>
 
 </body>
 </html>

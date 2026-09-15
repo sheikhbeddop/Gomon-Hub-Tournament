@@ -1,11 +1,11 @@
 // Service Worker for GOMON HUB TOURNAMENT (PWA Offline & Push Engine)
 
-const CACHE_NAME = 'gomon-hub-v5.3';
+const CACHE_NAME = 'gomon-hub-v5.5';
 const PRECACHE_ASSETS = [
     '/',
-    '/static/css/style.css',
-    '/static/css/auth-components.css',
-    '/static/js/app.js',
+    '/static/css/style.css?v=5.4.1',
+    '/static/css/auth-components.css?v=5.4.1',
+    '/static/js/app.js?v=5.4.2',
     '/manifest.json',
     '/favicon.ico',
     '/gomon_hub_logo.png'
@@ -42,7 +42,7 @@ self.addEventListener('message', (event) => {
     }
 });
 
-// Fetch Handler: Network-first with dynamic cache update & offline fallback
+// Fetch Handler: Stale-While-Revalidate for Static Assets, Network-First for Pages & API
 self.addEventListener('fetch', (event) => {
     // Only intercept GET requests
     if (event.request.method !== 'GET') {
@@ -56,10 +56,36 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
+    const isStaticAsset = url.pathname.startsWith('/static/') || 
+        url.pathname.endsWith('.css') || 
+        url.pathname.endsWith('.js') || 
+        url.pathname.endsWith('.png') || 
+        url.pathname.endsWith('.jpg') || 
+        url.pathname.endsWith('.ico') || 
+        url.pathname.endsWith('.svg');
+
+    // 1. Static Assets: Instant Cache-First with Background Revalidation (Zero-Lag UI)
+    if (isStaticAsset) {
+        event.respondWith(
+            caches.match(event.request).then((cachedResponse) => {
+                const networkFetch = fetch(event.request).then((networkResponse) => {
+                    if (networkResponse && networkResponse.status === 200) {
+                        const clone = networkResponse.clone();
+                        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+                    }
+                    return networkResponse;
+                }).catch(() => cachedResponse);
+
+                return cachedResponse || networkFetch;
+            })
+        );
+        return;
+    }
+
+    // 2. Navigation / HTML pages: Network-first with offline fallback
     event.respondWith(
         fetch(event.request)
             .then((networkResponse) => {
-                // If valid response, clone into cache
                 if (networkResponse && networkResponse.status === 200) {
                     const responseClone = networkResponse.clone();
                     caches.open(CACHE_NAME).then((cache) => {
@@ -69,17 +95,11 @@ self.addEventListener('fetch', (event) => {
                 return networkResponse;
             })
             .catch(async () => {
-                // Network failed: attempt to serve from cache
                 const cached = await caches.match(event.request);
-                if (cached) {
-                    return cached;
-                }
-                // If navigating to a page, serve cached root
+                if (cached) return cached;
                 if (event.request.mode === 'navigate') {
                     const rootCached = await caches.match('/');
-                    if (rootCached) {
-                        return rootCached;
-                    }
+                    if (rootCached) return rootCached;
                 }
                 return new Response('Offline: Network connection unavailable', {
                     status: 503,

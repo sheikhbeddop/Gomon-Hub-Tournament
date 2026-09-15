@@ -232,6 +232,23 @@ if (document.readyState === 'loading') {
 // -------------------------------------------------------------
 // Public Site Settings
 // -------------------------------------------------------------
+function updateNoticeTicker(noticeText) {
+    if (!noticeText) return;
+    document.querySelectorAll('#announcementText, .notice-text-bn').forEach(el => {
+        el.innerText = noticeText;
+    });
+    // Ensure English version also matches or maintains English translation
+    let enText = noticeText;
+    if (noticeText.includes("স্বাগতম") || noticeText.includes("ডিপোজিট")) {
+        enText = "Welcome! Join tournament matches from the schedule after depositing via bKash!";
+    } else if (noticeText.includes("মেইনটেনেন্সে") || noticeText.includes("সাপোর্টে")) {
+        enText = "⚠️ The app is currently under maintenance.. Please contact support immediately for any issues... Otherwise GOMON HUB authorities will not be held responsible ⚠️";
+    }
+    document.querySelectorAll('.notice-text-en').forEach(el => {
+        el.innerText = enText;
+    });
+}
+
 async function loadPublicInfo() {
     try {
         const res = await fetch('/api/info?_t=' + Date.now());
@@ -254,9 +271,7 @@ async function loadPublicInfo() {
         if (elTitle && data.site_title) elTitle.innerText = data.site_title;
 
         if (data.notice) {
-            document.querySelectorAll('#announcementText, .notice-text-bn').forEach(el => {
-                el.innerText = data.notice;
-            });
+            updateNoticeTicker(data.notice);
         }
 
         const setBk = document.getElementById('settingAdminBkash');
@@ -399,8 +414,10 @@ function fetchMatches() {
 
 async function fetchWithAuth(url, options = {}) {
     options.headers = options.headers || {};
-    if (token) {
-        options.headers['Authorization'] = `Bearer ${token}`;
+    const activeToken = token || localStorage.getItem('ff_token') || localStorage.getItem('token');
+    if (activeToken) {
+        if (!token) token = activeToken;
+        options.headers['Authorization'] = `Bearer ${activeToken}`;
     }
     if (options.body && typeof options.body === 'string' && !options.headers['Content-Type']) {
         options.headers['Content-Type'] = 'application/json';
@@ -4342,9 +4359,7 @@ function handleWsMessage(data) {
         });
     } else if (data.type === 'SETTINGS_UPDATED') {
         if (data.notice !== undefined) {
-            document.querySelectorAll('#announcementText, .notice-text-bn').forEach(el => {
-                el.innerText = data.notice;
-            });
+            updateNoticeTicker(data.notice);
             showToast('📢 Live notice updated!', 'info');
         }
         if (data.site_title) {

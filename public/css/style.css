@@ -2819,3 +2819,84 @@ body {
         box-shadow: 0 0 4px rgba(239, 68, 68, 0.6);
     }
 }
+
+/* -------------------------------------------------------------
+   INSTANT ROOM CREDENTIALS CARD & BUTTON ENHANCEMENTS
+------------------------------------------------------------- */
+.room-instant-box {
+    background: linear-gradient(135deg, #090e17 0%, #0f172a 100%);
+    border: 1.5px solid #10b981;
+    border-radius: 10px;
+    padding: 10px 12px;
+    box-shadow: 0 4px 14px rgba(16, 185, 129, 0.15);
+    color: #ffffff;
+    margin-bottom: 2px;
+}
+
+.room-instant-box-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    padding-bottom: 6px;
+}
+
+.room-live-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.74rem;
+    font-weight: 900;
+    color: #10b981;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.room-pulse-green {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #10b981;
+    box-shadow: 0 0 8px #10b981;
+    animation: countdownPulseGlow 1.8s infinite;
+}
+
+.btn-copy-chip {
+    width: 100%;
+    padding: 5px 8px;
+    font-size: 0.74rem;
+    font-weight: 800;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    transition: all 0.2s ease;
+    font-family: inherit;
+}
+
+.btn-copy-chip:active {
+    transform: scale(0.96);
+}
+
+.btn-copy-chip-id {
+    background: #0284c7;
+    color: #ffffff;
+}
+
+.btn-copy-chip-id:hover {
+    background: #0369a1;
+}
+
+.btn-copy-chip-pass {
+    background: #059669;
+    color: #ffffff;
+}
+
+.btn-copy-chip-pass:hover {
+    background: #047857;
+}

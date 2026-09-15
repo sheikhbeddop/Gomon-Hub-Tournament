@@ -2780,6 +2780,52 @@ def admin_list_users(search: Optional[str] = None, admin: dict = Depends(verify_
         result.append(d)
     return result
 
+@app.get("/api/admin/audit-logs")
+def admin_get_audit_logs(
+    user_id: Optional[int] = None,
+    action: Optional[str] = None,
+    search: Optional[str] = None,
+    limit: int = 100,
+    admin: dict = Depends(verify_moderator_or_admin)
+):
+    conn = get_db()
+    query = """
+    SELECT 
+        l.id,
+        l.admin_id,
+        l.target_user_id,
+        l.action,
+        l.amount,
+        l.reason,
+        l.created_at,
+        u.username as target_username,
+        u.player_id as target_player_id,
+        adm.username as admin_username
+    FROM audit_logs l
+    LEFT JOIN users u ON l.target_user_id = u.id
+    LEFT JOIN users adm ON l.admin_id = adm.id
+    WHERE 1=1
+    """
+    params = []
+    if user_id is not None:
+        query += " AND l.target_user_id = ?"
+        params.append(user_id)
+    if action and action.strip():
+        query += " AND l.action = ?"
+        params.append(action.strip())
+    if search and search.strip():
+        s_clean = search.strip()
+        query += " AND (l.reason LIKE ? OR u.username LIKE ? OR u.player_id LIKE ? OR l.action LIKE ?)"
+        s_like = f"%{s_clean}%"
+        params.extend([s_like, s_like, s_like, s_like])
+        
+    query += " ORDER BY l.id DESC LIMIT ?"
+    params.append(min(max(1, limit), 300))
+    
+    rows = conn.execute(query, params).fetchall()
+    conn.close()
+    return {"logs": [dict(r) for r in rows]}
+
 @app.post("/api/admin/users/adjust-digits")
 @app.post("/api/admin/users/{target_user_id}/adjust-digits")
 async def admin_adjust_digits(data: AdminAdjustDigits, target_user_id: Optional[int] = None, admin: dict = Depends(verify_admin)):

@@ -13,10 +13,24 @@
     <link rel="stylesheet" href="/static/css/style.css?v=5.4.0">
     <link rel="stylesheet" href="/static/css/auth-components.css?v=5.4.0">
 
+    <script>
+        (function() {
+            try {
+                if (!localStorage.getItem('ff_token')) {
+                    document.documentElement.classList.add('not-authenticated');
+                } else {
+                    document.documentElement.classList.add('authenticated');
+                }
+            } catch (e) {
+                document.documentElement.classList.add('not-authenticated');
+            }
+        })();
+    </script>
     <style id="anti-fouc-critical">
         /* Minimal anti-FOUC rules to prevent content flash during load */
         #appSplashScreen { display: none !important; }
-        #mainAppWrapper { display: block; }
+        html.not-authenticated #mainAppWrapper { display: none !important; }
+        html.not-authenticated #authModal.modal-overlay { display: flex !important; }
         #authModal:not(.show), .auth-modal-overlay:not(.show) { display: none !important; }
         #welcomeNoticeModal:not(.show), .welcome-notice-overlay:not(.show) { display: none !important; }
     </style>
@@ -25,7 +39,7 @@
 
     <!-- IN-APP SPLASH SCREEN REMOVED PER USER REQUEST -->
     <!-- MAIN APP WRAPPER -->
-    <div id="mainAppWrapper" style="display: block;">
+    <div id="mainAppWrapper">
 
     <!-- Top Navbar -->
     <header class="navbar">

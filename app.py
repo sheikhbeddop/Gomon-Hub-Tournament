@@ -926,10 +926,26 @@ app.add_middleware(
 # GZip compression middleware: shrinks HTML, JS, CSS, and API responses over the wire for blazing speed
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
+AI_AND_SCRAPER_BOTS = (
+    "gptbot", "chatgpt-user", "claudebot", "claude-web", "anthropic-ai",
+    "perplexitybot", "google-extended", "ccbot", "bytespider", "diffbot",
+    "facebookexternalhit", "scrapy", "petalbot", "dotbot", "semrushbot",
+    "ahrefsbot", "mj12bot"
+)
+
 @app.middleware("http")
 async def add_no_cache_header(request: Request, call_next):
+    user_agent = (request.headers.get("user-agent") or "").lower()
+    if any(bot in user_agent for bot in AI_AND_SCRAPER_BOTS):
+        return Response(
+            content="Access Denied: Automated AI crawlers and scrapers are blocked on this platform.",
+            status_code=403,
+            media_type="text/plain"
+        )
+
     response = await call_next(request)
     path = request.url.path
+    response.headers["X-Robots-Tag"] = "noindex, nofollow, noarchive, nosnippet"
     if path == "/" or path.endswith(".html") or path.endswith(".js") or path.endswith(".css") or path.startswith("/api/"):
         response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
         response.headers["Pragma"] = "no-cache"
@@ -4492,6 +4508,30 @@ def serve_manifest():
     if os.path.exists(mf_file):
         return FileResponse(mf_file, media_type="application/json", headers={"Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache", "Expires": "0"})
     return JSONResponse(status_code=404, content={"detail": "manifest.json not found"})
+
+@app.get("/robots.txt")
+def serve_robots():
+    content = (
+        "User-agent: *\n"
+        "Disallow: /\n\n"
+        "User-agent: GPTBot\n"
+        "Disallow: /\n\n"
+        "User-agent: ChatGPT-User\n"
+        "Disallow: /\n\n"
+        "User-agent: ClaudeBot\n"
+        "Disallow: /\n\n"
+        "User-agent: Claude-Web\n"
+        "Disallow: /\n\n"
+        "User-agent: PerplexityBot\n"
+        "Disallow: /\n\n"
+        "User-agent: Google-Extended\n"
+        "Disallow: /\n\n"
+        "User-agent: CCBot\n"
+        "Disallow: /\n\n"
+        "User-agent: Bytespider\n"
+        "Disallow: /\n"
+    )
+    return Response(content=content, media_type="text/plain")
 
 if __name__ == "__main__":
     import uvicorn

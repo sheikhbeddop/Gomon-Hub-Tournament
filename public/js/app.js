@@ -3853,6 +3853,176 @@ function impersonateFromActionModal() {
     impersonateUser(currentActionUser.id);
 }
 
+// ----------------------------------------------------
+// ADMIN AUDIT LOGS VIEWER
+// ----------------------------------------------------
+let currentAuditUserId = null;
+let currentAuditTargetName = null;
+let auditLogsCache = [];
+
+function viewAuditLogsForCurrentUser() {
+    if (!currentActionUser) return;
+    openAdminAuditLogsModal(currentActionUser.id, currentActionUser.username);
+}
+
+function openAdminAuditLogsModal(userId = null, targetName = null) {
+    currentAuditUserId = userId;
+    currentAuditTargetName = targetName;
+
+    const subtitle = document.getElementById('auditLogsSubtitle');
+    if (subtitle) {
+        if (userId && targetName) {
+            subtitle.innerHTML = `
+                <span>Showing balance records for: <b style="color: #4f46e5;">@${escapeHtml(targetName)}</b></span>
+                <button type="button" class="btn btn-outline btn-xs" onclick="resetAdminAuditFilters(true)" style="padding: 2px 8px; font-size: 0.72rem; border-color: #6366f1; color: #4f46e5; margin-left: 6px;">Clear Player Filter</button>
+            `;
+        } else {
+            subtitle.innerHTML = `<span>Real-time records of balance transactions, refunds, entry fees, prizes & admin actions.</span>`;
+        }
+    }
+
+    const searchInput = document.getElementById('adminAuditSearchInput');
+    if (searchInput) searchInput.value = '';
+
+    const actionFilter = document.getElementById('adminAuditActionFilter');
+    if (actionFilter) actionFilter.value = '';
+
+    openModal('adminAuditLogsModal');
+    loadAdminAuditLogs();
+}
+
+async function loadAdminAuditLogs() {
+    const tbody = document.getElementById('adminAuditLogsTableBody');
+    if (tbody) {
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 24px;">⏳ Loading audit logs...</td></tr>`;
+    }
+
+    const searchInput = document.getElementById('adminAuditSearchInput');
+    const actionFilter = document.getElementById('adminAuditActionFilter');
+
+    const search = searchInput ? searchInput.value.trim() : '';
+    const action = actionFilter ? actionFilter.value : '';
+
+    const params = new URLSearchParams();
+    if (currentAuditUserId) params.append('user_id', currentAuditUserId);
+    if (action) params.append('action', action);
+    if (search) params.append('search', search);
+    params.append('limit', '100');
+
+    try {
+        const res = await fetch(`/api/admin/audit-logs?${params.toString()}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.ok) {
+            const data = await res.json();
+            auditLogsCache = data.logs || [];
+            renderAdminAuditLogs(auditLogsCache);
+        } else {
+            if (tbody) tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: #ef4444; padding: 24px;">Failed to load audit logs.</td></tr>`;
+        }
+    } catch (e) {
+        console.error(e);
+        if (tbody) tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: #ef4444; padding: 24px;">Error connecting to server.</td></tr>`;
+    }
+}
+
+function handleAuditSearchKey(e) {
+    if (e.key === 'Enter') {
+        loadAdminAuditLogs();
+    }
+}
+
+function filterAdminAuditLogs() {
+    loadAdminAuditLogs();
+}
+
+function resetAdminAuditFilters(clearUser = false) {
+    if (clearUser) {
+        currentAuditUserId = null;
+        currentAuditTargetName = null;
+        const subtitle = document.getElementById('auditLogsSubtitle');
+        if (subtitle) {
+            subtitle.innerHTML = `<span>Real-time records of balance transactions, refunds, entry fees, prizes & admin actions.</span>`;
+        }
+    }
+    const searchInput = document.getElementById('adminAuditSearchInput');
+    if (searchInput) searchInput.value = '';
+    const actionFilter = document.getElementById('adminAuditActionFilter');
+    if (actionFilter) actionFilter.value = '';
+    loadAdminAuditLogs();
+}
+
+function renderAdminAuditLogs(logs) {
+    const tbody = document.getElementById('adminAuditLogsTableBody');
+    const countSummary = document.getElementById('auditLogsCountSummary');
+    if (!tbody) return;
+
+    if (!logs || logs.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 30px;">No audit records found matching criteria.</td></tr>`;
+        if (countSummary) countSummary.innerText = 'Showing 0 logs';
+        return;
+    }
+
+    if (countSummary) countSummary.innerText = `Showing ${logs.length} log(s)`;
+
+    tbody.innerHTML = logs.map(log => {
+        let amountHtml = '<span style="color: #94a3b8; font-weight: 600;">0</span>';
+        const numAmt = Number(log.amount) || 0;
+        if (numAmt > 0) {
+            amountHtml = `<span style="color: #10b981; font-weight: 800;">+${numAmt} 🪙</span>`;
+        } else if (numAmt < 0) {
+            amountHtml = `<span style="color: #ef4444; font-weight: 800;">${numAmt} 🪙</span>`;
+        }
+
+        // Action badge styling
+        const actStr = String(log.action || '');
+        let actionBadge = `<span class="badge-status" style="background: #e2e8f0; color: #475569; font-size: 0.74rem;">${escapeHtml(actStr)}</span>`;
+        if (actStr.includes('REFUND')) {
+            actionBadge = `<span class="badge-status" style="background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; font-size: 0.74rem; font-weight: 700;">🔄 REFUND</span>`;
+        } else if (actStr.includes('PRIZE')) {
+            actionBadge = `<span class="badge-status" style="background: #fef3c7; color: #b45309; border: 1px solid #fde68a; font-size: 0.74rem; font-weight: 700;">🏆 PRIZE</span>`;
+        } else if (actStr.includes('ENTRY_FEE')) {
+            actionBadge = `<span class="badge-status" style="background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; font-size: 0.74rem; font-weight: 700;">🎟️ ENTRY FEE</span>`;
+        } else if (actStr.includes('DEPOSIT')) {
+            actionBadge = `<span class="badge-status" style="background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; font-size: 0.74rem; font-weight: 700;">💳 DEPOSIT</span>`;
+        } else if (actStr.includes('WITHDRAW')) {
+            actionBadge = `<span class="badge-status" style="background: #fdf4ff; color: #9333ea; border: 1px solid #f5d0fe; font-size: 0.74rem; font-weight: 700;">💸 WITHDRAW</span>`;
+        } else if (actStr.includes('ADJUST')) {
+            actionBadge = `<span class="badge-status" style="background: #f5f3ff; color: #7c3aed; border: 1px solid #ddd6fe; font-size: 0.74rem; font-weight: 700;">⚙️ ADJUST</span>`;
+        }
+
+        // Performed by
+        let performedBy = '<span style="color: #64748b;">⚡ System</span>';
+        if (log.admin_id === 0) {
+            performedBy = '<span style="color: #059669; font-weight: 700;">🤖 SMS AutoBot</span>';
+        } else if (log.admin_username) {
+            performedBy = `<span style="color: #2563eb; font-weight: 700;">@${escapeHtml(log.admin_username)}</span>`;
+        }
+
+        // Target user
+        let userDisplay = '<span style="color: #94a3b8;">System-wide</span>';
+        if (log.target_username) {
+            userDisplay = `
+                <div style="font-weight: 700; color: #0f172a;">@${escapeHtml(log.target_username)}</div>
+                <div style="font-size: 0.72rem; color: #64748b; font-family: monospace;">${escapeHtml(log.target_player_id || '')}</div>
+            `;
+        }
+
+        const timeStr = log.created_at ? log.created_at : '-';
+
+        return `
+            <tr style="border-bottom: 1px solid #f1f5f9;">
+                <td style="white-space: nowrap; color: #64748b; font-size: 0.75rem; font-family: monospace;">${escapeHtml(timeStr)}</td>
+                <td style="white-space: nowrap;">${userDisplay}</td>
+                <td style="white-space: nowrap;">${actionBadge}</td>
+                <td style="white-space: nowrap; text-align: right;">${amountHtml}</td>
+                <td style="color: #334155; font-size: 0.8rem; line-height: 1.35;">${escapeHtml(log.reason || '-')}</td>
+                <td style="white-space: nowrap; font-size: 0.76rem;">${performedBy}</td>
+            </tr>
+        `;
+    }).join('');
+}
+
 function togglePassVisibility(userId) {
     const el = document.getElementById(`passText_${userId}`);
     const btn = document.getElementById(`passEyeBtn_${userId}`);

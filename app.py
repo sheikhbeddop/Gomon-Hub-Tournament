@@ -946,12 +946,12 @@ async def add_no_cache_header(request: Request, call_next):
     response = await call_next(request)
     path = request.url.path
     response.headers["X-Robots-Tag"] = "noindex, nofollow, noarchive, nosnippet"
-    if path == "/" or path.endswith(".html") or path.endswith(".js") or path.endswith(".css") or path.startswith("/api/"):
+    if path.endswith((".js", ".css", ".png", ".jpg", ".jpeg", ".ico", ".svg", ".woff2", ".webp")):
+        response.headers["Cache-Control"] = "public, max-age=86400, stale-while-revalidate=3600"
+    elif path == "/" or path.endswith(".html") or path.startswith("/api/"):
         response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"
-    elif path.endswith((".png", ".jpg", ".jpeg", ".ico", ".svg", ".woff2", ".webp")):
-        response.headers["Cache-Control"] = "public, max-age=86400"
     return response
 
 

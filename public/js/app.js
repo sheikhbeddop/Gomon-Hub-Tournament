@@ -218,8 +218,8 @@ async function startApp() {
         if (impBanner) impBanner.style.display = 'block';
     }
 
-    await loadPublicInfo();
     await initAuth();
+    loadPublicInfo();
     initServiceWorker();
 }
 
@@ -314,6 +314,8 @@ async function initAuth() {
     const cachedUserStr = localStorage.getItem('ff_user');
 
     if (!token) {
+        document.documentElement.classList.add('not-authenticated');
+        document.documentElement.classList.remove('authenticated');
         document.body.classList.add('not-authenticated');
         document.body.classList.remove('authenticated');
         const mainApp = document.getElementById('mainAppWrapper');
@@ -329,6 +331,8 @@ async function initAuth() {
     if (cachedUserStr) {
         try {
             currentUser = JSON.parse(cachedUserStr);
+            document.documentElement.classList.remove('not-authenticated');
+            document.documentElement.classList.add('authenticated');
             document.body.classList.remove('not-authenticated');
             document.body.classList.add('authenticated');
             const mainApp = document.getElementById('mainAppWrapper');
@@ -351,6 +355,8 @@ async function initAuth() {
         if (res.ok) {
             currentUser = await res.json();
             localStorage.setItem('ff_user', JSON.stringify(currentUser));
+            document.documentElement.classList.remove('not-authenticated');
+            document.documentElement.classList.add('authenticated');
             document.body.classList.remove('not-authenticated');
             document.body.classList.add('authenticated');
             const mainApp = document.getElementById('mainAppWrapper');
@@ -529,10 +535,12 @@ function logout(manual = true) {
     localStorage.removeItem('ff_user');
     token = null;
     currentUser = null;
+    document.documentElement.classList.remove('authenticated');
+    document.documentElement.classList.add('not-authenticated');
     document.body.classList.remove('authenticated');
     document.body.classList.add('not-authenticated');
     const mainApp = document.getElementById('mainAppWrapper');
-    if (mainApp) mainApp.style.display = 'block';
+    if (mainApp) mainApp.style.display = 'none';
     renderLoggedOutNav();
     renderUserProfile();
     loadMatches();
@@ -676,6 +684,8 @@ async function handleLoginSubmit(e) {
             localStorage.setItem('ff_token', token);
             localStorage.setItem('ff_user', JSON.stringify(currentUser));
             localStorage.setItem('saved_login_user', u);
+            document.documentElement.classList.remove('not-authenticated');
+            document.documentElement.classList.add('authenticated');
             document.body.classList.remove('not-authenticated');
             document.body.classList.add('authenticated');
             const mainApp = document.getElementById('mainAppWrapper');
@@ -966,6 +976,8 @@ async function handleRegisterSubmit(e) {
     localStorage.setItem('ff_token', token);
     localStorage.setItem('ff_user', JSON.stringify(currentUser));
     localStorage.setItem('saved_login_user', username);
+    document.documentElement.classList.remove('not-authenticated');
+    document.documentElement.classList.add('authenticated');
     document.body.classList.remove('not-authenticated');
     document.body.classList.add('authenticated');
     const mainApp = document.getElementById('mainAppWrapper');

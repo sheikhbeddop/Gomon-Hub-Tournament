@@ -1,4 +1,4 @@
-﻿import os
+import os
 import sys
 import json
 import time
@@ -1120,6 +1120,9 @@ class AdminMatchCreate(BaseModel):
     prize_pool: int = 500
     per_kill: int = 10
     total_slots: int = 48
+    winner_prize: Optional[int] = None
+    second_prize: Optional[int] = None
+    third_prize: Optional[int] = None
 
 class AdminMatchUpdate(BaseModel):
     title: Optional[str] = None
@@ -1130,9 +1133,20 @@ class AdminMatchUpdate(BaseModel):
     prize_pool: Optional[int] = None
     per_kill: Optional[int] = None
     total_slots: Optional[int] = None
+    winner_prize: Optional[int] = None
+    second_prize: Optional[int] = None
+    third_prize: Optional[int] = None
     room_id: Optional[str] = None
     room_pass: Optional[str] = None
     status: Optional[str] = None
+
+class PrizeBreakdownRequest(BaseModel):
+    winner: int
+    second: Optional[int] = 0
+    third: Optional[int] = 0
+    prize_pool: Optional[int] = None
+    per_kill: Optional[int] = None
+
 
 class AdminAdjustDigits(BaseModel):
     target_user_id: Optional[int] = None
@@ -1614,6 +1628,16 @@ def list_matches(request: Request):
         p_rows = conn.execute("SELECT match_id, slot_number, player_ign, player_uid FROM participations WHERE user_id = ?", (current_user_id,)).fetchall()
         user_participations = {r["match_id"]: dict(r) for r in p_rows}
 
+    # Load custom prize breakdowns from settings
+    breakdown_rows = conn.execute("SELECT key, value FROM settings WHERE key LIKE 'prize_breakdown_%'").fetchall()
+    breakdowns = {}
+    for br in breakdown_rows:
+        try:
+            mid = int(br["key"].replace("prize_breakdown_", ""))
+            breakdowns[mid] = json.loads(br["value"])
+        except Exception:
+            pass
+
     conn.close()
     
     matches = []
@@ -1627,6 +1651,8 @@ def list_matches(request: Request):
             m["my_ign"] = part_info.get("player_ign")
             m["my_uid"] = part_info.get("player_uid")
         
+        m["prize_breakdown"] = breakdowns.get(m["id"])
+
         # High Security: Only reveal Room ID and Password if the user joined or is admin!
         if not (has_joined or is_admin):
             m["room_id"] = "JOIN TO VIEW" if m["room_id"] else "NOT RELEASED YET"
@@ -1653,12 +1679,23 @@ def get_my_matches(user: dict = Depends(get_current_user)):
     GROUP BY m.id
     ORDER BY m.status = 'upcoming' DESC, m.match_time ASC
     """, (user_id, user_id)).fetchall()
+
+    breakdown_rows = conn.execute("SELECT key, value FROM settings WHERE key LIKE 'prize_breakdown_%'").fetchall()
+    breakdowns = {}
+    for br in breakdown_rows:
+        try:
+            mid = int(br["key"].replace("prize_breakdown_", ""))
+            breakdowns[mid] = json.loads(br["value"])
+        except Exception:
+            pass
+
     conn.close()
     
     matches = []
     for r in rows:
         m = dict(r)
         m["has_joined"] = True
+        m["prize_breakdown"] = breakdowns.get(m["id"])
         matches.append(m)
     return matches
 
@@ -3387,6 +3424,18 @@ async def admin_create_match(data: AdminMatchCreate, admin: dict = Depends(verif
         """, (data.title.strip(), data.match_type, match_code, data.map_name, data.match_time,
               data.entry_fee, data.prize_pool, data.per_kill, data.total_slots))
         match_id = cursor.lastrowid
+
+        if data.winner_prize is not None:
+            breakdown = {
+                "winner": max(0, data.winner_prize),
+                "second": max(0, data.second_prize or 0),
+                "third": max(0, data.third_prize or 0)
+            }
+            conn.execute(
+                "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                (f"prize_breakdown_{match_id}", json.dumps(breakdown))
+            )
+
         conn.execute("""
         INSERT INTO audit_logs (admin_id, target_user_id, action, amount, reason)
         VALUES (?, NULL, 'MATCH_CREATED', 0, ?)
@@ -3419,6 +3468,22 @@ async def admin_update_match(match_id: int, data: AdminMatchUpdate, current_user
     is_mod = current_user["role"] == "moderator"
     dict_data = data.dict(exclude_unset=True)
     dict_data.pop("match_code", None)  # Immutable: match_code never changes after creation
+
+    # Extract prize breakdown if provided
+    winner_prize = dict_data.pop("winner_prize", None)
+    second_prize = dict_data.pop("second_prize", None)
+    third_prize = dict_data.pop("third_prize", None)
+    if winner_prize is not None and not is_mod:
+        breakdown = {
+            "winner": max(0, winner_prize),
+            "second": max(0, second_prize or 0),
+            "third": max(0, third_prize or 0)
+        }
+        with conn:
+            conn.execute(
+                "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                (f"prize_breakdown_{match_id}", json.dumps(breakdown))
+            )
 
     # Moderators can strictly ONLY update room_id, room_pass, and status
     if is_mod:
@@ -3476,6 +3541,33 @@ async def admin_update_match(match_id: int, data: AdminMatchUpdate, current_user
         })
 
     return {"success": True, "message": "Match updated successfully"}
+
+
+@app.put("/api/admin/matches/{match_id}/prize-breakdown")
+def admin_update_prize_breakdown(match_id: int, data: PrizeBreakdownRequest, admin: dict = Depends(verify_moderator_or_admin)):
+    conn = get_db()
+    match = conn.execute("SELECT id FROM matches WHERE id = ?", (match_id,)).fetchone()
+    if not match:
+        conn.close()
+        raise HTTPException(status_code=404, detail="ম্যাচ পাওয়া যায়নি")
+
+    breakdown = {
+        "winner": max(0, data.winner),
+        "second": max(0, data.second or 0),
+        "third": max(0, data.third or 0)
+    }
+    with conn:
+        conn.execute(
+            "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            (f"prize_breakdown_{match_id}", json.dumps(breakdown))
+        )
+        if data.prize_pool is not None and data.prize_pool > 0:
+            conn.execute("UPDATE matches SET prize_pool = ? WHERE id = ?", (data.prize_pool, match_id))
+        if data.per_kill is not None and data.per_kill >= 0:
+            conn.execute("UPDATE matches SET per_kill = ? WHERE id = ?", (data.per_kill, match_id))
+    conn.close()
+    sync_db_async()
+    return {"success": True, "message": "Prize breakdown updated successfully", "breakdown": breakdown}
 
 
 @app.get("/api/admin/matches/{match_id}/participants")

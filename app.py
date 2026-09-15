@@ -1807,6 +1807,25 @@ async def join_match(data: Optional[JoinMatchRequest] = None, match_id: Optional
                 else:
                     raise HTTPException(status_code=400, detail="Registration is closed for this match")
 
+            # Check if match start time has already arrived/passed
+            if match["match_time"]:
+                try:
+                    from datetime import datetime
+                    clean_time = str(match["match_time"]).strip().replace("T", " ")
+                    m_dt = None
+                    for fmt in ("%Y-%m-%d %H:%M", "%Y-%m-%d %H:%M:%S"):
+                        try:
+                            m_dt = datetime.strptime(clean_time, fmt)
+                            break
+                        except Exception:
+                            pass
+                    if m_dt and datetime.now() >= m_dt:
+                        raise HTTPException(status_code=400, detail="ম্যাচটি ইতোমধ্যে শুরু হয়ে গেছে! শুরু হওয়া ম্যাচে জয়েন করা যাবে না।")
+                except HTTPException:
+                    raise
+                except Exception:
+                    pass
+
             already = conn.execute("SELECT id FROM participations WHERE match_id = ? AND user_id = ?", (match_id, user_id)).fetchone()
             if already:
                 raise HTTPException(status_code=400, detail="You have already joined this match!")

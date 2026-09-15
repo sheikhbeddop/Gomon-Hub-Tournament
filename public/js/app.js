@@ -1359,12 +1359,25 @@ function renderCategoryHub() {
     updateCategoryCounts();
 }
 
+// Check if a match is open & joinable in the public lobby (not started, not completed)
+function isMatchOpenInLobby(m) {
+    if (!m) return false;
+    if (m.status === 'completed' || m.status === 'cancelled' || m.status === 'reg_closed' || m.status === 'live' || m.status === 'started') {
+        return false;
+    }
+    const targetTime = parseMatchTimestamp(m.match_time);
+    if (targetTime && targetTime <= Date.now()) {
+        return false; // Match start time arrived/passed! Auto-remove from public lobby
+    }
+    return true;
+}
+
 function updateCategoryCounts() {
     MATCH_CATEGORIES_CONFIG.forEach(c => {
         const countEl = document.getElementById('count_' + c.id);
         if (!countEl) return;
-        // Only count active / upcoming matches (concluded/completed matches are excluded from categories)
-        const matchesInCat = (allMatches || []).filter(m => m.status !== 'completed' && m.status !== 'cancelled' && c.matches(m));
+        // Only count active / upcoming matches whose start time has NOT passed
+        const matchesInCat = (allMatches || []).filter(m => isMatchOpenInLobby(m) && c.matches(m));
         const cnt = matchesInCat.length;
         if (cnt === 0) {
             countEl.innerText = 'No Matches Found';
@@ -1694,11 +1707,17 @@ function updateAllMatchCountdowns() {
     const pills = document.querySelectorAll('.match-countdown-pill');
     if (!pills || pills.length === 0) return;
 
+    let needLobbyRefresh = false;
     pills.forEach(pill => {
         const timeStr = pill.getAttribute('data-match-time');
         const status = pill.getAttribute('data-match-status') || 'upcoming';
         const targetTime = parseMatchTimestamp(timeStr);
         const result = formatCountdown(targetTime, status);
+
+        // Auto-remove started matches in real-time from the public lobby grid:
+        if (targetTime && (targetTime <= Date.now()) && pill.closest('#matchesGrid')) {
+            needLobbyRefresh = true;
+        }
 
         const textEl = pill.querySelector('.countdown-timer-text');
         if (textEl && textEl.textContent !== result.text) {
@@ -1714,6 +1733,11 @@ function updateAllMatchCountdowns() {
             }
         });
     });
+
+    if (needLobbyRefresh) {
+        renderMatches();
+        updateCategoryCounts();
+    }
 }
 
 function startMatchCountdownTicker() {
@@ -1731,9 +1755,9 @@ function renderMatches() {
     const grid = document.getElementById('matchesGrid');
     if (!grid) return;
 
-    // Filter out completed/concluded and cancelled matches:
-    // Only active/upcoming matches appear in the category lists
-    const activeMatches = (allMatches || []).filter(m => m.status !== 'completed' && m.status !== 'cancelled');
+    // Filter out completed/concluded, cancelled, and already started matches:
+    // Only open upcoming matches whose start time has NOT passed appear in the user lobby
+    const activeMatches = (allMatches || []).filter(m => isMatchOpenInLobby(m));
 
     let filtered = activeMatches;
     if (selectedCategory) {
@@ -2832,7 +2856,8 @@ function renderMyMatches() {
     const grid = document.getElementById('myMatchesGrid');
     if (!grid) return;
 
-    const joinedMatches = (allMatches || []).filter(m => m.has_joined);
+    // In My Matches, show joined matches that are upcoming or ongoing (hide once concluded/cancelled)
+    const joinedMatches = (allMatches || []).filter(m => m.has_joined && m.status !== 'completed' && m.status !== 'cancelled');
 
     if (joinedMatches.length === 0) {
         grid.innerHTML = `
@@ -4023,6 +4048,8 @@ function renderAdminMatches() {
 
     tbody.innerHTML = allMatches.map(m => {
         const isCompleted = (m.status === 'completed');
+        const targetTime = parseMatchTimestamp(m.match_time);
+        const isStarted = !isCompleted && targetTime && (targetTime <= Date.now());
         const fmt = getMatchFormatInfo(m);
         const catName = getMatchCategoryDisplay(m.match_type);
         const updaterInfo = m.room_updated_by_name ? `
@@ -4033,13 +4060,24 @@ function renderAdminMatches() {
             </div>
         ` : `<span style="font-size: 0.75rem; color: var(--text-muted);">Not updated yet</span>`;
 
+        let statusBadge = '';
+        if (isCompleted) {
+            statusBadge = '<span class="badge-status approved" style="margin-left: 4px; font-size: 0.65rem;">Concluded</span>';
+        } else if (isStarted) {
+            statusBadge = '<span style="background: #fee2e2; color: #dc2626; border: 1px solid #f87171; border-radius: 4px; font-size: 0.65rem; font-weight: 800; padding: 1px 6px; margin-left: 4px; display: inline-flex; align-items: center; gap: 3px;">🔴 Started / Publish Result</span>';
+        } else if (m.status === 'reg_closed') {
+            statusBadge = '<span style="background: #fef3c7; color: #b45309; border: 1px solid #fcd34d; border-radius: 4px; font-size: 0.65rem; font-weight: 800; padding: 1px 6px; margin-left: 4px;">🔒 Reg Closed</span>';
+        } else {
+            statusBadge = '<span style="background: #ecfdf5; color: #047857; border: 1px solid #6ee7b7; border-radius: 4px; font-size: 0.65rem; font-weight: 800; padding: 1px 6px; margin-left: 4px;">⏳ Upcoming</span>';
+        }
+
         return `
         <tr>
             <td>
                 <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
                     <span class="match-code-badge" style="font-size: 0.72rem; padding: 2px 6px;">#${escapeHtml(m.match_code || ('MATCH-' + m.id))}</span>
                     <b>${escapeHtml(m.title)}</b>
-                    ${isCompleted ? '<span class="badge-status approved" style="margin-left: 4px; font-size: 0.65rem;">Concluded</span>' : ''}
+                    ${statusBadge}
                 </div>
             </td>
             <td>
@@ -4077,11 +4115,11 @@ function renderAdminMatches() {
 
                     ${!isCompleted ? `
                         <button type="button" onclick="completeMatch(${m.id}, '${escapeHtml(m.title)}')"
-                            style="background: #fffbeb; color: #b45309; border: 1.5px solid #fcd34d; font-weight: 800; font-size: 0.82rem; padding: 7px 13px; border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); transition: all 0.2s ease; white-space: nowrap;"
-                            onmouseover="this.style.background='#f59e0b';this.style.color='#ffffff';this.style.borderColor='#f59e0b';this.style.boxShadow='0 3px 8px rgba(245,158,11,0.3)';"
-                            onmouseout="this.style.background='#fffbeb';this.style.color='#b45309';this.style.borderColor='#fcd34d';this.style.boxShadow='0 1px 3px rgba(0,0,0,0.06)';"
+                            style="${isStarted ? 'background: linear-gradient(135deg, #ea580c, #f97316); color: #ffffff; border: 1.5px solid #c2410c; box-shadow: 0 0 10px rgba(234,88,12,0.35);' : 'background: #fffbeb; color: #b45309; border: 1.5px solid #fcd34d;'} font-weight: 800; font-size: 0.82rem; padding: 7px 13px; border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); transition: all 0.2s ease; white-space: nowrap;"
+                            onmouseover="this.style.filter='brightness(1.1)';"
+                            onmouseout="this.style.filter='none';"
                             title="Conclude Tournament & Distribute Prizes">
-                            <span style="font-size: 0.95rem;">🏁</span> Conclude
+                            <span style="font-size: 0.95rem;">🏁</span> ${isStarted ? 'Publish Result' : 'Conclude'}
                         </button>
                     ` : ''}
                     ${isAdmin ? `

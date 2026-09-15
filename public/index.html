@@ -20,7 +20,7 @@
         #authModal:not(.show), .auth-modal-overlay:not(.show) { display: none !important; }
         #welcomeNoticeModal:not(.show), .welcome-notice-overlay:not(.show) { display: none !important; }
     </style>
-
+</head>
 <body>
 
     <!-- IN-APP SPLASH SCREEN REMOVED PER USER REQUEST -->
@@ -1053,37 +1053,45 @@
                             </div>
                         </div>
 
-                        <!-- Master Admin Password Change Card -->
+                        <!-- Master Admin Credentials & 2FA Security PIN Card -->
                         <div class="admin-panel-card admin-only-card" style="margin-top: 24px; border-color: rgba(255, 77, 77, 0.35);">
                             <div class="admin-card-header">
                                 <div class="admin-card-title">
-                                    <span style="color: #ff4d4d;">🔐 Master Admin Password Change (এডমিন পাসওয়ার্ড পরিবর্তন)</span>
+                                    <span style="color: #ff4d4d;">🛡️ Master Admin Credentials & Security PIN (এডমিন আইডি, পাসওয়ার্ড ও পিন পরিবর্তন)</span>
                                 </div>
-                                <span style="font-size: 0.75rem; color: var(--neon-cyan); background: rgba(0, 210, 255, 0.1); padding: 3px 8px; border-radius: 4px;">
+                                <span style="font-size: 0.75rem; color: var(--neon-cyan); background: rgba(0, 210, 255, 0.1); padding: 3px 8px; border-radius: 4px;" id="adminMasterIdBadge">
                                     Master ID: @admin
                                 </span>
                             </div>
                             <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px; margin-bottom: 16px;">
-                                আপনার এডমিন অ্যাকাউন্টের নতুন শক্তিশালী পাসওয়ার্ড সেট করুন। পরিবর্তনের সাথে সাথে এটি ক্লাউড ডাটাবেজে স্থায়ীভাবে সেভ হয়ে যাবে।
+                                আপনার এডমিন অ্যাকাউন্টের ইউজারনেম, পাসওয়ার্ড এবং ৬ ডিজিটের সিকিউরিটি পিন যেকোনো সময় পরিবর্তন করতে পারেন।
                             </p>
                             <form id="adminChangePasswordForm" onsubmit="handleAdminChangePassword(event)">
-                                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px;">
+                                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px;">
                                     <div class="form-group">
                                         <label class="form-label">বর্তমান পাসওয়ার্ড (Current Password - ঐচ্ছিক)</label>
-                                        <input type="password" class="form-input" id="adminCurrentPassword" placeholder="বর্তমান পাসওয়ার্ড (যদি মনে থাকে)">
+                                        <input type="password" class="form-input" id="adminCurrentPassword" placeholder="বর্তমান পাসওয়ার্ড">
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">নতুন ইউজারনেম (New Username - ঐচ্ছিক)</label>
+                                        <input type="text" class="form-input" id="adminNewUsername" placeholder="নতুন ইউজারনেম (যেমন: admin_pro)">
                                     </div>
                                     <div class="form-group">
                                         <label class="form-label">নতুন পাসওয়ার্ড (New Password)</label>
-                                        <input type="password" class="form-input" id="adminNewPassword" placeholder="কমপক্ষে ৪ অক্ষর" minlength="4" required>
+                                        <input type="password" class="form-input" id="adminNewPassword" placeholder="কমপক্ষে ৪ অক্ষর" minlength="4">
                                     </div>
                                     <div class="form-group">
                                         <label class="form-label">কনফার্ম পাসওয়ার্ড (Confirm Password)</label>
-                                        <input type="password" class="form-input" id="adminConfirmPassword" placeholder="পুনরায় নতুন পাসওয়ার্ড দিন" minlength="4" required>
+                                        <input type="password" class="form-input" id="adminConfirmPassword" placeholder="পুনরায় নতুন পাসওয়ার্ড">
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label" style="color: #f59e0b; font-weight: 700;">নতুন ৬ ডিজিটের সিকিউরিটি পিন (New 6-Digit PIN)</label>
+                                        <input type="password" class="form-input" id="adminNewPin" maxlength="6" placeholder="যেমন: 202688" style="font-family: monospace; letter-spacing: 2px;">
                                     </div>
                                 </div>
                                 <div style="display: flex; justify-content: flex-end; margin-top: 14px;">
                                     <button type="submit" class="btn btn-crimson btn-sm" id="btnAdminChangePass" style="font-weight: 800; display: inline-flex; align-items: center; gap: 6px;">
-                                        <span>🔑 পাসওয়ার্ড আপডেট করুন</span>
+                                        <span>💾 এডমিন সিকিউরিটি আপডেট করুন</span>
                                     </button>
                                 </div>
                             </form>
@@ -1789,6 +1797,11 @@
                     <span class="auth-eye-icon" onclick="togglePasswordVisibility('loginPassword', this)" title="Toggle password visibility">
                         <svg class="eye-svg" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
                     </span>
+                <div class="auth-input-group" id="loginAdminPinGroup" style="display: none; border-color: #f59e0b;">
+                    <span class="auth-input-icon" style="color: #f59e0b;">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                    </span>
+                    <input type="password" class="auth-input" id="loginAdminPin" maxlength="6" placeholder="Admin Secret PIN (৬ ডিজিট)" autocomplete="one-time-code" style="font-family: monospace; letter-spacing: 2px;">
                 </div>
 
                 <div class="auth-forgot-row">

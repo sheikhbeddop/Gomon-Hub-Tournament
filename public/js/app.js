@@ -4222,8 +4222,22 @@ function renderAdminMatches() {
     if (!tbody) return;
 
     const isAdmin = (currentUser && currentUser.role === 'admin');
+    const activeMatches = (allMatches || []).filter(m => m.status !== 'completed' && m.status !== 'concluded');
 
-    tbody.innerHTML = allMatches.map(m => {
+    if (activeMatches.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="8" style="text-align: center; padding: 36px 16px; color: var(--text-muted);">
+                    <div style="font-size: 1.8rem; margin-bottom: 6px;">🎯</div>
+                    <div style="font-weight: 700; color: #64748b; font-size: 0.95rem;">বর্তমানে কোনো অ্যাক্টিভ বা আপকামিং ম্যাচ নেই</div>
+                    <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 4px;">নতুন টুর্নামেন্ট শুরু করতে উপরের <b>➕ Create Match</b> বাটনে ক্লিক করুন। সম্পন্ন ম্যাচের তথ্য বামপাশের <b>Match History</b>-তে সংরক্ষিত আছে।</div>
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    tbody.innerHTML = activeMatches.map(m => {
         const isCompleted = (m.status === 'completed');
         const targetTime = parseMatchTimestamp(m.match_time);
         const isStarted = !isCompleted && targetTime && (targetTime <= Date.now());
@@ -5462,7 +5476,21 @@ function renderAdminMatchHistory() {
                     </div>
                     <div class="admin-history-meta-item">
                         রুম ক্রেডেনশিয়াল
-                        <b style="font-family: monospace; font-size: 0.82rem; color: #cbd5e1;">ID: ${escapeHtml(m.room_id || 'N/A')}</b>
+                        <b style="font-family: monospace; font-size: 0.82rem; color: #cbd5e1;">ID: ${escapeHtml(m.room_id || 'N/A')}${m.room_pass ? ' | Pass: ' + escapeHtml(m.room_pass) : ''}</b>
+                    </div>
+                    <div class="admin-history-meta-item">
+                        রুম আইডি আপডেটকারী
+                        <b style="font-size: 0.82rem; color: var(--neon-cyan);">
+                            ${m.room_updated_by_name ? `🛡️ ${escapeHtml(m.room_updated_by_name)}` : '<span style="color: var(--text-muted); font-weight: normal;">দেওয়া হয়নি</span>'}
+                            ${m.room_updated_at ? `<span style="font-size: 0.68rem; color: var(--text-muted); display: block; font-weight: normal;">(${m.room_updated_at.substring(5, 16)})</span>` : ''}
+                        </b>
+                    </div>
+                    <div class="admin-history-meta-item">
+                        রেজাল্ট ও কনক্লুড
+                        <b style="font-size: 0.82rem; color: var(--neon-green);">
+                            ${m.completed_by_name ? `🏁 ${escapeHtml(m.completed_by_name)}` : '<span style="color: var(--text-muted); font-weight: normal;">অটো/সিস্টেম</span>'}
+                            ${m.completed_at ? `<span style="font-size: 0.68rem; color: var(--text-muted); display: block; font-weight: normal;">(${m.completed_at.substring(5, 16)})</span>` : ''}
+                        </b>
                     </div>
                 </div>
 

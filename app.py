@@ -1953,6 +1953,17 @@ async def join_match(data: Optional[JoinMatchRequest] = None, match_id: Optional
 # -------------------------------------------------------------
 # Digits & bKash Deposit System (Auto SMS Gateway + Manual Approval)
 # -------------------------------------------------------------
+def clean_bd_phone(raw_p) -> str:
+    """
+    Sanitizes and extracts an 11-digit Bangladeshi mobile number (013-019).
+    Filters out gateway names like 'bKash', 'Nagad', shortcodes like '16247', or invalid text.
+    """
+    if not raw_p:
+        return ""
+    m = re.search(r'(?:\+?88)?(01[3-9]\d{8})', str(raw_p).strip())
+    return m.group(1) if m else ""
+
+
 def parse_sms_payment(sms_text: str, default_gateway: str = "bkash", sender_name: str = "") -> Optional[dict]:
     """
     Parses incoming SMS notifications from bKash, Nagad, Rocket, etc.
@@ -2011,7 +2022,7 @@ def parse_sms_payment(sms_text: str, default_gateway: str = "bkash", sender_name
     if amount <= 0:
         return None
 
-    phone_match = re.search(r'(?:from|sender)\s*(?:no\.?)?\s*[:\s]*(01[3-9]\d{8})', text, re.IGNORECASE)
+    phone_match = re.search(r'(?:from|sender)\s*(?:no\.?)?\s*[:\s]*(?:\+?88)?(01[3-9]\d{8})', text, re.IGNORECASE)
     sender_phone = phone_match.group(1) if phone_match else ""
 
     return {
@@ -2073,12 +2084,13 @@ async def process_incoming_payment(trx_id: str, amount: int, sender_phone: str =
                     }
 
                 # Sender phone verification (if phone present in SMS, verify it matches deposit phone)
-                user_phone = (dep["bkash_number"] or "").strip()
-                if sender_phone and user_phone and sender_phone != user_phone:
+                user_phone = clean_bd_phone(dep["bkash_number"])
+                chk_sender = clean_bd_phone(sender_phone)
+                if chk_sender and user_phone and chk_sender != user_phone:
                     conn.execute("""
                         INSERT INTO audit_logs (admin_id, target_user_id, action, amount, reason)
                         VALUES (0, ?, 'DEPOSIT_PHONE_MISMATCH', ?, ?)
-                    """, (dep["user_id"], dep["amount"], f"Sender phone mismatch (User: {user_phone}, SMS: {sender_phone}). TrxID: {clean_trx}. Kept pending for manual review."))
+                    """, (dep["user_id"], dep["amount"], f"Sender phone mismatch (User: {user_phone}, SMS: {chk_sender}). TrxID: {clean_trx}. Kept pending for manual review."))
                     return {
                         "status": "phone_mismatch",
                         "trx_id": clean_trx,
@@ -2092,6 +2104,7 @@ async def process_incoming_payment(trx_id: str, amount: int, sender_phone: str =
                 conn.execute("""
                     UPDATE deposits 
                     SET amount = ?, status = 'approved', reviewed_by_name = 'AUTO_BOT', reviewed_at = CURRENT_TIMESTAMP, gateway = ? 
+                    WHERE id = ?
                 """, (approved_amount, gateway, dep["id"]))
 
                 conn.execute("""
@@ -2223,8 +2236,9 @@ async def submit_deposit(data: DepositRequest, user: dict = Depends(get_current_
 
             if incoming and incoming["amount"] >= amount:
                 # Anti-theft: check if sender_phone matches user phone
-                inc_phone = (incoming["sender_phone"] or "").strip()
-                if inc_phone and phone and inc_phone != phone:
+                inc_phone = clean_bd_phone(incoming["sender_phone"])
+                chk_phone = clean_bd_phone(phone)
+                if inc_phone and chk_phone and inc_phone != chk_phone:
                     # Sender phone mismatch -> keep pending for manual review so nobody can steal TrxID
                     try:
                         conn.execute("""
@@ -2404,7 +2418,7 @@ async def webhook_incoming_sms(request: Request):
                 amount = int(float(body_data["amount"]))
             except Exception:
                 amount = 0
-            sender_phone = str(body_data.get("sender_phone") or body_data.get("sender") or "").strip()
+            sender_phone = clean_bd_phone(body_data.get("sender_phone") or body_data.get("sender") or "")
             gateway = str(body_data.get("gateway") or "bkash").lower()
             raw_sms = str(body_data.get("raw_sms") or body_data.get("sms_content") or "")
 
@@ -2413,7 +2427,7 @@ async def webhook_incoming_sms(request: Request):
         if isinstance(body_data, dict):
             sms_text = body_data.get("sms_content") or body_data.get("body") or body_data.get("text") or body_data.get("message") or body_data.get("sms") or ""
             if not sender_phone:
-                sender_phone = str(body_data.get("sender") or body_data.get("from") or body_data.get("phone") or "")
+                sender_phone = clean_bd_phone(body_data.get("sender_phone") or body_data.get("sender") or body_data.get("from") or body_data.get("phone") or "")
         if not sms_text:
             sms_text = raw_body_text
 
@@ -2431,8 +2445,8 @@ async def webhook_incoming_sms(request: Request):
         trx_id = parsed["trx_id"]
         amount = parsed["amount"]
         gateway = parsed["gateway"]
-        if not sender_phone:
-            sender_phone = parsed["sender_phone"]
+        parsed_sender = clean_bd_phone(parsed.get("sender_phone"))
+        sender_phone = parsed_sender if parsed_sender else sender_phone
         raw_sms = parsed["raw_sms"]
 
     result = await process_incoming_payment(

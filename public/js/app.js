@@ -1818,40 +1818,25 @@ function renderMatches() {
             if (isRoomReleased) {
                 actionHtml = `
                     <div style="display: flex; flex-direction: column; gap: 6px;">
-                        <div class="room-instant-box">
-                            <div class="room-instant-box-header">
-                                <span class="room-live-badge">
-                                    <span class="room-pulse-green"></span>
-                                    Room ID Released!
-                                </span>
-                                <span style="font-family: 'Rajdhani', sans-serif; font-size: 0.88rem; font-weight: 900; background: #10b981; color: #022c22; padding: 2px 8px; border-radius: 6px;">
-                                    Slot #${m.my_slot || 1} (Fixed)
-                                </span>
-                            </div>
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
-                                <div style="background: rgba(255,255,255,0.06); border: 1px solid rgba(56, 189, 248, 0.35); border-radius: 8px; padding: 6px 8px;">
-                                    <div style="font-size: 0.68rem; color: #94a3b8; font-weight: 700; text-transform: uppercase;">Room ID</div>
-                                    <div style="font-family: 'Rajdhani', monospace; font-size: 1.15rem; font-weight: 900; color: #38bdf8; letter-spacing: 1px; margin: 2px 0 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${safeRoomId}</div>
-                                    <button type="button" class="btn-copy-chip btn-copy-chip-id" onclick="copyTextDirect('${jsRoomId}', 'Room ID')">
-                                        📋 Copy ID
-                                    </button>
-                                </div>
-                                <div style="background: rgba(255,255,255,0.06); border: 1px solid rgba(0, 245, 155, 0.35); border-radius: 8px; padding: 6px 8px;">
-                                    <div style="font-size: 0.68rem; color: #94a3b8; font-weight: 700; text-transform: uppercase;">Password</div>
-                                    <div style="font-family: 'Rajdhani', monospace; font-size: 1.15rem; font-weight: 900; color: #00f59b; letter-spacing: 1px; margin: 2px 0 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${safeRoomPass}</div>
-                                    <button type="button" class="btn-copy-chip btn-copy-chip-pass" onclick="copyTextDirect('${jsRoomPass}', 'Password')">
-                                        📋 Copy Pass
-                                    </button>
-                                </div>
-                            </div>
-                            <div style="display: flex; gap: 6px;">
-                                <button type="button" class="btn btn-outline" style="flex: 1; padding: 6px 8px; font-size: 0.74rem; font-weight: 800; border-color: rgba(255,255,255,0.25); color: #e2e8f0; border-radius: 6px;" onclick="openMatchInnerPortal(${m.id})">
-                                    👥 Room Details & Players
-                                </button>
-                                <button type="button" class="btn btn-outline" style="padding: 6px 12px; font-size: 0.74rem; font-weight: 800; border-color: #f59e0b; color: #f59e0b; border-radius: 6px;" onclick="openPrizeBreakdownModal(${m.id})">
-                                    🏆 Prize
-                                </button>
-                            </div>
+                        <div style="display: flex; align-items: center; justify-content: space-between; background: #ecfdf5; border: 1.5px solid #10b981; border-radius: 8px; padding: 6px 10px; box-shadow: 0 0 10px rgba(16,185,129,0.15);">
+                            <span style="font-size: 0.8rem; color: #047857; font-weight: 800; display: inline-flex; align-items: center; gap: 6px;">
+                                <span class="room-pulse-green"></span>
+                                Room ID Released!
+                            </span>
+                            <span style="font-family: 'Rajdhani', sans-serif; font-size: 0.95rem; font-weight: 900; color: #065f46; background: #dcfce7; padding: 1px 8px; border-radius: 5px; border: 1px solid #86efac;">
+                                Slot #${m.my_slot || 1}
+                            </span>
+                        </div>
+                        <div style="display: flex; gap: 6px;">
+                            <button type="button" class="btn btn-neon" style="flex: 2; padding: 8px 10px; font-size: 0.86rem; font-weight: 900; border-radius: 8px; background: linear-gradient(135deg, #059669, #10b981); box-shadow: 0 2px 10px rgba(16, 185, 129, 0.35); display: flex; align-items: center; justify-content: center; gap: 6px;" onclick="openRoomBottomSheet(${m.id})">
+                                🔑 Room ID
+                            </button>
+                            <button type="button" class="btn btn-outline" style="flex: 1; padding: 8px 6px; font-size: 0.78rem; font-weight: 800; border-color: #cbd5e1; color: #334155; border-radius: 8px;" onclick="openMatchInnerPortal(${m.id})" title="View Registered Players">
+                                👥 Players
+                            </button>
+                            <button type="button" class="btn btn-outline" style="padding: 8px 10px; font-size: 0.78rem; font-weight: 800; border-color: #f59e0b; color: #f59e0b; border-radius: 8px;" onclick="openPrizeBreakdownModal(${m.id})" title="View Prize Breakdown">
+                                🏆
+                            </button>
                         </div>
                     </div>
                 `;
@@ -1864,11 +1849,11 @@ function renderMatches() {
                         </div>
                         <div style="background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 6px 10px; font-size: 0.74rem; color: #92400e; font-weight: 700; display: flex; align-items: center; gap: 6px;">
                             <span>⏳</span>
-                            <span>আইডি ও পাসওয়ার্ড ম্যাচ শুরুর ২-৫ মিনিট আগে এখানে আসবে</span>
+                            <span>রুম আইডি ও পাসওয়ার্ড খেলা শুরুর ১০-১৫ মিনিট আগে দেওয়া হবে</span>
                         </div>
                         <div style="display: flex; gap: 6px;">
-                            <button class="btn btn-neon" style="flex: 2; padding: 8px 10px; font-size: 0.84rem; font-weight: 800; border-radius: 8px;" onclick="openMatchInnerPortal(${m.id})">
-                                🔑 Room Details & Players
+                            <button type="button" class="btn btn-outline" style="flex: 2; padding: 8px 10px; font-size: 0.82rem; font-weight: 800; border-color: #cbd5e1; color: #334155; border-radius: 8px; display: flex; align-items: center; justify-content: center; gap: 6px;" onclick="openMatchInnerPortal(${m.id})">
+                                👥 View Players (${m.joined_count})
                             </button>
                             <button type="button" class="btn btn-outline" style="flex: 1; padding: 8px 6px; font-size: 0.78rem; font-weight: 700; border-color: #f59e0b; color: #b45309; background: #fffbeb; border-radius: 8px;" onclick="openPrizeBreakdownModal(${m.id})">
                                 🏆 Prize
@@ -2365,6 +2350,83 @@ function copyTextDirect(val, label = 'Copied!') {
     }
 }
 
+let currentBsMatch = null;
+let currentPortalMatchId = null;
+
+function openPortalAdminSetRoom() {
+    if (!currentPortalMatchId) return;
+    openSetRoomModal(currentPortalMatchId, currentPortalRoomId, currentPortalRoomPass);
+}
+window.openPortalAdminSetRoom = openPortalAdminSetRoom;
+
+function openRoomBottomSheet(matchId) {
+    const m = (allMatches || []).find(x => x.id === matchId);
+    if (!m) {
+        showToast('Match not found', 'error');
+        return;
+    }
+    currentBsMatch = m;
+
+    const overlay = document.getElementById('roomBottomSheetModal');
+    if (!overlay) return;
+
+    const titleEl = document.getElementById('bsMatchTitle');
+    const subtitleEl = document.getElementById('bsMatchSubtitle');
+    const slotEl = document.getElementById('bsSlotNumber');
+    const idEl = document.getElementById('bsRoomIdVal');
+    const passEl = document.getElementById('bsRoomPassVal');
+
+    if (titleEl) titleEl.innerText = `${m.match_code ? `[#${m.match_code}] ` : ''}${m.title || 'Tournament Match'}`;
+    if (subtitleEl) subtitleEl.innerText = `Type: ${m.match_type || 'Solo'} • Time: ${m.match_time || 'Upcoming'}`;
+    
+    if (slotEl) {
+        if (m.has_joined) {
+            slotEl.innerText = `Slot #${m.my_slot || 1} (Fixed)`;
+        } else if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'moderator')) {
+            slotEl.innerText = currentUser.role === 'admin' ? '🛡️ Admin' : '🛡️ Moderator';
+        } else {
+            slotEl.innerText = '#1 (Fixed)';
+        }
+    }
+
+    const roomId = m.room_id || 'Not set yet';
+    const roomPass = m.room_pass || 'Not set yet';
+
+    if (idEl) idEl.innerText = roomId;
+    if (passEl) passEl.innerText = roomPass;
+
+    overlay.style.display = 'flex';
+    setTimeout(() => {
+        overlay.classList.add('active');
+    }, 10);
+}
+window.openRoomBottomSheet = openRoomBottomSheet;
+
+function closeRoomBottomSheet() {
+    const overlay = document.getElementById('roomBottomSheetModal');
+    if (!overlay) return;
+    overlay.classList.remove('active');
+    setTimeout(() => {
+        overlay.style.display = 'none';
+    }, 280);
+}
+window.closeRoomBottomSheet = closeRoomBottomSheet;
+
+function copyBottomSheetText(type) {
+    if (!currentBsMatch) return;
+    const rId = (currentBsMatch.room_id || '').trim();
+    const rPass = (currentBsMatch.room_pass || '').trim();
+
+    if (type === 'id') {
+        copyTextDirect(rId, 'Room ID');
+    } else if (type === 'pass') {
+        copyTextDirect(rPass, 'Password');
+    } else if (type === 'both') {
+        copyTextDirect(`ID: ${rId} Pass: ${rPass}`, 'Room ID & Password');
+    }
+}
+window.copyBottomSheetText = copyBottomSheetText;
+
 let currentPrizeModalMatchId = null;
 let isPrizeEditMode = false;
 
@@ -2602,8 +2664,14 @@ async function openMatchInnerPortal(matchId) {
     if (mapEl) mapEl.innerText = `${m.map_name || 'Bermuda'}`;
 
     // Room info
+    currentPortalMatchId = m.id;
     currentPortalRoomId = m.room_id || '';
     currentPortalRoomPass = m.room_pass || '';
+
+    const adminActionEl = document.getElementById('portalAdminRoomAction');
+    if (adminActionEl) {
+        adminActionEl.style.display = isAdminOrMod ? 'flex' : 'none';
+    }
 
     const rIdEl = document.getElementById('portalModalRoomId');
     const rPassEl = document.getElementById('portalModalRoomPass');
@@ -2935,38 +3003,25 @@ function renderMyMatches() {
 
                 <div class="match-card-footer" style="display: flex; flex-direction: column; gap: 6px;">
                     ${isRoomReleased ? `
-                    <div class="room-instant-box">
-                        <div class="room-instant-box-header">
-                            <span class="room-live-badge">
+                    <div style="display: flex; flex-direction: column; gap: 6px;">
+                        <div style="display: flex; align-items: center; justify-content: space-between; background: #ecfdf5; border: 1.5px solid #10b981; border-radius: 8px; padding: 6px 10px; box-shadow: 0 0 10px rgba(16,185,129,0.15);">
+                            <span style="font-size: 0.8rem; color: #047857; font-weight: 800; display: inline-flex; align-items: center; gap: 6px;">
                                 <span class="room-pulse-green"></span>
                                 Room ID Released!
                             </span>
-                            <span style="font-family: 'Rajdhani', sans-serif; font-size: 0.88rem; font-weight: 900; background: #10b981; color: #022c22; padding: 2px 8px; border-radius: 6px;">
-                                Slot #${m.my_slot || 1} (Fixed)
+                            <span style="font-family: 'Rajdhani', sans-serif; font-size: 0.95rem; font-weight: 900; color: #065f46; background: #dcfce7; padding: 1px 8px; border-radius: 5px; border: 1px solid #86efac;">
+                                Slot #${m.my_slot || 1}
                             </span>
                         </div>
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
-                            <div style="background: rgba(255,255,255,0.06); border: 1px solid rgba(56, 189, 248, 0.35); border-radius: 8px; padding: 6px 8px;">
-                                <div style="font-size: 0.68rem; color: #94a3b8; font-weight: 700; text-transform: uppercase;">Room ID</div>
-                                <div style="font-family: 'Rajdhani', monospace; font-size: 1.15rem; font-weight: 900; color: #38bdf8; letter-spacing: 1px; margin: 2px 0 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${safeRoomId}</div>
-                                <button type="button" class="btn-copy-chip btn-copy-chip-id" onclick="copyTextDirect('${jsRoomId}', 'Room ID')">
-                                    📋 Copy ID
-                                </button>
-                            </div>
-                            <div style="background: rgba(255,255,255,0.06); border: 1px solid rgba(0, 245, 155, 0.35); border-radius: 8px; padding: 6px 8px;">
-                                <div style="font-size: 0.68rem; color: #94a3b8; font-weight: 700; text-transform: uppercase;">Password</div>
-                                <div style="font-family: 'Rajdhani', monospace; font-size: 1.15rem; font-weight: 900; color: #00f59b; letter-spacing: 1px; margin: 2px 0 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${safeRoomPass}</div>
-                                <button type="button" class="btn-copy-chip btn-copy-chip-pass" onclick="copyTextDirect('${jsRoomPass}', 'Password')">
-                                    📋 Copy Pass
-                                </button>
-                            </div>
-                        </div>
                         <div style="display: flex; gap: 6px;">
-                            <button type="button" class="btn btn-outline" style="flex: 1; padding: 6px 8px; font-size: 0.74rem; font-weight: 800; border-color: rgba(255,255,255,0.25); color: #e2e8f0; border-radius: 6px;" onclick="openMatchInnerPortal(${m.id})">
-                                👥 Full Details & Players
+                            <button type="button" class="btn btn-neon" style="flex: 2; padding: 8px 10px; font-size: 0.86rem; font-weight: 900; border-radius: 8px; background: linear-gradient(135deg, #059669, #10b981); box-shadow: 0 2px 10px rgba(16, 185, 129, 0.35); display: flex; align-items: center; justify-content: center; gap: 6px;" onclick="openRoomBottomSheet(${m.id})">
+                                🔑 Room ID
                             </button>
-                            <button type="button" class="btn btn-outline" style="padding: 6px 12px; font-size: 0.74rem; font-weight: 800; border-color: #f59e0b; color: #f59e0b; border-radius: 6px;" onclick="openPrizeBreakdownModal(${m.id})">
-                                🏆 Prize
+                            <button type="button" class="btn btn-outline" style="flex: 1; padding: 8px 6px; font-size: 0.78rem; font-weight: 800; border-color: #cbd5e1; color: #334155; border-radius: 8px;" onclick="openMatchInnerPortal(${m.id})" title="View Registered Players">
+                                👥 Players
+                            </button>
+                            <button type="button" class="btn btn-outline" style="padding: 8px 10px; font-size: 0.78rem; font-weight: 800; border-color: #f59e0b; color: #f59e0b; border-radius: 8px;" onclick="openPrizeBreakdownModal(${m.id})" title="View Prize Breakdown">
+                                🏆
                             </button>
                         </div>
                     </div>` : `
@@ -2977,11 +3032,11 @@ function renderMyMatches() {
                         </div>
                         <div style="background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 6px 10px; font-size: 0.74rem; color: #92400e; font-weight: 700; display: flex; align-items: center; gap: 6px;">
                             <span>⏳</span>
-                            <span>আইডি ও পাসওয়ার্ড ম্যাচ শুরুর ২-৫ মিনিট আগে এখানে আসবে</span>
+                            <span>রুম আইডি ও পাসওয়ার্ড খেলা শুরুর ১০-১৫ মিনিট আগে দেওয়া হবে</span>
                         </div>
                         <div style="display: flex; gap: 6px;">
-                            <button class="btn btn-neon" style="flex: 2; padding: 8px 10px; font-size: 0.84rem; font-weight: 800; border-radius: 8px;" onclick="openMatchInnerPortal(${m.id})">
-                                🔑 View Room & Players
+                            <button type="button" class="btn btn-outline" style="flex: 2; padding: 8px 10px; font-size: 0.82rem; font-weight: 800; border-color: #cbd5e1; color: #334155; border-radius: 8px; display: flex; align-items: center; justify-content: center; gap: 6px;" onclick="openMatchInnerPortal(${m.id})">
+                                👥 View Players (${m.joined_count})
                             </button>
                             <button type="button" class="btn btn-outline" style="flex: 1; padding: 8px 6px; font-size: 0.78rem; font-weight: 700; border-color: #f59e0b; color: #b45309; background: #fffbeb; border-radius: 8px;" onclick="openPrizeBreakdownModal(${m.id})">
                                 🏆 Prize
@@ -4353,6 +4408,14 @@ async function handleSetRoomSubmit(e) {
             showToast('Room ID and Password published successfully!', 'success');
             playSound('alert');
             loadMatches();
+            if (currentPortalMatchId == matchId) {
+                currentPortalRoomId = room_id;
+                currentPortalRoomPass = room_pass;
+                const rIdEl = document.getElementById('portalModalRoomId');
+                const rPassEl = document.getElementById('portalModalRoomPass');
+                if (rIdEl) rIdEl.innerText = room_id || 'Not set yet (Set in Admin Panel)';
+                if (rPassEl) rPassEl.innerText = room_pass || 'Not set yet (Set in Admin Panel)';
+            }
             if (currentUser && currentUser.role === 'admin') {
                 loadModeratorScoreboard();
             }

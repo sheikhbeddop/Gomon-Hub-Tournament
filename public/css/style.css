@@ -2505,26 +2505,42 @@ body {
 .admin-history-card {
     background: rgba(15, 23, 42, 0.7);
     border: 1px solid rgba(255, 255, 255, 0.09);
-    border-radius: 14px;
-    margin-bottom: 22px;
+    border-radius: 12px;
+    margin-bottom: 10px;
     overflow: hidden;
-    transition: transform 0.2s, box-shadow 0.2s;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .admin-history-card:hover {
     border-color: rgba(0, 245, 155, 0.35);
-    box-shadow: 0 4px 22px rgba(0, 0, 0, 0.4);
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
+}
+
+.admin-history-card.expanded {
+    border-color: rgba(0, 210, 255, 0.45);
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
 }
 
 .admin-history-card-header {
-    padding: 15px 20px;
+    padding: 12px 18px;
     background: rgba(255, 255, 255, 0.025);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
     display: flex;
     justify-content: space-between;
     align-items: center;
     flex-wrap: wrap;
-    gap: 12px;
+    gap: 10px;
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.2s ease;
+}
+
+.admin-history-card:hover .admin-history-card-header {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.admin-history-card.expanded .admin-history-card-header {
+    background: rgba(0, 210, 255, 0.06);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
 }
 
 .admin-history-card-title {

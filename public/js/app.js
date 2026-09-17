@@ -5429,76 +5429,131 @@ function renderAdminMatchHistory() {
             }).join('');
         }
 
+        const winner = participants.find(p => p.rank_position === 1);
+        const winnerName = winner ? (winner.player_ign || winner.username || '') : '';
+
         return `
-            <div class="admin-history-card">
-                <div class="admin-history-card-header">
-                    <div class="admin-history-card-title">
-                        <span>#${escapeHtml(m.match_code || ('MATCH-' + m.id))}</span>
-                        <span style="color: rgba(255,255,255,0.85); font-size: 1.05rem;">${escapeHtml(m.title)}</span>
-                        ${badgeHtml}
+            <div class="admin-history-card" id="histCard-${m.id}">
+                <div class="admin-history-card-header" onclick="toggleAdminHistoryMatch(${m.id})">
+                    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                        <div class="admin-history-card-title" style="margin: 0;">
+                            <span class="match-code-badge" style="font-size: 0.74rem; padding: 2px 7px;">#${escapeHtml(m.match_code || ('MATCH-' + m.id))}</span>
+                            <span style="color: #ffffff; font-size: 0.98rem; font-weight: 800;">${escapeHtml(m.title)}</span>
+                            ${badgeHtml}
+                        </div>
+                        ${winnerName ? `<span style="background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.35); padding: 2px 8px; border-radius: 999px; font-size: 0.74rem; font-weight: 800; display: inline-flex; align-items: center; gap: 4px;">🥇 ${escapeHtml(winnerName)}</span>` : ''}
+                        <span style="font-size: 0.74rem; color: var(--neon-cyan); background: rgba(0, 210, 255, 0.08); padding: 2px 8px; border-radius: 999px; border: 1px solid rgba(0, 210, 255, 0.25); font-weight: 700;">👥 ${participants.length}/${m.total_slots || 48}</span>
+                        <span style="font-size: 0.74rem; color: var(--neon-green); background: rgba(0, 245, 155, 0.08); padding: 2px 8px; border-radius: 999px; border: 1px solid rgba(0, 245, 155, 0.25); font-weight: 800;">💰 ৳${m.total_payout || 0}</span>
                     </div>
-                    <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-                        <span class="admin-history-retention-notice">
+
+                    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                        <span class="admin-history-retention-notice" style="font-size: 0.72rem; padding: 2px 7px;">
                             ⏳ ${retentionText}
                         </span>
-                        <span style="font-size: 0.76rem; color: var(--text-muted);">
-                            সম্পন্ন: ${m.completed_at ? m.completed_at.substring(0, 16) : (m.created_at ? m.created_at.substring(0, 16) : '')}
+                        <span style="font-size: 0.74rem; color: var(--text-muted);">
+                            ${m.completed_at ? m.completed_at.substring(0, 16) : (m.created_at ? m.created_at.substring(0, 16) : '')}
                         </span>
-                        ${m.completed_by_name ? `<span style="font-size: 0.76rem; color: var(--neon-green); font-weight: 700;">🏁 Finished by: ${escapeHtml(m.completed_by_name)}</span>` : ''}
+                        ${m.completed_by_name ? `<span style="font-size: 0.74rem; color: var(--neon-green); font-weight: 700;">🏁 ${escapeHtml(m.completed_by_name)}</span>` : ''}
+                        <button type="button" class="btn btn-outline btn-xs" id="histToggleBtn-${m.id}" style="font-size: 0.75rem; font-weight: 800; padding: 4px 10px; border-radius: 6px; display: inline-flex; align-items: center; gap: 5px; pointer-events: none; border-color: rgba(255,255,255,0.2); color: #f1f5f9; background: rgba(255,255,255,0.06);">
+                            <span id="histBtnText-${m.id}">Details</span>
+                            <span id="histArrow-${m.id}" style="display: inline-block; transition: transform 0.25s ease; font-size: 0.7rem;">▼</span>
+                        </button>
                     </div>
                 </div>
 
-                <div class="admin-history-meta-grid">
-                    <div class="admin-history-meta-item">
-                        ম্যাপ ও টাইপ
-                        <b>🗺️ ${escapeHtml(m.map_name || 'Bermuda')} (${escapeHtml(m.match_type || 'Solo')})</b>
+                <!-- Collapsible Details Body (Hidden by default for ultra-compact layout) -->
+                <div class="admin-history-card-body" id="histBody-${m.id}" style="display: none;">
+                    <div class="admin-history-meta-grid">
+                        <div class="admin-history-meta-item">
+                            ম্যাপ ও টাইপ
+                            <b>🗺️ ${escapeHtml(m.map_name || 'Bermuda')} (${escapeHtml(m.match_type || 'Solo')})</b>
+                        </div>
+                        <div class="admin-history-meta-item">
+                            এন্ট্রি ফি / প্রাইজ পুল
+                            <b>৳${m.entry_fee} / ৳${m.prize_pool}</b>
+                        </div>
+                        <div class="admin-history-meta-item">
+                            প্রতি কিল প্রাইজ
+                            <b>৳${m.per_kill || 0}</b>
+                        </div>
+                        <div class="admin-history-meta-item">
+                            প্লেয়ার জয়েন
+                            <b style="color: var(--neon-cyan);">${participants.length} / ${m.total_slots || 48} খেলোয়াড়</b>
+                        </div>
+                        <div class="admin-history-meta-item">
+                            মোট প্রদানকৃত প্রাইজ
+                            <b style="color: var(--neon-green);">৳${m.total_payout || 0}</b>
+                        </div>
+                        <div class="admin-history-meta-item">
+                            রুম ক্রেডেনশিয়াল
+                            <b style="font-family: monospace; font-size: 0.82rem; color: #cbd5e1;">ID: ${escapeHtml(m.room_id || 'N/A')}${m.room_pass ? ` | Pass: ${escapeHtml(m.room_pass)}` : ''}</b>
+                        </div>
                     </div>
-                    <div class="admin-history-meta-item">
-                        এন্ট্রি ফি / প্রাইজ পুল
-                        <b>৳${m.entry_fee} / ৳${m.prize_pool}</b>
-                    </div>
-                    <div class="admin-history-meta-item">
-                        প্রতি কিল প্রাইজ
-                        <b>৳${m.per_kill || 0}</b>
-                    </div>
-                    <div class="admin-history-meta-item">
-                        প্লেয়ার জয়েন
-                        <b style="color: var(--neon-cyan);">${participants.length} / ${m.total_slots || 48} খেলোয়াড়</b>
-                    </div>
-                    <div class="admin-history-meta-item">
-                        মোট প্রদানকৃত প্রাইজ
-                        <b style="color: var(--neon-green);">৳${m.total_payout || 0}</b>
-                    </div>
-                    <div class="admin-history-meta-item">
-                        রুম ক্রেডেনশিয়াল
-                        <b style="font-family: monospace; font-size: 0.82rem; color: #cbd5e1;">ID: ${escapeHtml(m.room_id || 'N/A')}${m.room_pass ? ` | Pass: ${escapeHtml(m.room_pass)}` : ''}</b>
-                    </div>
-                </div>
 
-                <div class="table-wrapper" style="margin: 0; border: none; border-radius: 0;">
-                    <table class="custom-table" style="font-size: 0.8rem;">
-                        <thead>
-                            <tr style="background: rgba(0,0,0,0.25);">
-                                <th style="width: 70px;">র‍্যাংক</th>
-                                <th style="width: 60px;">স্লট</th>
-                                <th>খেলোয়াড় (IGN / UID)</th>
-                                <th>ইউজার / ফোন</th>
-                                <th style="text-align: center; width: 60px;">কিল</th>
-                                <th style="text-align: right; width: 85px;">কিল প্রাইজ</th>
-                                <th style="text-align: right; width: 85px;">র‍্যাংক প্রাইজ</th>
-                                <th style="text-align: right; width: 95px;">মোট জয়ী</th>
-                                <th style="text-align: center; width: 100px;">স্ট্যাটাস</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${rowsHtml}
-                        </tbody>
-                    </table>
+                    <div class="table-wrapper" style="margin: 0; border: none; border-radius: 0;">
+                        <table class="custom-table" style="font-size: 0.8rem;">
+                            <thead>
+                                <tr style="background: rgba(0,0,0,0.25);">
+                                    <th style="width: 70px;">র‍্যাংক</th>
+                                    <th style="width: 60px;">স্লট</th>
+                                    <th>খেলোয়াড় (IGN / UID)</th>
+                                    <th>ইউজার / ফোন</th>
+                                    <th style="text-align: center; width: 60px;">কিল</th>
+                                    <th style="text-align: right; width: 85px;">কিল প্রাইজ</th>
+                                    <th style="text-align: right; width: 85px;">র‍্যাংক প্রাইজ</th>
+                                    <th style="text-align: right; width: 95px;">মোট জয়ী</th>
+                                    <th style="text-align: center; width: 100px;">স্ট্যাটাস</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${rowsHtml}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         `;
     }).join('');
 }
+
+function toggleAdminHistoryMatch(matchId) {
+    const body = document.getElementById(`histBody-${matchId}`);
+    const arrow = document.getElementById(`histArrow-${matchId}`);
+    const btnText = document.getElementById(`histBtnText-${matchId}`);
+    const card = document.getElementById(`histCard-${matchId}`);
+    if (!body) return;
+
+    const isHidden = (body.style.display === 'none' || !body.style.display);
+    if (isHidden) {
+        body.style.display = 'block';
+        if (arrow) arrow.style.transform = 'rotate(180deg)';
+        if (btnText) btnText.textContent = 'Hide';
+        if (card) card.classList.add('expanded');
+    } else {
+        body.style.display = 'none';
+        if (arrow) arrow.style.transform = 'rotate(0deg)';
+        if (btnText) btnText.textContent = 'Details';
+        if (card) card.classList.remove('expanded');
+    }
+}
+window.toggleAdminHistoryMatch = toggleAdminHistoryMatch;
+
+function toggleAllAdminHistory(expand) {
+    document.querySelectorAll('.admin-history-card-body').forEach(b => {
+        b.style.display = expand ? 'block' : 'none';
+    });
+    document.querySelectorAll('[id^="histArrow-"]').forEach(a => {
+        a.style.transform = expand ? 'rotate(180deg)' : 'rotate(0deg)';
+    });
+    document.querySelectorAll('[id^="histBtnText-"]').forEach(t => {
+        t.textContent = expand ? 'Hide' : 'Details';
+    });
+    document.querySelectorAll('.admin-history-card').forEach(c => {
+        if (expand) c.classList.add('expanded');
+        else c.classList.remove('expanded');
+    });
+}
+window.toggleAllAdminHistory = toggleAllAdminHistory;
 
 // -------------------------------------------------------------
 // Player Profile & Categories (Details & Deposit)

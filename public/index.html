@@ -910,7 +910,7 @@
                                             <th>Name & Username</th>
                                             <th>Phone Number</th>
                                             <th>Rooms Released</th>
-                                            <th>Matches Concluded</th>
+                                            <th>Matches Finished</th>
                                             <th>Recent Action</th>
                                             <th>Actions</th>
                                         </tr>
@@ -1252,12 +1252,10 @@
                                 if (typeof window.loadAdminOverview === 'function') window.loadAdminOverview();
                             } else if (sectionId === 'players') {
                                 if (typeof window.loadAdminUsers === 'function') window.loadAdminUsers();
-                            } else if (sectionId === 'history') { if (typeof loadAdminMatchHistory === 'function') loadAdminMatchHistory(); } else if (sectionId === 'matches') {
-                                if (window.currentUser.role === 'moderator') {
-                                    if (typeof window.loadMatches === 'function') window.loadMatches();
-                                } else {
-                                    if (typeof window.loadAdminOverview === 'function') window.loadAdminOverview();
-                                }
+                            } else if (sectionId === 'history') {
+                                if (typeof loadAdminMatchHistory === 'function') loadAdminMatchHistory();
+                            } else if (sectionId === 'matches') {
+                                if (typeof window.loadMatches === 'function') window.loadMatches();
                             } else if (sectionId === 'moderators') {
                                 if (typeof window.loadModeratorScoreboard === 'function') window.loadModeratorScoreboard();
                             }

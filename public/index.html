@@ -2641,6 +2641,12 @@
                         <span>💡</span>
                         <span>Room ID and Password are released 10-15 minutes prior to match start. Join immediately once credentials appear.</span>
                     </div>
+
+                    <div id="portalAdminRoomAction" style="display: none; margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.08); justify-content: flex-end;">
+                        <button type="button" class="btn btn-outline btn-xs" style="padding: 5px 12px; font-size: 0.78rem; font-weight: 800; border-color: #38bdf8; color: #38bdf8; background: rgba(56, 189, 248, 0.1); border-radius: 6px; cursor: pointer;" onclick="openPortalAdminSetRoom()">
+                            ✏️ Set / Edit Room ID & Pass
+                        </button>
+                    </div>
                 </div>
 
                 <!-- Match Overview stats -->
@@ -2696,6 +2702,69 @@
             
             <div class="modal-footer" style="padding: 12px 18px; border-top: 1px solid #e2e8f0; background: #f8fafc; display: flex; justify-content: flex-end;">
                 <button type="button" class="btn btn-outline" style="padding: 6px 18px; font-size: 0.84rem; font-weight: 700; color: #0f172a; border-color: #cbd5e1;" onclick="closeModal('matchInnerPortalModal')">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MOBILE-STYLE BOTTOM SHEET / FLOATING BAR: QUICK ROOM ID & PASSWORD -->
+    <div class="bottom-sheet-overlay" id="roomBottomSheetModal" onclick="closeRoomBottomSheet()" style="display: none;">
+        <div class="bottom-sheet-card" onclick="event.stopPropagation()">
+            <div class="bottom-sheet-handle"></div>
+
+            <div class="bottom-sheet-header">
+                <div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span class="room-pulse-green"></span>
+                        <h3 id="bsMatchTitle" style="margin: 0; font-size: 1.12rem; font-weight: 900; font-family: 'Rajdhani', sans-serif; color: #ffffff; letter-spacing: 0.5px;">
+                            Tournament Room Credentials
+                        </h3>
+                    </div>
+                    <div id="bsMatchSubtitle" style="font-size: 0.74rem; color: #94a3b8; margin-top: 2px;">
+                        Custom Room Credentials
+                    </div>
+                </div>
+                <button type="button" class="bottom-sheet-close" onclick="closeRoomBottomSheet()">&times;</button>
+            </div>
+
+            <div class="bottom-sheet-body">
+                <!-- Assigned Slot Banner -->
+                <div class="bs-slot-banner">
+                    <div>
+                        <div style="font-size: 0.76rem; color: #a7f3d0; font-weight: 800; text-transform: uppercase;">🎯 Your Assigned Slot</div>
+                        <div style="font-size: 0.72rem; color: #e6fffa;">You must sit strictly in this slot number</div>
+                    </div>
+                    <div id="bsSlotNumber" class="bs-slot-pill">
+                        #1 (Fixed)
+                    </div>
+                </div>
+
+                <!-- Credentials Grid: Room ID & Password -->
+                <div class="bs-creds-grid">
+                    <div class="bs-cred-box bs-cred-id">
+                        <div class="bs-cred-label">Custom Room ID</div>
+                        <div id="bsRoomIdVal" class="bs-cred-val">-</div>
+                        <button type="button" class="btn-copy-chip btn-copy-chip-id" onclick="copyBottomSheetText('id')">
+                            📋 Copy ID
+                        </button>
+                    </div>
+
+                    <div class="bs-cred-box bs-cred-pass">
+                        <div class="bs-cred-label">Room Password</div>
+                        <div id="bsRoomPassVal" class="bs-cred-val">-</div>
+                        <button type="button" class="btn-copy-chip btn-copy-chip-pass" onclick="copyBottomSheetText('pass')">
+                            📋 Copy Pass
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 1-Tap Copy Both -->
+                <button type="button" class="bs-copy-all-btn" onclick="copyBottomSheetText('both')">
+                    ⚡ Copy Both (Room ID & Password)
+                </button>
+
+                <div class="bs-tips-notice">
+                    💡 <b>টিপস:</b> রুম আইডি ও পাসওয়ার্ড কপি করে Free Fire গেমে Custom-এ জয়েন করুন এবং আপনার নির্দিষ্ট স্লটে বসে পড়ুন!
+                </div>
             </div>
         </div>
     </div>

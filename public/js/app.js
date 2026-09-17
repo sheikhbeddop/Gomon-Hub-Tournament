@@ -1661,7 +1661,7 @@ function formatCountdown(targetTime, status) {
     const s = String(status || '').toLowerCase();
     if (s === 'completed' || s === 'concluded') {
         return {
-            text: '🏁 Match Concluded',
+            text: '🏁 Match Finished',
             state: 'completed'
         };
     }
@@ -1927,7 +1927,7 @@ function renderMatches() {
             actionHtml = `
                 <div style="display: flex; flex-direction: column; gap: 6px;">
                     <div style="display: flex; align-items: center; justify-content: space-between; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 5px 10px;">
-                        <span style="font-size: 0.78rem; color: #94a3b8; font-weight: 600;">⭕ Concluded</span>
+                        <span style="font-size: 0.78rem; color: #94a3b8; font-weight: 600;">⭕ Finished</span>
                         <span style="font-size: 0.75rem; color: #10b981; font-weight: 700;">Completed</span>
                     </div>
                     <button class="btn btn-outline" style="width: 100%; border-color: #10b981; color: #10b981; font-size: 0.82rem; font-weight: 700;" onclick="openPrizeBreakdownModal(${m.id})">🏁 View Results & Prizes</button>
@@ -4222,22 +4222,20 @@ function renderAdminMatches() {
     if (!tbody) return;
 
     const isAdmin = (currentUser && currentUser.role === 'admin');
-    const activeMatches = (allMatches || []).filter(m => m.status !== 'completed' && m.status !== 'concluded');
 
-    if (activeMatches.length === 0) {
-        tbody.innerHTML = `
-            <tr>
-                <td colspan="8" style="text-align: center; padding: 36px 16px; color: var(--text-muted);">
-                    <div style="font-size: 1.8rem; margin-bottom: 6px;">🎯</div>
-                    <div style="font-weight: 700; color: #64748b; font-size: 0.95rem;">বর্তমানে কোনো অ্যাক্টিভ বা আপকামিং ম্যাচ নেই</div>
-                    <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 4px;">নতুন টুর্নামেন্ট শুরু করতে উপরের <b>➕ Create Match</b> বাটনে ক্লিক করুন। সম্পন্ন ম্যাচের তথ্য বামপাশের <b>Match History</b>-তে সংরক্ষিত আছে।</div>
-                </td>
-            </tr>
-        `;
+    // Only show active, upcoming, live, and reg_closed matches here.
+    // Concluded matches are exclusively managed in 'Match History' (📜 Match History).
+    const activeAdminMatches = (allMatches || []).filter(m => m.status !== 'completed');
+
+    if (activeAdminMatches.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; padding: 32px 16px; color: var(--text-muted); font-size: 0.88rem;">
+            🎮 বর্তমানে কোনো আসন্ন বা চলমান (Upcoming/Live) টুর্নামেন্ট ম্যাচ নেই।<br>
+            <span style="font-size: 0.78rem; color: #64748b; margin-top: 4px; display: inline-block;">সকল সম্পন্ন ম্যাচের সম্পূর্ণ বিবরণ ও রেকর্ড দেখতে বামপাশের মেনু থেকে <b>📜 Match History</b> দেখুন।</span>
+        </td></tr>`;
         return;
     }
 
-    tbody.innerHTML = activeMatches.map(m => {
+    tbody.innerHTML = activeAdminMatches.map(m => {
         const isCompleted = (m.status === 'completed');
         const targetTime = parseMatchTimestamp(m.match_time);
         const isStarted = !isCompleted && targetTime && (targetTime <= Date.now());
@@ -4247,13 +4245,13 @@ function renderAdminMatches() {
             <div style="font-size: 0.78rem; color: var(--neon-cyan);">
                 <b>🛡️ ${escapeHtml(m.room_updated_by_name)}</b>
                 <div style="font-size: 0.68rem; color: var(--text-muted);">${m.room_updated_at ? m.room_updated_at.substring(5, 16) : ''}</div>
-                ${m.completed_by_name ? `<div style="font-size: 0.7rem; color: var(--neon-green); margin-top: 2px;">🏁 Concluded by: ${escapeHtml(m.completed_by_name)}</div>` : ''}
+                ${m.completed_by_name ? `<div style="font-size: 0.7rem; color: var(--neon-green); margin-top: 2px;">🏁 Finished by: ${escapeHtml(m.completed_by_name)}</div>` : ''}
             </div>
         ` : `<span style="font-size: 0.75rem; color: var(--text-muted);">Not updated yet</span>`;
 
         let statusBadge = '';
         if (isCompleted) {
-            statusBadge = '<span class="badge-status approved" style="margin-left: 4px; font-size: 0.65rem;">Concluded</span>';
+            statusBadge = '<span class="badge-status approved" style="margin-left: 4px; font-size: 0.65rem;">Finished</span>';
         } else if (isStarted) {
             statusBadge = '<span style="background: #fee2e2; color: #dc2626; border: 1px solid #f87171; border-radius: 4px; font-size: 0.65rem; font-weight: 800; padding: 1px 6px; margin-left: 4px; display: inline-flex; align-items: center; gap: 3px;">🔴 Started / Publish Result</span>';
         } else if (m.status === 'reg_closed') {
@@ -4309,8 +4307,8 @@ function renderAdminMatches() {
                             style="${isStarted ? 'background: linear-gradient(135deg, #ea580c, #f97316); color: #ffffff; border: 1.5px solid #c2410c; box-shadow: 0 0 10px rgba(234,88,12,0.35);' : 'background: #fffbeb; color: #b45309; border: 1.5px solid #fcd34d;'} font-weight: 800; font-size: 0.82rem; padding: 7px 13px; border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); transition: all 0.2s ease; white-space: nowrap;"
                             onmouseover="this.style.filter='brightness(1.1)';"
                             onmouseout="this.style.filter='none';"
-                            title="Conclude Tournament & Distribute Prizes">
-                            <span style="font-size: 0.95rem;">🏁</span> ${isStarted ? 'Publish Result' : 'Conclude'}
+                            title="Finish Tournament & Distribute Prizes">
+                            <span style="font-size: 0.95rem;">🏁</span> ${isStarted ? 'Publish Result' : 'Finish'}
                         </button>
                     ` : ''}
                     ${isAdmin ? `
@@ -4433,7 +4431,7 @@ async function deleteMatch(matchId) {
 }
 
 async function completeMatch(matchId, title) {
-    if (!confirm(`Are you sure "${title}" has completed and you want to mark it concluded?`)) return;
+    if (!confirm(`Are you sure "${title}" has completed and you want to mark it finished?`)) return;
     try {
         const res = await fetch(`/api/admin/matches/${matchId}`, {
             method: 'PUT',
@@ -4444,7 +4442,7 @@ async function completeMatch(matchId, title) {
             body: JSON.stringify({ status: 'completed' })
         });
         if (res.ok) {
-            showToast(`Match "${title}" concluded successfully!`, 'success');
+            showToast(`Match "${title}" finished successfully!`, 'success');
             playSound('alert');
             loadMatches();
             if (currentUser && currentUser.role === 'admin') {
@@ -5231,11 +5229,7 @@ function switchAdminSection(sectionId) {
     } else if (sectionId === 'players') {
         if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'moderator')) loadAdminUsers();
     } else if (sectionId === 'matches') {
-        if (currentUser && currentUser.role === 'moderator') {
-            loadMatches();
-        } else {
-            loadAdminOverview();
-        }
+        loadMatches();
     } else if (sectionId === 'moderators') {
         if (currentUser && currentUser.role === 'admin') loadModeratorScoreboard();
     } else if (sectionId === 'history') {
@@ -5450,6 +5444,7 @@ function renderAdminMatchHistory() {
                         <span style="font-size: 0.76rem; color: var(--text-muted);">
                             সম্পন্ন: ${m.completed_at ? m.completed_at.substring(0, 16) : (m.created_at ? m.created_at.substring(0, 16) : '')}
                         </span>
+                        ${m.completed_by_name ? `<span style="font-size: 0.76rem; color: var(--neon-green); font-weight: 700;">🏁 Finished by: ${escapeHtml(m.completed_by_name)}</span>` : ''}
                     </div>
                 </div>
 
@@ -5476,21 +5471,7 @@ function renderAdminMatchHistory() {
                     </div>
                     <div class="admin-history-meta-item">
                         রুম ক্রেডেনশিয়াল
-                        <b style="font-family: monospace; font-size: 0.82rem; color: #cbd5e1;">ID: ${escapeHtml(m.room_id || 'N/A')}${m.room_pass ? ' | Pass: ' + escapeHtml(m.room_pass) : ''}</b>
-                    </div>
-                    <div class="admin-history-meta-item">
-                        রুম আইডি আপডেটকারী
-                        <b style="font-size: 0.82rem; color: var(--neon-cyan);">
-                            ${m.room_updated_by_name ? `🛡️ ${escapeHtml(m.room_updated_by_name)}` : '<span style="color: var(--text-muted); font-weight: normal;">দেওয়া হয়নি</span>'}
-                            ${m.room_updated_at ? `<span style="font-size: 0.68rem; color: var(--text-muted); display: block; font-weight: normal;">(${m.room_updated_at.substring(5, 16)})</span>` : ''}
-                        </b>
-                    </div>
-                    <div class="admin-history-meta-item">
-                        রেজাল্ট ও কনক্লুড
-                        <b style="font-size: 0.82rem; color: var(--neon-green);">
-                            ${m.completed_by_name ? `🏁 ${escapeHtml(m.completed_by_name)}` : '<span style="color: var(--text-muted); font-weight: normal;">অটো/সিস্টেম</span>'}
-                            ${m.completed_at ? `<span style="font-size: 0.68rem; color: var(--text-muted); display: block; font-weight: normal;">(${m.completed_at.substring(5, 16)})</span>` : ''}
-                        </b>
+                        <b style="font-family: monospace; font-size: 0.82rem; color: #cbd5e1;">ID: ${escapeHtml(m.room_id || 'N/A')}${m.room_pass ? ` | Pass: ${escapeHtml(m.room_pass)}` : ''}</b>
                     </div>
                 </div>
 
@@ -5912,7 +5893,7 @@ async function loadCompletedResults(category, btnElem) {
                         <span class="filter-pill" style="background:#e0f2fe; color:#0369a1; border:none; padding:2px 8px; font-size:0.68rem; font-weight:700;">🔥 ${escapeHtml(catName)}</span>
                         <span class="match-format-monitor ${fmt.cssClass}" style="display: inline-flex; align-items: center; gap: 4px; font-size: 0.68rem; font-weight: 800; padding: 1px 6px; border-radius: 999px; letter-spacing: 0.5px; text-transform: uppercase; font-family: 'Rajdhani', sans-serif; ${fmt.inlineStyle}">${fmt.icon} ${fmt.label}</span>
                     </div>
-                    <span style="font-size:0.72rem; color:#64748b;">Concluded: ${(m.completed_at || m.match_time || '').split(' ')[0]}</span>
+                    <span style="font-size:0.72rem; color:#64748b;">Finished: ${(m.completed_at || m.match_time || '').split(' ')[0]}</span>
                 </div>
                 <h3 style="font-family:'Rajdhani',sans-serif; font-size:0.98rem; font-weight:800; color:#0f172a; margin:0 0 8px 0;">
                     ${escapeHtml(m.title)}
@@ -5950,7 +5931,7 @@ async function loadCompletedResults(category, btnElem) {
                     </div>
                 ` : `
                     <div style="font-size:0.72rem; color:#64748b; background:#f8fafc; padding:6px 10px; border-radius:6px; text-align:center;">
-                        Match concluded (Prizes distributed)
+                        Match finished (Prizes distributed)
                     </div>
                 `}
             </div>
@@ -6244,7 +6225,7 @@ function filterAdminResultMatches(category, btnElem) {
     } else {
         select.innerHTML = '<option value="">-- Select a tournament match --</option>' + 
             filtered.map(m => {
-                const statusTxt = m.status === 'completed' ? '🏁 Concluded' : (m.status === 'reg_closed' ? '🔒 Closed' : '🟢 Open');
+                const statusTxt = m.status === 'completed' ? '🏁 Finished' : (m.status === 'reg_closed' ? '🔒 Closed' : '🟢 Open');
                 const codeTag = m.match_code ? `[#${m.match_code}]` : `#${m.id}`;
                 return `<option value="${m.id}">${codeTag} [${m.match_type}] ${escapeHtml(m.title)} (${statusTxt})</option>`;
             }).join('');

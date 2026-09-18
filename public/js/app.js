@@ -1923,7 +1923,7 @@ function renderMatches() {
                 <div style="display: flex; flex-direction: column; gap: 6px;">
                     <div style="display: flex; align-items: center; justify-content: space-between; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 5px 10px;">
                         <span style="font-size: 0.78rem; color: #94a3b8; font-weight: 600;">⭕ Not Joined</span>
-                        <span style="font-size: 0.75rem; color: #ef4444; font-weight: 700;">Slots Full (48/48)</span>
+                        <span style="font-size: 0.75rem; color: #ef4444; font-weight: 700;">Slots Full (${m.joined_count || m.total_slots || 48}/${m.total_slots || 48})</span>
                     </div>
                     <button class="btn btn-outline" style="width: 100%; opacity: 0.7; cursor: not-allowed; font-size: 0.84rem; font-weight: 800; border-color: #cbd5e1; color: #64748b;" disabled>🔒 Match Full</button>
                     <div style="display: flex; gap: 6px;">

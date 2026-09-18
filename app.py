@@ -2726,7 +2726,7 @@ def subscribe_push(data: PushSubscribeRequest, request: Request):
 def admin_overview(admin: dict = Depends(verify_moderator_or_admin)):
     conn = get_db()
     total_users = conn.execute("SELECT COUNT(*) FROM users WHERE role != 'admin'").fetchone()[0]
-    total_matches = conn.execute("SELECT COUNT(*) FROM matches").fetchone()[0]
+    total_matches = conn.execute("SELECT COUNT(*) FROM matches WHERE status != 'completed'").fetchone()[0]
     pending_deposits = conn.execute("""
         SELECT COUNT(*) 
         FROM deposits d

@@ -121,13 +121,14 @@ TABLES_TO_COLLECTIONS = [
 import threading
 _sync_lock = threading.Lock()
 _pending_sync = False
+_last_synced_hash = ""
 
 # -------------------------------------------------------------------
 # Push SQLite Data to MongoDB Collections (Zero Data Loss)
 # -------------------------------------------------------------------
-def push_sqlite_to_mongo(conn=None) -> bool:
+def push_sqlite_to_mongo(conn=None, force: bool = False) -> bool:
     """Reads all records from SQLite and saves them into MongoDB collections."""
-    global _pending_sync
+    global _pending_sync, _last_synced_hash
     db = get_mongo_database()
     if db is None:
         return False
@@ -147,6 +148,41 @@ def push_sqlite_to_mongo(conn=None) -> bool:
         should_close = True
 
     try:
+        # 1. Resolve actual SQLite database file path
+        actual_db_path = DB_PATH
+        try:
+            cur = conn.cursor()
+            cur.execute("PRAGMA database_list")
+            dblist = cur.fetchall()
+            if dblist and len(dblist) > 0:
+                p = dblist[0][2] if isinstance(dblist[0], (tuple, list)) else dblist[0]["file"]
+                if p:
+                    actual_db_path = p
+        except Exception:
+            pass
+
+        # Flush pending WAL pages so disk bytes are 100% current
+        try:
+            conn.execute("PRAGMA wal_checkpoint(PASSIVE);")
+        except Exception:
+            pass
+
+        # 2. Check digital fingerprint (MD5) of the database
+        db_bytes = b""
+        current_hash = ""
+        if os.path.exists(actual_db_path):
+            try:
+                with open(actual_db_path, "rb") as f:
+                    db_bytes = f.read()
+                if db_bytes:
+                    current_hash = hashlib.md5(db_bytes).hexdigest()
+            except Exception:
+                pass
+
+        # 3. BANDWIDTH SHIELD: If database has not changed since last sync, skip all network traffic
+        if not force and _last_synced_hash and current_hash and current_hash == _last_synced_hash:
+            return True
+
         for table in TABLES_TO_COLLECTIONS:
             try:
                 cursor = conn.execute(f"SELECT * FROM {table}")
@@ -210,51 +246,38 @@ def push_sqlite_to_mongo(conn=None) -> bool:
                         except Exception:
                             pass
 
-        # Store binary snapshot via GridFS (completely eliminates 16MB BSON size limit)
-        actual_db_path = DB_PATH
-        try:
-            cur = conn.cursor()
-            cur.execute("PRAGMA database_list")
-            dblist = cur.fetchall()
-            if dblist and len(dblist) > 0:
-                p = dblist[0][2] if isinstance(dblist[0], (tuple, list)) else dblist[0]["file"]
-                if p:
-                    actual_db_path = p
-        except Exception:
-            pass
+        # 4. Store binary snapshot via GridFS
+        if db_bytes:
+            try:
+                import gridfs
+                fs = gridfs.GridFS(db, collection="sqlite_snapshots")
+                for old_f in fs.find({"filename": "tournament_latest.db"}):
+                    fs.delete(old_f._id)
+                fs.put(
+                    db_bytes,
+                    filename="tournament_latest.db",
+                    upload_date=datetime.utcnow(),
+                    md5_hash=current_hash
+                )
+            except Exception as ge:
+                print(f"[GridFS Backup Notice] {ge}")
 
-        if os.path.exists(actual_db_path):
-            with open(actual_db_path, "rb") as f:
-                db_bytes = f.read()
-            if db_bytes:
-                try:
-                    import gridfs
-                    fs = gridfs.GridFS(db, collection="sqlite_snapshots")
-                    for old_f in fs.find({"filename": "tournament_latest.db"}):
-                        fs.delete(old_f._id)
-                    fs.put(
-                        db_bytes,
-                        filename="tournament_latest.db",
-                        upload_date=datetime.utcnow(),
-                        md5_hash=hashlib.md5(db_bytes).hexdigest()
-                    )
-                except Exception as ge:
-                    print(f"[GridFS Backup Notice] {ge}")
+            try:
+                db["db_snapshots"].replace_one(
+                    {"_id": "latest"},
+                    {
+                        "_id": "latest",
+                        "size": len(db_bytes),
+                        "updated_at": datetime.utcnow().isoformat(),
+                        "hash": current_hash
+                    },
+                    upsert=True
+                )
+            except Exception:
+                pass
 
-                try:
-                    db["db_snapshots"].replace_one(
-                        {"_id": "latest"},
-                        {
-                            "_id": "latest",
-                            "size": len(db_bytes),
-                            "updated_at": datetime.utcnow().isoformat(),
-                            "hash": hashlib.md5(db_bytes).hexdigest()
-                        },
-                        upsert=True
-                    )
-                except Exception:
-                    pass
-
+        if current_hash:
+            _last_synced_hash = current_hash
         print("[MongoDB] Synced SQLite database to MongoDB Atlas successfully.")
         return True
     except Exception as e:
@@ -343,6 +366,13 @@ def pull_mongo_to_sqlite(target_path=DB_PATH) -> bool:
                     except Exception:
                         pass
         conn.close()
+        global _last_synced_hash
+        if os.path.exists(target_path):
+            try:
+                with open(target_path, "rb") as f:
+                    _last_synced_hash = hashlib.md5(f.read()).hexdigest()
+            except Exception:
+                pass
         print("[MongoDB] Collections re-synchronized into SQLite successfully.")
         return True
     except Exception as e:
@@ -414,37 +444,8 @@ def delete_from_mongo_direct(table_name: str, id_val, id_field: str = "id"):
 
 def sync_snapshot_now():
     """Immediately refreshes the latest binary snapshot in MongoDB Atlas using GridFS."""
-    db = get_mongo_database()
-    if db is None or not os.path.exists(DB_PATH):
-        return
     try:
-        with open(DB_PATH, "rb") as f:
-            db_bytes = f.read()
-        if db_bytes:
-            try:
-                import gridfs
-                fs = gridfs.GridFS(db, collection="sqlite_snapshots")
-                for old_f in fs.find({"filename": "tournament_latest.db"}):
-                    fs.delete(old_f._id)
-                fs.put(
-                    db_bytes,
-                    filename="tournament_latest.db",
-                    upload_date=datetime.utcnow(),
-                    md5_hash=hashlib.md5(db_bytes).hexdigest()
-                )
-            except Exception as ge:
-                print(f"[GridFS Snapshot Notice] {ge}")
-
-            db["db_snapshots"].replace_one(
-                {"_id": "latest"},
-                {
-                    "_id": "latest",
-                    "size": len(db_bytes),
-                    "updated_at": datetime.utcnow().isoformat(),
-                    "hash": hashlib.md5(db_bytes).hexdigest()
-                },
-                upsert=True
-            )
+        push_sqlite_to_mongo(force=True)
     except Exception as e:
         print(f"[Snapshot Sync] {e}")
 

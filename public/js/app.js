@@ -156,6 +156,12 @@ async function apiRequest(endpoint, method = 'GET', body = null) {
     }
 
     if (!res.ok) {
+        if (res.status === 401 && activeToken && !endpoint.includes('/api/auth/login')) {
+            console.warn('Session revoked or password changed on another device. Auto logging out.');
+            if (typeof logout === 'function') {
+                logout(false);
+            }
+        }
         const errorMsg = data.detail || data.message || `Request failed (${res.status})`;
         const err = new Error(errorMsg);
         err.status = res.status;

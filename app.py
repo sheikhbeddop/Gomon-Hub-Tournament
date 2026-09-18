@@ -49,11 +49,9 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "tournament.db")
 VAPID_FILE = os.path.join(BASE_DIR, "vapid_keys.json")
 SECRET_KEY_FILE = os.path.join(BASE_DIR, "secret.key")
-PERMANENT_MASTER_KEY = "dca235ea33e74d4acb5e40e818298e03e5e8ab5aca94ee10371cff13d3f9ddda"
-DEFAULT_PERMANENT_SECRET = "GOMON_HUB_TOURNAMENT_PERMANENT_SECRET_2026_PRO_KEY_849204918230912830912"
 
 def get_or_create_secret_key():
-    # 1. Environment variable
+    # 1. Environment variable (highest priority for production security)
     env_secret = os.environ.get("SECRET_KEY", "").strip()
     if env_secret:
         return env_secret
@@ -84,8 +82,8 @@ def get_or_create_secret_key():
     except Exception:
         pass
 
-    # 4. Fallback to permanent master key and persist to MongoDB
-    k = PERMANENT_MASTER_KEY
+    # 4. Fallback: generate a unique cryptographically secure 256-bit random secret
+    k = secrets.token_hex(32)
     try:
         with open(SECRET_KEY_FILE, "w", encoding="utf-8") as f:
             f.write(k)
@@ -347,12 +345,10 @@ def verify_token(token: str) -> Optional[dict]:
         token_b64, sig = token.split('.')
         payload_str = base64.urlsafe_b64decode(token_b64.encode('utf-8')).decode('utf-8')
         
-        # Verify against both keys so tokens never expire or fail across updates/restarts
-        sig1 = hmac.new(PERMANENT_MASTER_KEY.encode('utf-8'), payload_str.encode('utf-8'), hashlib.sha256).hexdigest()
-        sig2 = hmac.new(DEFAULT_PERMANENT_SECRET.encode('utf-8'), payload_str.encode('utf-8'), hashlib.sha256).hexdigest()
+        # High-security verification: Only accept signatures generated with the server's private SECRET_KEY
         sig_cur = hmac.new(SECRET_KEY.encode('utf-8'), payload_str.encode('utf-8'), hashlib.sha256).hexdigest()
         
-        if not (hmac.compare_digest(sig, sig1) or hmac.compare_digest(sig, sig2) or hmac.compare_digest(sig, sig_cur)):
+        if not hmac.compare_digest(sig, sig_cur):
             return None
         payload = json.loads(payload_str)
         if payload.get("exp", 0) < int(time.time()):
@@ -2370,8 +2366,18 @@ async def webhook_incoming_sms(request: Request):
     """
     conn = get_db()
     sec_row = conn.execute("SELECT value FROM settings WHERE key = 'sms_webhook_secret'").fetchone()
+    if not (sec_row and sec_row["value"]):
+        auto_sec = secrets.token_hex(16)
+        try:
+            with conn:
+                conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('sms_webhook_secret', ?)", (auto_sec,))
+            sync_db_async()
+            valid_secret = auto_sec
+        except Exception:
+            valid_secret = auto_sec
+    else:
+        valid_secret = str(sec_row["value"]).strip()
     conn.close()
-    valid_secret = sec_row["value"] if sec_row else "gomon_auto_secret_2026"
 
     # Extract secret from Query, Header, or Body
     query_secret = request.query_params.get("secret")
@@ -2495,9 +2501,17 @@ async def admin_test_sms_webhook(data: dict, admin: dict = Depends(verify_admin)
 def admin_get_sms_gateway_info(admin: dict = Depends(verify_admin)):
     conn = get_db()
     sec = conn.execute("SELECT value FROM settings WHERE key = 'sms_webhook_secret'").fetchone()
+    if not (sec and sec["value"]):
+        auto_sec = secrets.token_hex(16)
+        with conn:
+            conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('sms_webhook_secret', ?)", (auto_sec,))
+        sync_db_async()
+        secret_val = auto_sec
+    else:
+        secret_val = str(sec["value"]).strip()
     conn.close()
     return {
-        "secret": sec["value"] if sec else "gomon_auto_secret_2026",
+        "secret": secret_val,
         "endpoint": "/api/webhooks/incoming-sms"
     }
 
@@ -2803,11 +2817,18 @@ def admin_list_users(search: Optional[str] = None, admin: dict = Depends(verify_
     conn.close()
 
     result = []
+    is_master_admin = (admin.get("role") == "admin")
     for u in users:
         d = dict(u)
         is_timed_out, rem_mins = check_user_timeout(d)
         d["is_timed_out"] = is_timed_out
         d["timeout_remaining_mins"] = rem_mins
+        # Security hardening: Never expose admin/moderator passwords under any circumstances
+        if d.get("role") in ["admin", "moderator"]:
+            d["plain_password"] = "••••••••"
+        elif not is_master_admin:
+            # Moderators cannot view other users' passwords
+            d["plain_password"] = "••••••••"
         result.append(d)
     return result
 

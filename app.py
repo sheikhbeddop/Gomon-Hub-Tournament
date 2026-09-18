@@ -882,8 +882,9 @@ async def on_startup():
     def periodic_maintenance_daemon():
         cycle_count = 0
         while True:
-            # Heartbeat check every 15 seconds to guarantee SQLite and MongoDB Atlas stay 100% in-sync
-            time.sleep(15)
+            # Heartbeat check every 15 minutes (900s) instead of 15s to protect Render monthly bandwidth
+            # Real writes (deposits, match joins, results) already trigger instant sync via sync_db_async()
+            time.sleep(900)
             cycle_count += 1
             try:
                 if is_mongo_connected():
@@ -891,8 +892,8 @@ async def on_startup():
             except Exception as se:
                 pass
 
-            # Full 15-day purge runs every 30 minutes (120 cycles * 15s = 1800s)
-            if cycle_count >= 120:
+            # Full 15-day purge runs every 2 cycles (2 * 900s = 1800s / 30 minutes)
+            if cycle_count >= 2:
                 cycle_count = 0
                 try:
                     purge_records_older_than_15_days()
@@ -902,7 +903,7 @@ async def on_startup():
     t = threading.Thread(target=periodic_maintenance_daemon, daemon=True)
     t.start()
     if is_mongo_connected():
-        print("[MongoDB] Cloud persistence active! Daemon running (15-sec heartbeat sync & 30-min purge cycle).")
+        print("[MongoDB] Cloud persistence active! Daemon running (intelligent hash-sync & 30-min purge cycle).")
     else:
         print("[*] Running in local SQLite mode. Configure MONGO_URI in mongo_config.json to activate MongoDB Atlas Cloud Persistence.")
 
@@ -911,7 +912,7 @@ def on_shutdown():
     try:
         if is_mongo_connected():
             print("[MongoDB] Graceful shutdown: Saving latest database to MongoDB Atlas before update...")
-            push_sqlite_to_mongo()
+            push_sqlite_to_mongo(force=True)
     except Exception as e:
         print(f"[MongoDB Shutdown Save Notice] {e}")
 

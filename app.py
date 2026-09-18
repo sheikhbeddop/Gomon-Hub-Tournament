@@ -326,12 +326,15 @@ def check_rate_limit(key_prefix: str, max_requests: int, window_seconds: int, er
         return True
     return dependency
 
-def generate_token(user_id: int, username: str, role: str) -> str:
+def generate_token(user_id: int, username: str, role: str, pw_hash: str = "") -> str:
+    # High-security token validity: 7 days for admin/moderator, 30 days for regular players
+    validity_days = 7 if role in ["admin", "moderator"] else 30
     payload = {
         "user_id": user_id,
         "username": username,
         "role": role,
-        "exp": int(time.time()) + (10 * 365 * 86400) # 10 years permanent token
+        "pw_sig": pw_hash[-8:] if pw_hash else "",
+        "exp": int(time.time()) + (validity_days * 86400)
     }
     payload_str = json.dumps(payload, separators=(',', ':'))
     sig = hmac.new(SECRET_KEY.encode('utf-8'), payload_str.encode('utf-8'), hashlib.sha256).hexdigest()
@@ -1042,6 +1045,16 @@ def get_current_user(request: Request):
     if user["status"] == "banned":
         raise HTTPException(status_code=403, detail="Your account has been suspended by Admin")
 
+    # High-Security Password Signature Check:
+    # Instant revocation across all devices if password was changed or legacy token
+    cur_hash = str(user["password_hash"] or "")
+    pw_sig = payload.get("pw_sig")
+    if cur_hash and pw_sig != cur_hash[-8:]:
+        raise HTTPException(
+            status_code=401,
+            detail="পাসওয়ার্ড পরিবর্তিত হয়েছে অথবা সেশনের মেয়াদ শেষ! অনুগ্রহ করে পুনরায় লগইন করুন।"
+        )
+
     user_dict = dict(user)
     is_timed_out, rem_mins = check_user_timeout(user_dict)
     if is_timed_out:
@@ -1419,7 +1432,7 @@ def register(data: RegisterRequest):
         """, (rand_id, username, pass_hash, data.password.strip(), phone, email, ff_ign, ff_uid))
         user_id = cursor.lastrowid
 
-    token = generate_token(user_id, username, "player")
+    token = generate_token(user_id, username, "player", pass_hash)
     conn.close()
     sync_db_async()
     return {
@@ -1483,6 +1496,7 @@ def login(data: LoginRequest):
 
     # Verify password against hash (raw and trimmed)
     is_valid = verify_password(user["password_hash"], raw_pass) or verify_password(user["password_hash"], trimmed_pass)
+    active_hash = user["password_hash"]
 
     # Self-healing fallback: Check plain_password if hash check failed
     user_keys = user.keys()
@@ -1497,6 +1511,7 @@ def login(data: LoginRequest):
                 with c_fix:
                     c_fix.execute("UPDATE users SET password_hash = ? WHERE id = ?", (new_hash_val, user["id"]))
                 c_fix.close()
+                active_hash = new_hash_val
             except Exception:
                 pass
 
@@ -1531,7 +1546,7 @@ def login(data: LoginRequest):
     except Exception:
         pass
 
-    token = generate_token(user["id"], user["username"], user["role"])
+    token = generate_token(user["id"], user["username"], user["role"], active_hash or "")
     
     # Query extra stats for login response
     u_dict = dict(user)
@@ -3037,7 +3052,7 @@ def admin_impersonate_user(target_user_id: int, admin: dict = Depends(verify_adm
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    impersonation_token = generate_token(user["id"], user["username"], user["role"])
+    impersonation_token = generate_token(user["id"], user["username"], user["role"], user["password_hash"] or "")
     return {
         "success": True,
         "impersonation_token": impersonation_token,
@@ -4272,10 +4287,12 @@ async def admin_change_own_password(data: AdminChangePasswordRequest, admin: dic
                 raise HTTPException(status_code=400, detail="এই ইউজারনেমটি ইতিমধ্যে অন্য কারো দখলে আছে!")
             target_username = new_username
 
+        active_hash = user["password_hash"]
         with conn:
             if new_pass:
                 new_hash = hash_password(new_pass)
                 conn.execute("UPDATE users SET username = ?, password_hash = ?, plain_password = ? WHERE id = ?", (target_username, new_hash, new_pass, admin["id"]))
+                active_hash = new_hash
             else:
                 conn.execute("UPDATE users SET username = ? WHERE id = ?", (target_username, admin["id"]))
 
@@ -4298,8 +4315,8 @@ async def admin_change_own_password(data: AdminChangePasswordRequest, admin: dic
     except Exception:
         pass
 
-    # Generate a new permanent token with the updated session
-    new_token = generate_token(admin["id"], target_username, admin["role"])
+    # Generate a new token with the updated session and security signature
+    new_token = generate_token(admin["id"], target_username, admin["role"], active_hash or "")
 
     return {
         "success": True,

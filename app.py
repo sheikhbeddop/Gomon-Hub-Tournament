@@ -4588,6 +4588,14 @@ def serve_sitemap():
         return FileResponse(sitemap_file, media_type="application/xml", headers={"Cache-Control": "public, max-age=3600"})
     return Response(content='<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>/</loc></url></urlset>', media_type="application/xml")
 
+@app.get("/google{code}.html")
+def serve_google_verification(code: str):
+    fname = f"google{code}.html"
+    fpath = os.path.join(public_dir, fname)
+    if os.path.exists(fpath):
+        return FileResponse(fpath, media_type="text/html")
+    return Response(content=f"google-site-verification: google{code}.html", media_type="text/html")
+
 if __name__ == "__main__":
     import uvicorn
     print("\n========================================================")

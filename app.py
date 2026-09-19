@@ -936,7 +936,7 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)
 AI_AND_SCRAPER_BOTS = (
     "gptbot", "chatgpt-user", "claudebot", "claude-web", "anthropic-ai",
     "perplexitybot", "google-extended", "ccbot", "bytespider", "diffbot",
-    "facebookexternalhit", "scrapy", "petalbot", "dotbot", "semrushbot",
+    "scrapy", "petalbot", "dotbot", "semrushbot",
     "ahrefsbot", "mj12bot"
 )
 
@@ -952,7 +952,11 @@ async def add_no_cache_header(request: Request, call_next):
 
     response = await call_next(request)
     path = request.url.path
-    response.headers["X-Robots-Tag"] = "noindex, nofollow, noarchive, nosnippet"
+    if path.startswith(("/admin", "/api/admin", "/api/super-admin")):
+        response.headers["X-Robots-Tag"] = "noindex, nofollow"
+    else:
+        response.headers["X-Robots-Tag"] = "index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1"
+
     if path.endswith((".js", ".css", ".png", ".jpg", ".jpeg", ".ico", ".svg", ".woff2", ".webp")):
         response.headers["Cache-Control"] = "public, max-age=86400, stale-while-revalidate=3600"
     elif path == "/" or path.endswith(".html") or path.startswith("/api/"):

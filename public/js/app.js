@@ -6287,10 +6287,12 @@ function incrementVersion(v) {
 // =============================================================
 
 // =============================================================
+// =============================================================
 // ADMIN RESULT PUBLISHING & AUTO-PRIZE LOGIC (ENHANCED)
 // =============================================================
 let adminAllMatchesCache = [];
 let currentAdminResultFilter = 'all';
+let currentAdminResultStatus = 'pending';
 let currentAdminResultMatchData = null;
 
 async function openPublishResultModal(preselectedMatchId = null) {
@@ -6309,7 +6311,26 @@ async function openPublishResultModal(preselectedMatchId = null) {
         adminAllMatchesCache = allMatches || [];
     }
 
-    filterAdminResultMatches('all');
+    currentAdminResultFilter = 'all';
+    currentAdminResultStatus = 'pending';
+
+    if (preselectedMatchId) {
+        const preId = parseInt(preselectedMatchId);
+        const target = (adminAllMatchesCache || []).find(x => x.id === preId);
+        if (target && target.status === 'completed') {
+            currentAdminResultStatus = 'finished';
+        }
+    }
+
+    // Sync active pills
+    document.querySelectorAll('#publishResultModal .status-filter-pill').forEach(b => {
+        b.classList.toggle('active', b.id === `adminResStatus-${currentAdminResultStatus}`);
+    });
+    document.querySelectorAll('#publishResultModal .cat-filter-pill').forEach(b => {
+        b.classList.toggle('active', b.id === `adminResCat-${currentAdminResultFilter}`);
+    });
+
+    renderAdminResultDropdown();
 
     if (preselectedMatchId) {
         const select = document.getElementById('adminResultMatchSelect');
@@ -6324,30 +6345,55 @@ function openPublishResultModalForMatch(matchId) {
     openPublishResultModal(matchId);
 }
 
+function filterAdminResultStatus(status, btnElem) {
+    currentAdminResultStatus = status || 'pending';
+    
+    document.querySelectorAll('#publishResultModal .status-filter-pill').forEach(b => {
+        b.classList.toggle('active', b.id === `adminResStatus-${currentAdminResultStatus}`);
+    });
+
+    renderAdminResultDropdown();
+}
+window.filterAdminResultStatus = filterAdminResultStatus;
+
 function filterAdminResultMatches(category, btnElem) {
     currentAdminResultFilter = category || 'all';
     
-    if (btnElem) {
-        document.querySelectorAll('#publishResultModal .filter-pill').forEach(b => b.classList.remove('active'));
-        btnElem.classList.add('active');
-    } else {
-        document.querySelectorAll('#publishResultModal .filter-pill').forEach(b => {
-            b.classList.toggle('active', b.id === `adminResCat-${category}`);
-        });
-    }
+    document.querySelectorAll('#publishResultModal .cat-filter-pill').forEach(b => {
+        b.classList.toggle('active', b.id === `adminResCat-${currentAdminResultFilter}`);
+    });
 
+    renderAdminResultDropdown();
+}
+window.filterAdminResultMatches = filterAdminResultMatches;
+
+function renderAdminResultDropdown() {
     const select = document.getElementById('adminResultMatchSelect');
     if (!select) return;
 
-    let filtered = adminAllMatchesCache;
+    let filtered = adminAllMatchesCache || [];
+
+    // 1. Status Filter: pending (open/closed) vs finished (completed)
+    if (currentAdminResultStatus === 'pending') {
+        filtered = filtered.filter(m => m.status !== 'completed' && m.status !== 'cancelled');
+    } else if (currentAdminResultStatus === 'finished') {
+        filtered = filtered.filter(m => m.status === 'completed');
+    }
+
+    // 2. Category Filter
     if (currentAdminResultFilter !== 'all') {
-        filtered = adminAllMatchesCache.filter(m => (m.match_type || '').toLowerCase().trim() === currentAdminResultFilter.toLowerCase().trim());
+        filtered = filtered.filter(m => (m.match_type || '').toLowerCase().trim() === currentAdminResultFilter.toLowerCase().trim());
     }
 
     if (filtered.length === 0) {
-        select.innerHTML = `<option value="">-- No matches found in [${currentAdminResultFilter.toUpperCase()}] category --</option>`;
+        const statusLabel = currentAdminResultStatus === 'pending' ? 'Pending' : 'Finished';
+        const catLabel = currentAdminResultFilter === 'all' ? 'All Categories' : currentAdminResultFilter;
+        select.innerHTML = `<option value="">-- No ${statusLabel} matches found in [${catLabel}] --</option>`;
     } else {
-        select.innerHTML = '<option value="">-- Select a tournament match --</option>' + 
+        const placeholder = currentAdminResultStatus === 'pending'
+            ? '-- Select a pending tournament match --'
+            : '-- Select a finished match to view/update results --';
+        select.innerHTML = `<option value="">${placeholder}</option>` + 
             filtered.map(m => {
                 const statusTxt = m.status === 'completed' ? '🏁 Finished' : (m.status === 'reg_closed' ? '🔒 Closed' : '🟢 Open');
                 const codeTag = m.match_code ? `[#${m.match_code}]` : `#${m.id}`;
@@ -6356,10 +6402,14 @@ function filterAdminResultMatches(category, btnElem) {
     }
 
     // Hide details until a match is explicitly selected
-    document.getElementById('adminSelectedMatchInfo').style.display = 'none';
-    document.getElementById('adminResultParticipantsContainer').style.display = 'none';
-    document.getElementById('adminPublishBtnWrapper').style.display = 'none';
+    const infoEl = document.getElementById('adminSelectedMatchInfo');
+    const partsEl = document.getElementById('adminResultParticipantsContainer');
+    const btnWrapper = document.getElementById('adminPublishBtnWrapper');
+    if (infoEl) infoEl.style.display = 'none';
+    if (partsEl) partsEl.style.display = 'none';
+    if (btnWrapper) btnWrapper.style.display = 'none';
 }
+window.renderAdminResultDropdown = renderAdminResultDropdown;
 
 async function onAdminSelectResultMatch() {
     const select = document.getElementById('adminResultMatchSelect');
@@ -6433,6 +6483,26 @@ async function onAdminSelectResultMatch() {
         document.getElementById('adminResultParticipantsContainer').style.display = 'block';
         document.getElementById('adminPublishBtnWrapper').style.display = 'block';
 
+        // Update notice & submit button based on finished vs pending match
+        const isFinished = m.status === 'completed';
+        const noticeEl = document.getElementById('adminResultEditNotice');
+        const submitBtn = document.getElementById('adminPublishResultBtn');
+        if (isFinished) {
+            if (noticeEl) noticeEl.style.display = 'flex';
+            if (submitBtn) {
+                submitBtn.innerHTML = '✏️ Update & Re-distribute Match Results';
+                submitBtn.style.background = 'linear-gradient(135deg, #d97706, #b45309)';
+                submitBtn.style.boxShadow = '0 4px 12px rgba(217, 119, 6, 0.35)';
+            }
+        } else {
+            if (noticeEl) noticeEl.style.display = 'none';
+            if (submitBtn) {
+                submitBtn.innerHTML = '🚀 Distribute Prizes & Publish Results';
+                submitBtn.style.background = 'linear-gradient(135deg, #059669, #047857)';
+                submitBtn.style.boxShadow = '0 4px 12px rgba(5, 150, 105, 0.3)';
+            }
+        }
+
     } catch (err) {
         showToast('Failed to load match details', 'error');
     }
@@ -6460,6 +6530,12 @@ async function submitMatchResultsPublish() {
         showToast('Please select a tournament match', 'error');
         return;
     }
+
+    const isFinished = currentAdminResultMatchData.match.status === 'completed';
+    const confirmMsg = isFinished
+        ? '⚠️ This match is already finished. Are you sure you want to update results and recalculate wallet prize adjustments?'
+        : 'Are you sure you want to finalize this match and distribute prizes to player wallets?';
+    if (!confirm(confirmMsg)) return;
 
     const matchId = currentAdminResultMatchData.match.id;
     const participants = currentAdminResultMatchData.participants || [];

@@ -1642,25 +1642,103 @@ function getMatchCategoryDisplay(matchType) {
 // -------------------------------------------------------------
 let matchCountdownTimerId = null;
 
+// Convert 24-hour match time (e.g. 2026-09-19 22:59) into 12-hour AM/PM format (e.g. 19 Sep 2026, 10:59 PM)
+function formatMatchTime12Hour(timeStr) {
+    if (!timeStr) return 'Upcoming';
+    const str = String(timeStr).trim();
+    if (!str || str.toLowerCase() === 'upcoming') return 'Upcoming';
+
+    // If already contains AM/PM, return as-is
+    if (/\b(AM|PM)\b/i.test(str)) {
+        return str;
+    }
+
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+    // Match YYYY-MM-DD HH:mm(:ss)? or YYYY/MM/DD
+    const match = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})[ T](\d{1,2}):(\d{1,2})(?::(\d{1,2}))?/);
+    if (match) {
+        const year = match[1];
+        const monthNum = parseInt(match[2], 10);
+        const day = parseInt(match[3], 10);
+        let hour = parseInt(match[4], 10);
+        const min = String(parseInt(match[5], 10)).padStart(2, '0');
+
+        const ampm = hour >= 12 ? 'PM' : 'AM';
+        hour = hour % 12;
+        if (hour === 0) hour = 12;
+        const hourStr = String(hour).padStart(2, '0');
+        const monthName = months[monthNum - 1] || match[2];
+
+        return `${day} ${monthName} ${year}, ${hourStr}:${min} ${ampm}`;
+    }
+
+    // Fallback to standard Date parsing
+    const d = new Date(str.replace(' ', 'T'));
+    if (!isNaN(d.getTime())) {
+        const year = d.getFullYear();
+        const monthName = months[d.getMonth()];
+        const day = d.getDate();
+        let hour = d.getHours();
+        const min = String(d.getMinutes()).padStart(2, '0');
+        const ampm = hour >= 12 ? 'PM' : 'AM';
+        hour = hour % 12;
+        if (hour === 0) hour = 12;
+        const hourStr = String(hour).padStart(2, '0');
+        return `${day} ${monthName} ${year}, ${hourStr}:${min} ${ampm}`;
+    }
+
+    return str;
+}
+window.formatMatchTime12Hour = formatMatchTime12Hour;
+
 function parseMatchTimestamp(timeStr) {
     if (!timeStr) return null;
     const str = String(timeStr).trim();
-    // 1. Manual regex parse for YYYY-MM-DD HH:mm(:ss)? to guarantee local time in all browsers
-    const match = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})[ T](\d{1,2}):(\d{1,2})(?::(\d{1,2}))?/);
-    if (match) {
-        const year = parseInt(match[1], 10);
-        const month = parseInt(match[2], 10) - 1;
-        const day = parseInt(match[3], 10);
-        const hour = parseInt(match[4], 10);
-        const min = parseInt(match[5], 10);
-        const sec = match[6] ? parseInt(match[6], 10) : 0;
+    if (!str) return null;
+
+    // 1. Manual regex parse for YYYY-MM-DD HH:mm(:ss)? with optional AM/PM
+    const matchYMD = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})[ T](\d{1,2}):(\d{1,2})(?::(\d{1,2}))?(?:\s*(AM|PM))?/i);
+    if (matchYMD) {
+        const year = parseInt(matchYMD[1], 10);
+        const month = parseInt(matchYMD[2], 10) - 1;
+        const day = parseInt(matchYMD[3], 10);
+        let hour = parseInt(matchYMD[4], 10);
+        const min = parseInt(matchYMD[5], 10);
+        const sec = matchYMD[6] ? parseInt(matchYMD[6], 10) : 0;
+        const ampm = matchYMD[7] ? matchYMD[7].toUpperCase() : null;
+        if (ampm === 'PM' && hour < 12) hour += 12;
+        if (ampm === 'AM' && hour === 12) hour = 0;
         const d = new Date(year, month, day, hour, min, sec);
         if (!isNaN(d.getTime())) return d.getTime();
     }
-    // 2. Fallback to standard ISO
+
+    // 2. Parse "DD Mon YYYY, hh:mm AM/PM" (e.g. "19 Sep 2026, 10:59 PM")
+    const matchDMY = str.match(/^(\d{1,2})\s+([A-Za-z]{3,9})\s+(\d{4}),?\s+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?(?:\s*(AM|PM))?/i);
+    if (matchDMY) {
+        const day = parseInt(matchDMY[1], 10);
+        const monthStr = matchDMY[2].toLowerCase().slice(0, 3);
+        const year = parseInt(matchDMY[3], 10);
+        let hour = parseInt(matchDMY[4], 10);
+        const min = parseInt(matchDMY[5], 10);
+        const sec = matchDMY[6] ? parseInt(matchDMY[6], 10) : 0;
+        const ampm = matchDMY[7] ? matchDMY[7].toUpperCase() : null;
+        if (ampm === 'PM' && hour < 12) hour += 12;
+        if (ampm === 'AM' && hour === 12) hour = 0;
+        const monthNames = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+        const monthIdx = monthNames.indexOf(monthStr);
+        if (monthIdx !== -1) {
+            const d = new Date(year, monthIdx, day, hour, min, sec);
+            if (!isNaN(d.getTime())) return d.getTime();
+        }
+    }
+
+    // 3. Fallback to standard ISO / Date parsing
     const isoStr = str.replace(' ', 'T');
     const d = new Date(isoStr);
-    return isNaN(d.getTime()) ? null : d.getTime();
+    if (!isNaN(d.getTime())) return d.getTime();
+    const dDirect = new Date(str);
+    return isNaN(dDirect.getTime()) ? null : dDirect.getTime();
 }
 
 function formatCountdown(targetTime, status) {
@@ -1975,7 +2053,7 @@ function renderMatches() {
                             <span class="match-format-monitor ${fmt.cssClass}" style="display: inline-flex; align-items: center; gap: 4px; font-size: 0.74rem; font-weight: 800; padding: 2.5px 9px; border-radius: 999px; letter-spacing: 0.5px; text-transform: uppercase; font-family: 'Rajdhani', sans-serif; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05); line-height: 1.2; ${fmt.inlineStyle}">${fmt.icon} ${fmt.label}</span>
                         </div>
                         <div class="match-title">${escapeHtml(m.title)}</div>
-                        <div class="match-time-badge">⏰ ${escapeHtml(m.match_time || '')}</div>
+                        <div class="match-time-badge">⏰ ${escapeHtml(formatMatchTime12Hour(m.match_time))}</div>
                     </div>
                     <div class="match-map">🗺️ ${escapeHtml(m.map_name || 'Bermuda')}</div>
                 </div>
@@ -2402,7 +2480,7 @@ function openRoomBottomSheet(matchId) {
     const passEl = document.getElementById('bsRoomPassVal');
 
     if (titleEl) titleEl.innerText = `${m.match_code ? `[#${m.match_code}] ` : ''}${m.title || 'Tournament Match'}`;
-    if (subtitleEl) subtitleEl.innerText = `Type: ${m.match_type || 'Solo'} • Time: ${m.match_time || 'Upcoming'}`;
+    if (subtitleEl) subtitleEl.innerText = `Type: ${m.match_type || 'Solo'} • Time: ${formatMatchTime12Hour(m.match_time)}`;
     
     if (slotEl) {
         if (m.has_joined) {
@@ -2692,7 +2770,7 @@ async function openMatchInnerPortal(matchId) {
     if (titleEl) titleEl.innerText = `${m.match_code ? `[#${m.match_code}] ` : ''}${m.title || 'Match Details'}`;
 
     const subEl = document.getElementById('portalModalSubtitle');
-    if (subEl) subEl.innerText = `Match Code: #${m.match_code || ('MATCH-' + m.id)} • Type: ${m.match_type || 'Solo'} • Time: ${m.match_time || 'Upcoming'}`;
+    if (subEl) subEl.innerText = `Match Code: #${m.match_code || ('MATCH-' + m.id)} • Type: ${m.match_type || 'Solo'} • Time: ${formatMatchTime12Hour(m.match_time)}`;
 
     const slotEl = document.getElementById('portalModalSlot');
     if (slotEl) {
@@ -3025,7 +3103,7 @@ function renderMyMatches() {
                             <span class="match-format-monitor ${fmt.cssClass}" style="display: inline-flex; align-items: center; gap: 4px; font-size: 0.74rem; font-weight: 800; padding: 2.5px 9px; border-radius: 999px; letter-spacing: 0.5px; text-transform: uppercase; font-family: 'Rajdhani', sans-serif; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05); line-height: 1.2; ${fmt.inlineStyle}">${fmt.icon} ${fmt.label}</span>
                         </div>
                         <div class="match-title">${escapeHtml(m.title)}</div>
-                        <div class="match-time-badge">⏰ ${escapeHtml(m.match_time || '')}</div>
+                        <div class="match-time-badge">⏰ ${escapeHtml(formatMatchTime12Hour(m.match_time))}</div>
                     </div>
                     <div class="match-map">🗺️ ${escapeHtml(m.map_name || 'Bermuda')}</div>
                 </div>
@@ -4384,7 +4462,7 @@ function renderAdminMatches() {
                     <span class="match-format-monitor ${fmt.cssClass}" style="display: inline-flex; align-items: center; gap: 4px; font-size: 0.68rem; font-weight: 800; padding: 1px 6px; border-radius: 999px; letter-spacing: 0.5px; text-transform: uppercase; font-family: 'Rajdhani', sans-serif; margin-left: 4px; ${fmt.inlineStyle}">${fmt.icon} ${fmt.label}</span>
                 </div>
             </td>
-            <td style="font-size: 0.8rem;">${m.match_time}</td>
+            <td style="font-size: 0.8rem; font-weight: 700; color: #1e293b; white-space: nowrap;">${formatMatchTime12Hour(m.match_time)}</td>
             <td>${m.entry_fee} 🪙 / ৳${m.prize_pool}</td>
             <td>${m.joined_count} / ${m.total_slots}</td>
             <td>
@@ -5568,7 +5646,7 @@ function renderAdminMatchHistory() {
                             ⏳ ${retentionText}
                         </span>
                         <span style="font-size: 0.74rem; color: var(--text-muted);">
-                            ${m.completed_at ? m.completed_at.substring(0, 16) : (m.created_at ? m.created_at.substring(0, 16) : '')}
+                            ${formatMatchTime12Hour(m.completed_at || m.created_at || m.match_time)}
                         </span>
                         ${m.completed_by_name ? `<span style="font-size: 0.74rem; color: var(--neon-green); font-weight: 700;">🏁 ${escapeHtml(m.completed_by_name)}</span>` : ''}
                         <button type="button" class="btn btn-outline btn-xs" id="histToggleBtn-${m.id}" style="font-size: 0.75rem; font-weight: 800; padding: 4px 10px; border-radius: 6px; display: inline-flex; align-items: center; gap: 5px; pointer-events: none; border-color: rgba(255,255,255,0.2); color: #f1f5f9; background: rgba(255,255,255,0.06);">
@@ -6065,7 +6143,7 @@ async function loadCompletedResults(category, btnElem) {
                         <span class="filter-pill" style="background:#e0f2fe; color:#0369a1; border:none; padding:2px 8px; font-size:0.68rem; font-weight:700;">🔥 ${escapeHtml(catName)}</span>
                         <span class="match-format-monitor ${fmt.cssClass}" style="display: inline-flex; align-items: center; gap: 4px; font-size: 0.68rem; font-weight: 800; padding: 1px 6px; border-radius: 999px; letter-spacing: 0.5px; text-transform: uppercase; font-family: 'Rajdhani', sans-serif; ${fmt.inlineStyle}">${fmt.icon} ${fmt.label}</span>
                     </div>
-                    <span style="font-size:0.72rem; color:#64748b;">Finished: ${(m.completed_at || m.match_time || '').split(' ')[0]}</span>
+                    <span style="font-size:0.72rem; color:#64748b;">Finished: ${formatMatchTime12Hour(m.completed_at || m.match_time)}</span>
                 </div>
                 <h3 style="font-family:'Rajdhani',sans-serif; font-size:0.98rem; font-weight:800; color:#0f172a; margin:0 0 8px 0;">
                     ${escapeHtml(m.title)}
@@ -6445,7 +6523,8 @@ function renderAdminResultDropdown() {
             filtered.map(m => {
                 const statusTxt = m.status === 'completed' ? '🏁 Finished' : (m.status === 'reg_closed' ? '🔒 Closed' : '🟢 Open');
                 const codeTag = m.match_code ? `[#${m.match_code}]` : `#${m.id}`;
-                return `<option value="${m.id}">${codeTag} [${m.match_type}] ${escapeHtml(m.title)} (${statusTxt})</option>`;
+                const timeTag = m.match_time ? ` - ⏰ ${formatMatchTime12Hour(m.match_time)}` : '';
+                return `<option value="${m.id}">${codeTag} [${m.match_type}] ${escapeHtml(m.title)}${timeTag} (${statusTxt})</option>`;
             }).join('');
     }
 
@@ -6485,6 +6564,8 @@ async function onAdminSelectResultMatch() {
         const codeBanner = m.match_code ? `[#${m.match_code}] ` : `#${m.id} - `;
         document.getElementById('resMatchTitleText').innerText = `${codeBanner}${m.title}`;
         document.getElementById('resMatchTypeText').innerText = m.match_type;
+        const resTimeEl = document.getElementById('resMatchTimeText');
+        if (resTimeEl) resTimeEl.innerText = formatMatchTime12Hour(m.match_time);
         document.getElementById('resPerKillRate').innerText = m.per_kill || 0;
         document.getElementById('resPrizePool').innerText = m.prize_pool || 0;
         document.getElementById('resJoinedCount').innerText = participants.length;

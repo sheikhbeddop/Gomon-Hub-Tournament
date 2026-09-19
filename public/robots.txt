@@ -1,6 +1,24 @@
-User-agent: *
-Disallow: /
+# Googlebot & Bingbot Allowed
+User-agent: Googlebot
+Allow: /
+Disallow: /admin
+Disallow: /api/admin/
+Disallow: /api/super-admin/
 
+User-agent: Bingbot
+Allow: /
+Disallow: /admin
+Disallow: /api/admin/
+Disallow: /api/super-admin/
+
+# Default for legitimate search engines
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /api/admin/
+Disallow: /api/super-admin/
+
+# Block unwanted AI scrapers and aggressive crawlers
 User-agent: GPTBot
 Disallow: /
 
@@ -13,14 +31,13 @@ Disallow: /
 User-agent: Claude-Web
 Disallow: /
 
-User-agent: PerplexityBot
-Disallow: /
-
-User-agent: Google-Extended
+User-agent: Bytespider
 Disallow: /
 
 User-agent: CCBot
 Disallow: /
 
-User-agent: Bytespider
+User-agent: PerplexityBot
 Disallow: /
+
+Sitemap: /sitemap.xml

@@ -1398,9 +1398,22 @@
 
                 <!-- 4. Participants Table with Quick Kill / Rank Input -->
                 <div id="adminResultParticipantsContainer" style="display: none; margin-bottom: 16px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; flex-wrap: wrap; gap: 6px;">
                         <h4 style="font-family: 'Rajdhani', sans-serif; font-size: 0.92rem; font-weight: 800; color: #0f172a; margin: 0;">Enter Player Kills & Rank Positions</h4>
-                        <span style="font-size: 0.72rem; color: #64748b;">(Prize amounts calculate automatically per kill)</span>
+                        <span style="font-size: 0.72rem; color: #64748b;">(একাধিক স্লট নিলে প্রাইজ নিজে থেকেই যোগ হয়ে যাবে)</span>
+                    </div>
+
+                    <!-- 1-Click Booyah Shortcuts for Clash Squad (Team 1 vs Team 2) -->
+                    <div id="csQuickBooyahButtons" style="display: none; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 7px 10px; margin-bottom: 8px; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px;">
+                        <span style="font-size: 0.74rem; font-weight: 800; color: #334155;">⚡ 1-Click Booyah Winner:</span>
+                        <div style="display: flex; gap: 6px;">
+                            <button type="button" class="btn btn-sm" onclick="quickFillCsBooyah(1)" style="background: #ecfdf5; color: #047857; border: 1.5px solid #10b981; font-weight: 800; font-size: 0.76rem; border-radius: 6px; padding: 4px 10px; cursor: pointer;">
+                                👑 Team 1 Won (Slots 1-4)
+                            </button>
+                            <button type="button" class="btn btn-sm" onclick="quickFillCsBooyah(2)" style="background: #eff6ff; color: #1d4ed8; border: 1.5px solid #3b82f6; font-weight: 800; font-size: 0.76rem; border-radius: 6px; padding: 4px 10px; cursor: pointer;">
+                                👑 Team 2 Won (Slots 5-8)
+                            </button>
+                        </div>
                     </div>
                     <div style="overflow-x: auto; background: white; border: 1px solid #e2e8f0; border-radius: 8px;">
                         <table style="width: 100%; font-size: 0.74rem; border-collapse: collapse; text-align: left;">
@@ -2375,6 +2388,22 @@
                             <span style="display: flex; align-items: center; gap: 5px;">🏆 <b>Prize Breakdown (স্থান ভিত্তিক প্রাইজ লিস্ট)</b></span>
                             <span style="font-size: 0.7rem; color: #b45309;">(অটো যোগ হবে)</span>
                         </div>
+                        <!-- Smart Per-Player Win Prize Helper for Clash Squad / Squads -->
+                        <div id="csPrizeHelperStrip" style="background: #ecfdf5; border: 1.5px solid #a7f3d0; border-radius: 8px; padding: 8px 10px; margin-bottom: 10px;">
+                            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px;">
+                                <span style="font-size: 0.78rem; font-weight: 800; color: #047857;">
+                                    💡 প্রতি প্লেয়ার জিতলে কত পাবে? (Per-Player Win):
+                                </span>
+                                <div style="display: flex; align-items: center; gap: 4px;">
+                                    <span style="font-size: 0.85rem; font-weight: 800; color: #065f46;">৳</span>
+                                    <input type="number" id="csPerPlayerPrizeInput" placeholder="14" style="width: 75px; padding: 4px 6px; font-size: 0.85rem; font-weight: 800; border-radius: 6px; border: 1.5px solid #10b981; text-align: center; color: #065f46;" oninput="applyCsPerPlayerPrize()">
+                                </div>
+                            </div>
+                            <div id="csHelperText" style="font-size: 0.7rem; color: #059669; font-weight: 700; margin-top: 3px;">
+                                এখানে লিখলে পুরো টিমের প্রাইজ স্বয়ংক্রিয়ভাবে হিসাব হয়ে যাবে।
+                            </div>
+                        </div>
+
                         <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 10px;">
                             <div class="form-group" style="margin-bottom: 0;">
                                 <label class="form-label" style="font-size: 0.72rem; color: #b45309; font-weight: 800;">👑 1st (Winner)</label>
@@ -2533,6 +2562,10 @@
                     <div style="display: flex; justify-content: space-between;">
                         <span style="color: #64748b; font-size: 0.85rem; font-weight: 600;">Your Balance:</span>
                         <b id="joinModalUserBal" style="color: #059669; font-size: 0.95rem; font-weight: 800;">100 Digits</b>
+                    </div>
+                    <div id="joinModalWinPrizeRow" style="display: flex; justify-content: space-between; margin-top: 6px; padding-top: 6px; border-top: 1px dashed #cbd5e1;">
+                        <span style="color: #047857; font-size: 0.85rem; font-weight: 700;">🎯 Booyah Win Prize (জিতলে পাবেন):</span>
+                        <b id="joinModalWinPrize" style="color: #059669; font-size: 0.98rem; font-weight: 900; font-family: 'Rajdhani', sans-serif;">৳14</b>
                     </div>
                 </div>
 

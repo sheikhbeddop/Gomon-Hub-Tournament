@@ -4594,7 +4594,7 @@ def serve_google_verification(code: str):
     fpath = os.path.join(public_dir, fname)
     if os.path.exists(fpath):
         return FileResponse(fpath, media_type="text/html")
-    return Response(content=f"google-site-verification: google{code}.html", media_type="text/html")
+    return Response(status_code=404, content="File not found", media_type="text/plain")
 
 if __name__ == "__main__":
     import uvicorn

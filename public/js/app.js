@@ -2092,6 +2092,25 @@ function selectJoinEntrySlots(count) {
         feeEl.innerText = count > 1 ? `${totalFee} Digits (${currentJoinFeePerSlot} × ${count})` : `${totalFee} Digits`;
     }
 
+    // Calculate and display dynamic Win Prize for selected slots
+    const winPrizeEl = document.getElementById('joinModalWinPrize');
+    const winPrizeRow = document.getElementById('joinModalWinPrizeRow');
+    if (winPrizeEl && winPrizeRow && currentJoinMatch) {
+        const m = currentJoinMatch;
+        const winnerPrize = (m.prize_breakdown && m.prize_breakdown.winner) ? parseInt(m.prize_breakdown.winner, 10) : (parseInt(m.prize_pool, 10) || 0);
+        const totalSlots = parseInt(m.total_slots, 10) || 48;
+        const isTeamMatch = (totalSlots <= 8) || (m.match_type || '').toLowerCase().includes('clash') || (m.match_type || '').toLowerCase().includes('cs') || (m.match_type || '').toLowerCase().includes('lone');
+        const teamSlots = isTeamMatch ? Math.max(1, Math.round(totalSlots / 2)) : (totalSlots > 8 ? 1 : Math.max(1, Math.round(totalSlots / 2)));
+        const perSlotPrize = Math.round(winnerPrize / teamSlots);
+        const myWinShare = perSlotPrize * count;
+        if (myWinShare > 0) {
+            winPrizeRow.style.display = 'flex';
+            winPrizeEl.innerText = count > 1 ? `৳${myWinShare} (${count}টি স্লট)` : `৳${myWinShare}`;
+        } else {
+            winPrizeRow.style.display = 'none';
+        }
+    }
+
     // Check user balance
     const userBal = (currentUser && currentUser.digits_balance) ? currentUser.digits_balance : 0;
     const warnEl = document.getElementById('joinModalFeeWarning');
@@ -2445,6 +2464,35 @@ function calcTotalPrizePool() {
         totalEl.value = w + s + t;
     }
 }
+
+function applyCsPerPlayerPrize() {
+    const input = document.getElementById('csPerPlayerPrizeInput');
+    const perPlayer = parseInt(input ? input.value : 0, 10) || 0;
+    const slotsEl = document.getElementById('matchSlots');
+    const totalSlots = parseInt(slotsEl ? slotsEl.value : 8, 10) || 8;
+    const winningPlayers = Math.max(1, Math.round(totalSlots / 2));
+    const totalWinnerPrize = perPlayer * winningPlayers;
+
+    const wInput = document.getElementById('matchPrizeWinner');
+    const sInput = document.getElementById('matchPrizeSecond');
+    const tInput = document.getElementById('matchPrizeThird');
+    const killInput = document.getElementById('matchPerKill');
+
+    if (wInput) wInput.value = totalWinnerPrize;
+    if (sInput) sInput.value = 0;
+    if (tInput) tInput.value = 0;
+    if (killInput && (killInput.value === '12' || !killInput.value)) killInput.value = 0;
+
+    calcTotalPrizePool();
+
+    const helperText = document.getElementById('csHelperText');
+    if (helperText) {
+        helperText.innerText = perPlayer > 0 
+            ? `✅ উইনার দলের ${winningPlayers} জন × ৳${perPlayer} = মোট ৳${totalWinnerPrize} অটো-সেট করা হয়েছে।`
+            : `এখানে লিখলে পুরো টিমের প্রাইজ স্বয়ংক্রিয়ভাবে হিসাব হয়ে যাবে।`;
+    }
+}
+window.applyCsPerPlayerPrize = applyCsPerPlayerPrize;
 
 function openPrizeBreakdownModal(matchId) {
     currentPrizeModalMatchId = matchId;
@@ -6451,30 +6499,38 @@ async function onAdminSelectResultMatch() {
         }
 
         tbody.innerHTML = participants.map((p, idx) => {
+            const slotNum = p.slot_number || (idx + 1);
             const kills = p.kills || 0;
             const rankPos = p.rank_position || '';
             const rankPrize = p.rank_prize || 0;
             const killPrize = kills * (m.per_kill || 0);
             const totalPrize = p.total_prize || (killPrize + rankPrize);
 
+            const isTeammate = p.is_leader === 0;
+            const teammateBadge = isTeammate 
+                ? `<span style="font-size: 0.65rem; background: #e0f2fe; color: #0369a1; padding: 1px 6px; border-radius: 4px; font-weight: 700; margin-left: 4px;">👥 Teammate</span>`
+                : `<span style="font-size: 0.65rem; background: #ecfdf5; color: #047857; padding: 1px 6px; border-radius: 4px; font-weight: 700; margin-left: 4px;">👑 Booker</span>`;
+
             return `
-                <tr id="resRow_${p.user_id}" style="border-bottom:1px solid #f1f5f9;">
-                    <td style="padding:6px 8px; font-weight:700; color:#64748b;">#${p.slot_number || (idx + 1)}</td>
+                <tr id="resRow_slot_${slotNum}" style="border-bottom:1px solid #f1f5f9;">
+                    <td style="padding:6px 8px; font-weight:700; color:#64748b;">#${slotNum}</td>
                     <td style="padding:6px 8px;">
-                        <div style="font-weight:700; color:#0f172a;">${escapeHtml(p.ff_ign || p.username)}</div>
+                        <div style="font-weight:700; color:#0f172a; display: flex; align-items: center; flex-wrap: wrap;">
+                            ${escapeHtml(p.ff_ign || p.username)} ${teammateBadge}
+                        </div>
                         <div style="font-size:0.68rem; color:#64748b;">@${escapeHtml(p.username)} • UID: ${escapeHtml(p.ff_uid || 'N/A')}</div>
                     </td>
                     <td style="padding:6px 8px;">
-                        <input type="number" id="resRank_${p.user_id}" class="input-glow" value="${rankPos}" min="0" max="50" placeholder="Rank" style="width:100%; padding:4px 6px; font-size:0.75rem; border-radius:4px; border:1px solid #cbd5e1;" oninput="calcRowPrize(${p.user_id})">
+                        <input type="number" id="resRank_slot_${slotNum}" data-slot="${slotNum}" data-userid="${p.user_id}" class="input-glow" value="${rankPos}" min="0" max="50" placeholder="Rank" style="width:100%; padding:4px 6px; font-size:0.75rem; border-radius:4px; border:1px solid #cbd5e1;">
                     </td>
                     <td style="padding:6px 8px;">
-                        <input type="number" id="resKills_${p.user_id}" class="input-glow" value="${kills}" min="0" max="99" placeholder="0" style="width:100%; padding:4px 6px; font-size:0.75rem; border-radius:4px; border:1px solid #cbd5e1;" oninput="calcRowPrize(${p.user_id})">
+                        <input type="number" id="resKills_slot_${slotNum}" data-slot="${slotNum}" data-userid="${p.user_id}" class="input-glow" value="${kills}" min="0" max="99" placeholder="0" style="width:100%; padding:4px 6px; font-size:0.75rem; border-radius:4px; border:1px solid #cbd5e1;" oninput="calcRowPrizeBySlot(${slotNum})">
                     </td>
                     <td style="padding:6px 8px;">
-                        <input type="number" id="resRankPrize_${p.user_id}" class="input-glow" value="${rankPrize}" min="0" placeholder="0" style="width:100%; padding:4px 6px; font-size:0.75rem; border-radius:4px; border:1px solid #cbd5e1;" oninput="calcRowPrize(${p.user_id})">
+                        <input type="number" id="resRankPrize_slot_${slotNum}" data-slot="${slotNum}" data-userid="${p.user_id}" class="input-glow" value="${rankPrize}" min="0" placeholder="0" style="width:100%; padding:4px 6px; font-size:0.75rem; border-radius:4px; border:1px solid #cbd5e1;" oninput="calcRowPrizeBySlot(${slotNum})">
                     </td>
                     <td style="padding:6px 8px; text-align:right;">
-                        <span id="resTotalPrizeText_${p.user_id}" style="font-family:'Rajdhani',sans-serif; font-size:0.95rem; font-weight:800; color:#059669;">৳${totalPrize}</span>
+                        <span id="resTotalPrizeText_slot_${slotNum}" style="font-family:'Rajdhani',sans-serif; font-size:0.95rem; font-weight:800; color:#059669;">৳${totalPrize}</span>
                     </td>
                 </tr>
             `;
@@ -6482,6 +6538,13 @@ async function onAdminSelectResultMatch() {
 
         document.getElementById('adminResultParticipantsContainer').style.display = 'block';
         document.getElementById('adminPublishBtnWrapper').style.display = 'block';
+
+        // Show 1-Click Booyah Shortcuts for 4v4 / 2v2 / Clash Squad matches
+        const isCsOrFewSlots = (m.total_slots <= 8) || (m.match_type || '').toLowerCase().includes('clash') || (m.match_type || '').toLowerCase().includes('cs');
+        const booyahStrip = document.getElementById('csQuickBooyahButtons');
+        if (booyahStrip) {
+            booyahStrip.style.display = isCsOrFewSlots ? 'flex' : 'none';
+        }
 
         // Update notice & submit button based on finished vs pending match
         const isFinished = m.status === 'completed';
@@ -6508,21 +6571,53 @@ async function onAdminSelectResultMatch() {
     }
 }
 
-function calcRowPrize(userId) {
+function calcRowPrizeBySlot(slotNum) {
     if (!currentAdminResultMatchData || !currentAdminResultMatchData.match) return;
     const perKill = currentAdminResultMatchData.match.per_kill || 0;
     
-    const killsInput = document.getElementById(`resKills_${userId}`);
-    const rankPrizeInput = document.getElementById(`resRankPrize_${userId}`);
-    const totalSpan = document.getElementById(`resTotalPrizeText_${userId}`);
+    const killsInput = document.getElementById(`resKills_slot_${slotNum}`);
+    const rankPrizeInput = document.getElementById(`resRankPrize_slot_${slotNum}`);
+    const totalSpan = document.getElementById(`resTotalPrizeText_slot_${slotNum}`);
 
-    const kills = parseInt(killsInput ? killsInput.value : 0) || 0;
-    const rankPrize = parseInt(rankPrizeInput ? rankPrizeInput.value : 0) || 0;
+    const kills = parseInt(killsInput ? killsInput.value : 0, 10) || 0;
+    const rankPrize = parseInt(rankPrizeInput ? rankPrizeInput.value : 0, 10) || 0;
     const total = (kills * perKill) + rankPrize;
 
     if (totalSpan) {
         totalSpan.innerText = '৳' + total;
     }
+}
+window.calcRowPrizeBySlot = calcRowPrizeBySlot;
+
+function quickFillCsBooyah(winningTeam) {
+    if (!currentAdminResultMatchData || !currentAdminResultMatchData.match) return;
+    const m = currentAdminResultMatchData.match;
+    const participants = currentAdminResultMatchData.participants || [];
+    const totalSlots = m.total_slots || 8;
+    const halfSlots = Math.round(totalSlots / 2) || 4;
+    const winnerPrize = (m.prize_breakdown && m.prize_breakdown.winner) ? parseInt(m.prize_breakdown.winner, 10) : (parseInt(m.prize_pool, 10) || 56);
+    const perSlotPrize = Math.round(winnerPrize / halfSlots) || 14;
+
+    participants.forEach(p => {
+        const slotNum = p.slot_number;
+        const isWinningTeam = winningTeam === 1 ? (slotNum <= halfSlots) : (slotNum > halfSlots);
+        const rankInput = document.getElementById(`resRank_slot_${slotNum}`);
+        const killsInput = document.getElementById(`resKills_slot_${slotNum}`);
+        const rankPrizeInput = document.getElementById(`resRankPrize_slot_${slotNum}`);
+
+        if (rankInput) rankInput.value = isWinningTeam ? 1 : 2;
+        if (killsInput) killsInput.value = 0;
+        if (rankPrizeInput) rankPrizeInput.value = isWinningTeam ? perSlotPrize : 0;
+
+        calcRowPrizeBySlot(slotNum);
+    });
+
+    showToast(`👑 Auto-filled Booyah for Team ${winningTeam}! (৳${perSlotPrize}/slot)`, 'success');
+}
+window.quickFillCsBooyah = quickFillCsBooyah;
+
+function calcRowPrize(userId) {
+    // Backward-compatibility wrapper
 }
 
 async function submitMatchResultsPublish() {
@@ -6540,23 +6635,36 @@ async function submitMatchResultsPublish() {
     const matchId = currentAdminResultMatchData.match.id;
     const participants = currentAdminResultMatchData.participants || [];
 
-    const results = [];
+    // Group by user_id and automatically SUM rank_prize and kills across all slots booked by each user
+    const userTotals = {};
     for (const p of participants) {
-        const rankInput = document.getElementById(`resRank_${p.user_id}`);
-        const killsInput = document.getElementById(`resKills_${p.user_id}`);
-        const rankPrizeInput = document.getElementById(`resRankPrize_${p.user_id}`);
+        const slotNum = p.slot_number;
+        const rankInput = document.getElementById(`resRank_slot_${slotNum}`) || document.getElementById(`resRank_${p.user_id}`);
+        const killsInput = document.getElementById(`resKills_slot_${slotNum}`) || document.getElementById(`resKills_${p.user_id}`);
+        const rankPrizeInput = document.getElementById(`resRankPrize_slot_${slotNum}`) || document.getElementById(`resRankPrize_${p.user_id}`);
 
-        const rankPos = parseInt(rankInput ? rankInput.value : 0) || 0;
-        const kills = parseInt(killsInput ? killsInput.value : 0) || 0;
-        const rankPrize = parseInt(rankPrizeInput ? rankPrizeInput.value : 0) || 0;
+        const rankPos = parseInt(rankInput ? rankInput.value : 0, 10) || 0;
+        const kills = parseInt(killsInput ? killsInput.value : 0, 10) || 0;
+        const rankPrize = parseInt(rankPrizeInput ? rankPrizeInput.value : 0, 10) || 0;
 
-        results.push({
-            user_id: p.user_id,
-            rank_position: rankPos,
-            kills: kills,
-            rank_prize: rankPrize
-        });
+        if (!userTotals[p.user_id]) {
+            userTotals[p.user_id] = {
+                user_id: p.user_id,
+                rank_position: rankPos,
+                kills: kills,
+                rank_prize: rankPrize
+            };
+        } else {
+            // User booked multiple slots! Auto-sum kills and rank_prize!
+            userTotals[p.user_id].kills += kills;
+            userTotals[p.user_id].rank_prize += rankPrize;
+            if (rankPos > 0 && (userTotals[p.user_id].rank_position === 0 || rankPos < userTotals[p.user_id].rank_position)) {
+                userTotals[p.user_id].rank_position = rankPos;
+            }
+        }
     }
+
+    const results = Object.values(userTotals);
 
     try {
         const res = await fetchWithAuth(`/api/admin/matches/${matchId}/publish-results`, {

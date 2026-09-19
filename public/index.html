@@ -1353,13 +1353,24 @@
                 <button type="button" class="btn-close" onclick="closeModal('publishResultModal')">&times;</button>
             </div>
             <div class="modal-body" style="padding: 14px 16px;">
-                <!-- 1. Category Filter Chips -->
-                <div style="display: flex; gap: 6px; margin-bottom: 12px; align-items: center; flex-wrap: wrap;">
-                    <span style="font-size: 0.74rem; font-weight: 700; color: #64748b;">Category:</span>
-                    <button class="filter-pill active" id="adminResCat-all" onclick="filterAdminResultMatches('all', this)">All Matches</button>
-                    <button class="filter-pill" id="adminResCat-Solo" onclick="filterAdminResultMatches('Solo', this)">Solo</button>
-                    <button class="filter-pill" id="adminResCat-Duo" onclick="filterAdminResultMatches('Duo', this)">Duo</button>
-                    <button class="filter-pill" id="adminResCat-Squad" onclick="filterAdminResultMatches('Squad', this)">Squad</button>
+                <!-- 1. Category & Status Filter Chips -->
+                <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px;">
+                    <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
+                        <span style="font-size: 0.74rem; font-weight: 800; color: #475569; min-width: 62px;">Status:</span>
+                        <button type="button" class="filter-pill status-filter-pill active" id="adminResStatus-pending" onclick="filterAdminResultStatus('pending', this)">
+                            🟢 Pending Matches
+                        </button>
+                        <button type="button" class="filter-pill status-filter-pill" id="adminResStatus-finished" onclick="filterAdminResultStatus('finished', this)">
+                            🏁 Finished Matches
+                        </button>
+                    </div>
+                    <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
+                        <span style="font-size: 0.74rem; font-weight: 800; color: #475569; min-width: 62px;">Category:</span>
+                        <button type="button" class="filter-pill cat-filter-pill active" id="adminResCat-all" onclick="filterAdminResultMatches('all', this)">All</button>
+                        <button type="button" class="filter-pill cat-filter-pill" id="adminResCat-Solo" onclick="filterAdminResultMatches('Solo', this)">Solo</button>
+                        <button type="button" class="filter-pill cat-filter-pill" id="adminResCat-Duo" onclick="filterAdminResultMatches('Duo', this)">Duo</button>
+                        <button type="button" class="filter-pill cat-filter-pill" id="adminResCat-Squad" onclick="filterAdminResultMatches('Squad', this)">Squad</button>
+                    </div>
                 </div>
 
                 <!-- 2. Select Match Dropdown -->
@@ -1412,7 +1423,10 @@
 
                 <!-- 5. 1-Click Payout & Publish Button -->
                 <div id="adminPublishBtnWrapper" style="display: none;">
-                    <button type="button" class="btn btn-neon" onclick="submitMatchResultsPublish()" style="width: 100%; padding: 11px; font-weight: 800; font-size: 0.92rem; background: linear-gradient(135deg, #059669, #047857); border: none; color: white; border-radius: 8px; cursor: pointer; box-shadow: 0 4px 12px rgba(5, 150, 105, 0.3);">
+                    <div id="adminResultEditNotice" style="display: none; background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 8px 12px; margin-bottom: 10px; font-size: 0.76rem; color: #92400e; font-weight: 700; align-items: center; gap: 6px;">
+                        <span>⚠️ This match is already finished! You are in Result Edit mode. Updating will automatically adjust player wallet balance differences.</span>
+                    </div>
+                    <button type="button" id="adminPublishResultBtn" class="btn btn-neon" onclick="submitMatchResultsPublish()" style="width: 100%; padding: 11px; font-weight: 800; font-size: 0.92rem; background: linear-gradient(135deg, #059669, #047857); border: none; color: white; border-radius: 8px; cursor: pointer; box-shadow: 0 4px 12px rgba(5, 150, 105, 0.3);">
                         🚀 Distribute Prizes & Publish Results
                     </button>
                 </div>

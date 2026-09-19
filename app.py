@@ -4576,27 +4576,17 @@ def serve_manifest():
 
 @app.get("/robots.txt")
 def serve_robots():
-    content = (
-        "User-agent: *\n"
-        "Disallow: /\n\n"
-        "User-agent: GPTBot\n"
-        "Disallow: /\n\n"
-        "User-agent: ChatGPT-User\n"
-        "Disallow: /\n\n"
-        "User-agent: ClaudeBot\n"
-        "Disallow: /\n\n"
-        "User-agent: Claude-Web\n"
-        "Disallow: /\n\n"
-        "User-agent: PerplexityBot\n"
-        "Disallow: /\n\n"
-        "User-agent: Google-Extended\n"
-        "Disallow: /\n\n"
-        "User-agent: CCBot\n"
-        "Disallow: /\n\n"
-        "User-agent: Bytespider\n"
-        "Disallow: /\n"
-    )
-    return Response(content=content, media_type="text/plain")
+    robots_file = os.path.join(public_dir, "robots.txt")
+    if os.path.exists(robots_file):
+        return FileResponse(robots_file, media_type="text/plain", headers={"Cache-Control": "public, max-age=3600"})
+    return Response(content="User-agent: *\nAllow: /\nDisallow: /admin\n", media_type="text/plain")
+
+@app.get("/sitemap.xml")
+def serve_sitemap():
+    sitemap_file = os.path.join(public_dir, "sitemap.xml")
+    if os.path.exists(sitemap_file):
+        return FileResponse(sitemap_file, media_type="application/xml", headers={"Cache-Control": "public, max-age=3600"})
+    return Response(content='<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>/</loc></url></urlset>', media_type="application/xml")
 
 if __name__ == "__main__":
     import uvicorn

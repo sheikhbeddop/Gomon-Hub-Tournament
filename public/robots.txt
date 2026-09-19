@@ -40,4 +40,4 @@ Disallow: /
 User-agent: PerplexityBot
 Disallow: /
 
-Sitemap: /sitemap.xml
+Sitemap: https://tournament-website-controller.onrender.com/sitemap.xml

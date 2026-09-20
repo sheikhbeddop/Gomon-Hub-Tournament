@@ -1915,6 +1915,34 @@ body {
     background: #f1f5f9;
 }
 
+/* Admin Wide Screen Dashboard Mode */
+body:has(#tab-admin.active) .main-container,
+.main-container.admin-wide-mode {
+    max-width: 97% !important;
+    padding-left: 14px !important;
+    padding-right: 14px !important;
+}
+
+#tab-admin .admin-layout {
+    gap: 16px;
+}
+
+@media (min-width: 769px) {
+    #tab-admin .admin-sidebar {
+        width: 200px;
+    }
+}
+
+#tab-admin .admin-panel-card {
+    padding: 20px 16px;
+}
+
+#adminSection-matches .table-wrapper {
+    overflow-x: auto;
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 transparent;
+}
+
 .user-action-btn-group {
     display: inline-flex;
     align-items: center;

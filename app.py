@@ -4505,18 +4505,29 @@ if not os.path.exists(public_dir):
 @app.get("/static/img/icon-512.png")
 @app.get("/static/img/icon-192.png")
 @app.get("/static/img/gomon_hub_logo.png")
+@app.get("/icon-192.png")
+@app.get("/icon-512.png")
 @app.get("/icon.png")
 @app.get("/gomon_hub_logo.png")
 @app.get("/favicon.ico")
 def serve_app_icon(request: Request):
+    req_file = request.url.path.strip("/").split("/")[-1]
+    disk_path = os.path.join(public_dir, req_file)
+    if os.path.exists(disk_path):
+        m_type = "image/x-icon" if req_file.endswith(".ico") else "image/png"
+        return FileResponse(
+            disk_path,
+            media_type=m_type,
+            headers={
+                "Cache-Control": "public, max-age=86400, stale-while-revalidate=3600"
+            }
+        )
     raw = base64.b64decode(EMBEDDED_MASCOT_B64)
     return Response(
         content=raw,
         media_type="image/png",
         headers={
-            "Cache-Control": "no-cache, no-store, must-revalidate",
-            "Pragma": "no-cache",
-            "Expires": "0"
+            "Cache-Control": "public, max-age=86400, stale-while-revalidate=3600"
         }
     )
 

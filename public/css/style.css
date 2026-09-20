@@ -1894,6 +1894,27 @@ body {
     background: #f1f5f9 !important;
 }
 
+#adminSection-matches .custom-table th,
+#adminSection-matches .custom-table td {
+    padding: 6px 8px;
+    font-size: 0.76rem;
+    vertical-align: middle;
+    white-space: nowrap;
+}
+
+#adminSection-matches .custom-table th {
+    font-size: 0.70rem;
+    font-weight: 700;
+    padding: 8px 8px;
+    color: #475569;
+    letter-spacing: 0.3px;
+    background: #f8fafc;
+}
+
+#adminSection-matches .custom-table tr:hover td {
+    background: #f1f5f9;
+}
+
 .user-action-btn-group {
     display: inline-flex;
     align-items: center;

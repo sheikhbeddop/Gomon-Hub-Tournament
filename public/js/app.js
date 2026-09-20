@@ -4429,78 +4429,77 @@ function renderAdminMatches() {
         const fmt = getMatchFormatInfo(m);
         const catName = getMatchCategoryDisplay(m.match_type);
         const updaterInfo = m.room_updated_by_name ? `
-            <div style="font-size: 0.78rem; color: var(--neon-cyan);">
-                <b>🛡️ ${escapeHtml(m.room_updated_by_name)}</b>
-                <div style="font-size: 0.68rem; color: var(--text-muted);">${m.room_updated_at ? m.room_updated_at.substring(5, 16) : ''}</div>
-                ${m.completed_by_name ? `<div style="font-size: 0.7rem; color: var(--neon-green); margin-top: 2px;">🏁 Finished by: ${escapeHtml(m.completed_by_name)}</div>` : ''}
-            </div>
-        ` : `<span style="font-size: 0.75rem; color: var(--text-muted);">Not updated yet</span>`;
+            <span style="font-size: 0.72rem; white-space: nowrap; color: #0284c7;" title="${m.completed_by_name ? 'Finished by: ' + escapeHtml(m.completed_by_name) : ''}">
+                🛡️ <b>${escapeHtml(m.room_updated_by_name)}</b> <span style="font-size: 0.65rem; color: #64748b;">(${m.room_updated_at ? m.room_updated_at.substring(5, 16) : ''})</span>
+            </span>
+        ` : `<span style="font-size: 0.72rem; color: #94a3b8; white-space: nowrap;">Not updated</span>`;
 
         let statusBadge = '';
         if (isCompleted) {
-            statusBadge = '<span class="badge-status approved" style="margin-left: 4px; font-size: 0.65rem;">Finished</span>';
+            statusBadge = '<span class="badge-status approved" style="margin-left: 2px; font-size: 0.62rem; padding: 1px 5px; white-space: nowrap;">Finished</span>';
         } else if (isStarted) {
-            statusBadge = '<span style="background: #fee2e2; color: #dc2626; border: 1px solid #f87171; border-radius: 4px; font-size: 0.65rem; font-weight: 800; padding: 1px 6px; margin-left: 4px; display: inline-flex; align-items: center; gap: 3px;">🔴 Started / Publish Result</span>';
+            statusBadge = '<span style="background: #fee2e2; color: #dc2626; border: 1px solid #f87171; border-radius: 4px; font-size: 0.62rem; font-weight: 800; padding: 1px 5px; margin-left: 2px; display: inline-flex; align-items: center; gap: 2px; white-space: nowrap;">🔴 Started</span>';
         } else if (m.status === 'reg_closed') {
-            statusBadge = '<span style="background: #fef3c7; color: #b45309; border: 1px solid #fcd34d; border-radius: 4px; font-size: 0.65rem; font-weight: 800; padding: 1px 6px; margin-left: 4px;">🔒 Reg Closed</span>';
+            statusBadge = '<span style="background: #fef3c7; color: #b45309; border: 1px solid #fcd34d; border-radius: 4px; font-size: 0.62rem; font-weight: 800; padding: 1px 5px; margin-left: 2px; white-space: nowrap;">🔒 Closed</span>';
         } else {
-            statusBadge = '<span style="background: #ecfdf5; color: #047857; border: 1px solid #6ee7b7; border-radius: 4px; font-size: 0.65rem; font-weight: 800; padding: 1px 6px; margin-left: 4px;">⏳ Upcoming</span>';
+            statusBadge = '<span style="background: #ecfdf5; color: #047857; border: 1px solid #6ee7b7; border-radius: 4px; font-size: 0.62rem; font-weight: 800; padding: 1px 5px; margin-left: 2px; white-space: nowrap;">⏳ Upcoming</span>';
         }
 
         return `
         <tr>
-            <td>
-                <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
-                    <span class="match-code-badge" style="font-size: 0.72rem; padding: 2px 6px;">#${escapeHtml(m.match_code || ('MATCH-' + m.id))}</span>
-                    <b>${escapeHtml(m.title)}</b>
+            <td style="white-space: nowrap;">
+                <div style="display: flex; align-items: center; gap: 4px; white-space: nowrap;">
+                    <span class="match-code-badge" style="font-size: 0.68rem; padding: 1px 5px; font-weight: 700;">#${escapeHtml(m.match_code || ('MATCH-' + m.id))}</span>
+                    <b style="font-size: 0.8rem; color: #0f172a; white-space: nowrap;">${escapeHtml(m.title)}</b>
                     ${statusBadge}
                 </div>
             </td>
-            <td>
-                <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+            <td style="white-space: nowrap;">
+                <div style="display: flex; align-items: center; gap: 4px; white-space: nowrap; font-size: 0.76rem;">
                     <span>${escapeHtml(catName)} (${escapeHtml(m.map_name || 'Bermuda')})</span>
-                    <span class="match-format-monitor ${fmt.cssClass}" style="display: inline-flex; align-items: center; gap: 4px; font-size: 0.68rem; font-weight: 800; padding: 1px 6px; border-radius: 999px; letter-spacing: 0.5px; text-transform: uppercase; font-family: 'Rajdhani', sans-serif; margin-left: 4px; ${fmt.inlineStyle}">${fmt.icon} ${fmt.label}</span>
+                    <span class="match-format-monitor ${fmt.cssClass}" style="display: inline-flex; align-items: center; gap: 3px; font-size: 0.62rem; font-weight: 800; padding: 1px 5px; border-radius: 999px; letter-spacing: 0.3px; text-transform: uppercase; font-family: 'Rajdhani', sans-serif; margin-left: 2px; ${fmt.inlineStyle}">${fmt.icon} ${fmt.label}</span>
                 </div>
             </td>
-            <td style="font-size: 0.8rem; font-weight: 700; color: #1e293b; white-space: nowrap;">${formatMatchTime12Hour(m.match_time)}</td>
-            <td>${m.entry_fee} 🪙 / ৳${m.prize_pool}</td>
-            <td>${m.joined_count} / ${m.total_slots}</td>
-            <td>
-                <div style="font-family: monospace; font-size: 0.82rem;">
-                    <div>ID: <b style="color: var(--neon-green);">${m.room_id || 'Not set'}</b></div>
-                    <div>Pass: <b style="color: var(--neon-cyan);">${m.room_pass || 'Not set'}</b></div>
+            <td style="font-size: 0.76rem; font-weight: 700; color: #1e293b; white-space: nowrap;">${formatMatchTime12Hour(m.match_time)}</td>
+            <td style="white-space: nowrap; font-size: 0.76rem; font-weight: 600;">${m.entry_fee} 🪙 / ৳${m.prize_pool}</td>
+            <td style="white-space: nowrap; font-size: 0.76rem; font-weight: 700; text-align: center;">${m.joined_count} / ${m.total_slots}</td>
+            <td style="white-space: nowrap;">
+                <div style="font-family: monospace; font-size: 0.72rem; white-space: nowrap; display: inline-flex; align-items: center; gap: 4px;">
+                    <span>ID: <b style="color: #059669;">${escapeHtml(m.room_id || 'Not set')}</b></span>
+                    <span style="color: #cbd5e1;">|</span>
+                    <span>Pass: <b style="color: #0284c7;">${escapeHtml(m.room_pass || 'Not set')}</b></span>
                 </div>
             </td>
-            <td>${updaterInfo}</td>
+            <td style="white-space: nowrap;">${updaterInfo}</td>
             <td style="white-space: nowrap; text-align: center;">
-                <div style="display: inline-flex; align-items: center; gap: 8px; flex-wrap: nowrap; justify-content: center;">
+                <div style="display: inline-flex; align-items: center; gap: 5px; flex-wrap: nowrap; justify-content: center;">
                     <button type="button" onclick="openMatchInnerPortal(${m.id})" 
-                        style="background: #ecfdf5; color: #047857; border: 1.5px solid #6ee7b7; font-weight: 800; font-size: 0.82rem; padding: 7px 13px; border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); transition: all 0.2s ease; white-space: nowrap;"
-                        onmouseover="this.style.background='#10b981';this.style.color='#ffffff';this.style.borderColor='#10b981';this.style.boxShadow='0 3px 8px rgba(16,185,129,0.3)';"
-                        onmouseout="this.style.background='#ecfdf5';this.style.color='#047857';this.style.borderColor='#6ee7b7';this.style.boxShadow='0 1px 3px rgba(0,0,0,0.06)';"
+                        style="background: #ecfdf5; color: #047857; border: 1.2px solid #6ee7b7; font-weight: 700; font-size: 0.72rem; padding: 4px 8px; border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; box-shadow: 0 1px 2px rgba(0,0,0,0.04); transition: all 0.2s ease; white-space: nowrap;"
+                        onmouseover="this.style.background='#10b981';this.style.color='#ffffff';this.style.borderColor='#10b981';"
+                        onmouseout="this.style.background='#ecfdf5';this.style.color='#047857';this.style.borderColor='#6ee7b7';"
                         title="View Registered Players & UIDs">
-                        <span style="font-size: 0.95rem;">👥</span> Players (${m.joined_count})
+                        <span>👥</span> Players (${m.joined_count})
                     </button>
                     <button type="button" onclick="openSetRoomModal(${m.id}, '${escapeHtml(m.room_id || '')}', '${escapeHtml(m.room_pass || '')}')"
-                        style="background: linear-gradient(135deg, #059669, #10b981); color: #ffffff; border: 1px solid #047857; font-weight: 800; font-size: 0.82rem; padding: 7px 14px; border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 2px 6px rgba(5,150,105,0.28); transition: all 0.2s ease; white-space: nowrap;"
-                        onmouseover="this.style.filter='brightness(1.1)';this.style.transform='translateY(-1px)';this.style.boxShadow='0 4px 10px rgba(5,150,105,0.4)';"
-                        onmouseout="this.style.filter='none';this.style.transform='translateY(0)';this.style.boxShadow='0 2px 6px rgba(5,150,105,0.28)';"
+                        style="background: linear-gradient(135deg, #059669, #10b981); color: #ffffff; border: 1px solid #047857; font-weight: 700; font-size: 0.72rem; padding: 4px 8px; border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; box-shadow: 0 1px 3px rgba(5,150,105,0.2); transition: all 0.2s ease; white-space: nowrap;"
+                        onmouseover="this.style.filter='brightness(1.1)';"
+                        onmouseout="this.style.filter='none';"
                         title="Set / Update Room ID & Password">
-                        <span style="font-size: 0.95rem;">🔑</span> Room ID
+                        <span>🔑</span> Room ID
                     </button>
 
                     ${!isCompleted ? `
                         <button type="button" onclick="completeMatch(${m.id}, '${escapeHtml(m.title)}')"
-                            style="${isStarted ? 'background: linear-gradient(135deg, #ea580c, #f97316); color: #ffffff; border: 1.5px solid #c2410c; box-shadow: 0 0 10px rgba(234,88,12,0.35);' : 'background: #fffbeb; color: #b45309; border: 1.5px solid #fcd34d;'} font-weight: 800; font-size: 0.82rem; padding: 7px 13px; border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); transition: all 0.2s ease; white-space: nowrap;"
+                            style="${isStarted ? 'background: linear-gradient(135deg, #ea580c, #f97316); color: #ffffff; border: 1px solid #c2410c;' : 'background: #fffbeb; color: #b45309; border: 1px solid #fcd34d;'} font-weight: 700; font-size: 0.72rem; padding: 4px 8px; border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; box-shadow: 0 1px 2px rgba(0,0,0,0.04); transition: all 0.2s ease; white-space: nowrap;"
                             onmouseover="this.style.filter='brightness(1.1)';"
                             onmouseout="this.style.filter='none';"
                             title="Finish Tournament & Distribute Prizes">
-                            <span style="font-size: 0.95rem;">🏁</span> ${isStarted ? 'Publish Result' : 'Finish'}
+                            <span>🏁</span> ${isStarted ? 'Result' : 'Finish'}
                         </button>
                     ` : ''}
                     ${isAdmin ? `
                         <button type="button" onclick="deleteMatch(${m.id})"
-                            style="background: #fef2f2; color: #dc2626; border: 1.5px solid #fca5a5; font-weight: 700; font-size: 0.92rem; width: 35px; height: 35px; border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; box-shadow: 0 1px 3px rgba(0,0,0,0.06); transition: all 0.2s ease; flex-shrink: 0;"
+                            style="background: #fef2f2; color: #dc2626; border: 1px solid #fca5a5; font-weight: 700; font-size: 0.75rem; width: 26px; height: 26px; border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; box-shadow: 0 1px 2px rgba(0,0,0,0.04); transition: all 0.2s ease; flex-shrink: 0;"
                             onmouseover="this.style.background='#ef4444';this.style.color='#ffffff';this.style.borderColor='#ef4444';this.style.boxShadow='0 3px 8px rgba(239,68,68,0.3)';"
                             onmouseout="this.style.background='#fef2f2';this.style.color='#dc2626';this.style.borderColor='#fca5a5';this.style.boxShadow='0 1px 3px rgba(0,0,0,0.06)';"
                             title="Delete Match">

@@ -5879,6 +5879,15 @@ function switchTab(tabId) {
     const targetTab = document.getElementById(tabId);
     if (targetTab) targetTab.classList.add('active');
 
+    const mainContainer = document.querySelector('.main-container');
+    if (mainContainer) {
+        if (tabId === 'tab-admin') {
+            mainContainer.classList.add('admin-wide-mode');
+        } else {
+            mainContainer.classList.remove('admin-wide-mode');
+        }
+    }
+
     const cleanName = tabId.replace('tab-', '');
     const btn = document.getElementById('tabBtn-' + cleanName);
     if (btn) btn.classList.add('active');

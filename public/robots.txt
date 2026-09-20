@@ -5,6 +5,12 @@ Disallow: /admin
 Disallow: /api/admin/
 Disallow: /api/super-admin/
 
+User-agent: Googlebot-Image
+Allow: /
+Disallow: /admin
+Disallow: /api/admin/
+Disallow: /api/super-admin/
+
 User-agent: Bingbot
 Allow: /
 Disallow: /admin

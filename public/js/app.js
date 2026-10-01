@@ -340,7 +340,11 @@ async function initAuth() {
             renderLoggedInNav();
             applyRolePermissionsUI();
             dismissSplashScreen();
-            loadMatches();
+            if (typeof restoreLastActiveView === 'function') {
+                restoreLastActiveView(true);
+            } else {
+                loadMatches();
+            }
             initWebSocket();
         } catch (e) {
             console.error('Error parsing cached user:', e);
@@ -364,8 +368,12 @@ async function initAuth() {
             renderLoggedInNav();
             renderUserProfile();
             applyRolePermissionsUI();
-            loadWalletHistory();
-            loadMatches();
+            if (typeof restoreLastActiveView === 'function') {
+                restoreLastActiveView(false);
+            } else {
+                loadWalletHistory();
+                loadMatches();
+            }
             initWebSocket();
             if (currentUser.role === 'admin') {
                 loadAdminOverview();
@@ -530,6 +538,10 @@ function renderLoggedOutNav() {
 }
 function logout(manual = true) {
     sessionStorage.removeItem('welcome_notice_dismissed');
+    sessionStorage.removeItem('current_active_tab');
+    sessionStorage.removeItem('current_admin_section');
+    sessionStorage.removeItem('current_active_modal');
+    try { history.replaceState(null, '', window.location.pathname); } catch (e) {}
     localStorage.removeItem('ff_token');
     localStorage.removeItem('ff_user');
     token = null;
@@ -5421,6 +5433,8 @@ function switchAdminSection(sectionId) {
         targetSection.classList.add('active');
     }
 
+    sessionStorage.setItem('current_admin_section', sectionId);
+
     // Dynamic data loading for the opened section
     if (sectionId === 'dashboard') {
         if (currentUser && currentUser.role === 'admin') loadAdminOverview();
@@ -5871,11 +5885,87 @@ function copyProfilePlayerId() {
 }
 
 // -------------------------------------------------------------
+// Seamless State & Tab Restoration on Page Refresh
+// -------------------------------------------------------------
+function restoreLastActiveView(isCached = false) {
+    if (!currentUser) return;
+
+    let savedTab = sessionStorage.getItem('current_active_tab');
+    if (window.location.hash) {
+        const hashClean = window.location.hash.replace('#', '').trim();
+        if (hashClean && document.getElementById('tab-' + hashClean)) {
+            savedTab = 'tab-' + hashClean;
+        }
+    }
+
+    if (!savedTab || !document.getElementById(savedTab)) {
+        savedTab = 'tab-matches';
+    }
+
+    // Role check: Only admin or moderator can stay on tab-admin
+    if (savedTab === 'tab-admin' && currentUser.role !== 'admin' && currentUser.role !== 'moderator') {
+        savedTab = 'tab-matches';
+        sessionStorage.setItem('current_active_tab', 'tab-matches');
+    }
+
+    // Switch tab with isRestore=true (preserves scroll position!)
+    switchTab(savedTab, true);
+
+    // If it's the final network-verified restore, trigger full fresh refresh
+    if (!isCached) {
+        if (savedTab === 'tab-matches') {
+            fetchMatches();
+        } else if (savedTab === 'tab-mymatches') {
+            renderMyMatches();
+        } else if (savedTab === 'tab-results') {
+            loadCompletedResults();
+        } else if (savedTab === 'tab-profile') {
+            renderUserProfile();
+            loadWalletHistory();
+        } else if (savedTab === 'tab-shop') {
+            loadWalletHistory();
+        } else if (savedTab === 'tab-admin') {
+            const savedSec = sessionStorage.getItem('current_admin_section') || (currentUser.role === 'moderator' ? 'matches' : 'dashboard');
+            switchAdminSection(savedSec);
+        }
+    }
+
+    // Restore active modal if one was open
+    const savedModal = sessionStorage.getItem('current_active_modal');
+    if (savedModal) {
+        if (savedModal === 'walletModal') {
+            openWalletModal();
+        } else if (savedModal === 'withdrawModal') {
+            openWithdrawModal();
+        } else if (savedModal === 'myProfileDetailsModal') {
+            openMyProfileModal();
+        } else if (savedModal === 'allRulesModal') {
+            openRulesModal();
+        } else {
+            const m = document.getElementById(savedModal);
+            if (m && !m.classList.contains('show')) {
+                openModal(savedModal);
+            }
+        }
+    }
+}
+
+// Browser Back/Forward navigation listener
+window.addEventListener('popstate', () => {
+    if (window.location.hash) {
+        const clean = window.location.hash.replace('#', '').trim();
+        if (clean && document.getElementById('tab-' + clean)) {
+            switchTab('tab-' + clean, true);
+        }
+    }
+});
+
+// -------------------------------------------------------------
 // Tab Switching & Modal Helpers
 // -------------------------------------------------------------
-function switchTab(tabId) {
+function switchTab(tabId, isRestore = false) {
     if (tabId === 'tab-recharge' || tabId === 'tab-shop') {
-        switchTab('tab-profile');
+        switchTab('tab-profile', isRestore);
         openWalletModal();
         return;
     }
@@ -5903,6 +5993,14 @@ function switchTab(tabId) {
     const mBtn = document.getElementById('mNav-' + cleanName);
     if (mBtn) mBtn.classList.add('active');
 
+    // Save active tab state
+    sessionStorage.setItem('current_active_tab', tabId);
+    try {
+        if (window.location.hash !== '#' + cleanName) {
+            history.replaceState(null, '', '#' + cleanName);
+        }
+    } catch (e) {}
+
     if (tabId === 'tab-profile') {
         renderUserProfile();
     } else if (tabId === 'tab-shop') {
@@ -5915,14 +6013,19 @@ function switchTab(tabId) {
         renderMyMatches();
     } else if (tabId === 'tab-admin') {
         applyRolePermissionsUI();
-        if (currentUser && currentUser.role === 'moderator') {
+        const savedSec = sessionStorage.getItem('current_admin_section');
+        if (savedSec && document.getElementById('adminSection-' + savedSec)) {
+            switchAdminSection(savedSec);
+        } else if (currentUser && currentUser.role === 'moderator') {
             switchAdminSection('matches');
         } else {
             switchAdminSection('dashboard');
         }
     }
 
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (!isRestore) {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
 }
 
 // -------------------------------------------------------------
@@ -6241,6 +6344,10 @@ function closeWelcomeNoticeOnBackdrop(e) {
 function openModal(id) {
     const modal = document.getElementById(id);
     if (modal) modal.classList.add('show');
+    const persistableModals = ['walletModal', 'withdrawModal', 'myProfileDetailsModal', 'allRulesModal', 'topPlayersModal', 'devProfileModal', 'supportModal', 'adminAuditLogsModal'];
+    if (persistableModals.includes(id)) {
+        sessionStorage.setItem('current_active_modal', id);
+    }
 }
 
 function closeModal(id) {
@@ -6249,6 +6356,9 @@ function closeModal(id) {
     }
     const modal = document.getElementById(id);
     if (modal) modal.classList.remove('show');
+    if (sessionStorage.getItem('current_active_modal') === id) {
+        sessionStorage.removeItem('current_active_modal');
+    }
 }
 
 window.onclick = (e) => {
@@ -6257,6 +6367,9 @@ window.onclick = (e) => {
             return; // Non-logged-in users cannot dismiss login modal by clicking background
         }
         e.target.classList.remove('show');
+        if (sessionStorage.getItem('current_active_modal') === e.target.id) {
+            sessionStorage.removeItem('current_active_modal');
+        }
     }
 };
 

@@ -27,12 +27,20 @@ print(f"[*] Creating backup: {zip_filename}")
 # Files and folders to back up
 files_to_backup = [
     "app.py",
+    "db_mongo.py",
+    "mongo_config.json",
+    "render.yaml",
+    "migrate_sqlite_to_mongo.py",
     "tournament.db",
     "secret.key",
     "vapid_keys.json",
     "requirements.txt",
     "run.bat",
-    "backup.bat"
+    "backup.bat",
+    "cloudflared.exe",
+    "icon.png",
+    "gomon_hub_logo.png",
+    ".gitignore"
 ]
 
 folders_to_backup = [

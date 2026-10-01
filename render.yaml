@@ -11,4 +11,10 @@ services:
         value: 3.11.9
       - key: MONGO_URI
         sync: false
+      - key: SECRET_KEY
+        sync: false
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
 

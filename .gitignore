@@ -15,4 +15,5 @@ check_js_syntax.py
 mongo_config.json
 .env
 secret.key
+vapid_keys.json
 

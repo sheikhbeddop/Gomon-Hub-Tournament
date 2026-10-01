@@ -958,8 +958,14 @@ async def add_no_cache_header(request: Request, call_next):
         response.headers["X-Robots-Tag"] = "index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1"
 
     if path.endswith((".js", ".css", ".png", ".jpg", ".jpeg", ".ico", ".svg", ".woff2", ".webp")):
-        response.headers["Cache-Control"] = "public, max-age=86400, stale-while-revalidate=3600"
-    elif path == "/" or path.endswith(".html") or path.startswith("/api/"):
+        response.headers["Cache-Control"] = "public, max-age=604800, stale-while-revalidate=86400"
+    elif path == "/sw.js":
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+    elif path == "/" or path.endswith(".html"):
+        response.headers["Cache-Control"] = "public, max-age=3600, stale-while-revalidate=86400"
+    elif path.startswith("/api/"):
         response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"
@@ -4568,11 +4574,19 @@ def admin_reset_all_players(admin: dict = Depends(verify_admin)):
 
 app.mount("/static", StaticFiles(directory=public_dir), name="static")
 
+@app.api_route("/ping", methods=["GET", "HEAD"])
+def ping_keepalive():
+    return Response(
+        content='{"status":"ok"}',
+        media_type="application/json",
+        headers={"Cache-Control": "public, max-age=60"}
+    )
+
 @app.get("/")
 def serve_index():
     index_file = os.path.join(public_dir, "index.html")
     if os.path.exists(index_file):
-        return FileResponse(index_file, headers={"Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache", "Expires": "0"})
+        return FileResponse(index_file, headers={"Cache-Control": "public, max-age=3600, stale-while-revalidate=86400"})
     return {"status": "Frontend loading..."}
 
 @app.get("/sw.js")

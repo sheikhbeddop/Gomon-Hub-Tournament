@@ -5302,7 +5302,15 @@ async function forceSyncAll() {
 async function initServiceWorker() {
     if ('serviceWorker' in navigator && 'PushManager' in window) {
         try {
-            await navigator.serviceWorker.register('/sw.js');
+            const reg = await navigator.serviceWorker.register('/sw.js');
+            if (reg) {
+                const lastCheck = localStorage.getItem('sw_last_update_check');
+                const now = Date.now();
+                if (!lastCheck || (now - parseInt(lastCheck)) > 24 * 60 * 60 * 1000) {
+                    reg.update().catch(() => {});
+                    localStorage.setItem('sw_last_update_check', String(now));
+                }
+            }
             checkNotificationPermission();
         } catch (e) {
             console.warn('SW registration failed', e);

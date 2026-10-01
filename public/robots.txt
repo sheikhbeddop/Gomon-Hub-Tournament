@@ -4,6 +4,7 @@ Allow: /
 Disallow: /admin
 Disallow: /api/admin/
 Disallow: /api/super-admin/
+Disallow: /ping
 
 User-agent: Googlebot-Image
 Allow: /
@@ -12,10 +13,12 @@ Disallow: /api/admin/
 Disallow: /api/super-admin/
 
 User-agent: Bingbot
+Crawl-delay: 5
 Allow: /
 Disallow: /admin
 Disallow: /api/admin/
 Disallow: /api/super-admin/
+Disallow: /ping
 
 # Default for legitimate search engines
 User-agent: *
@@ -23,6 +26,7 @@ Allow: /
 Disallow: /admin
 Disallow: /api/admin/
 Disallow: /api/super-admin/
+Disallow: /ping
 
 # Block unwanted AI scrapers and aggressive crawlers
 User-agent: GPTBot

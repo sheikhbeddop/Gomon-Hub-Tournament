@@ -1,11 +1,11 @@
 // Service Worker for GOMON HUB TOURNAMENT (PWA Offline & Push Engine)
 
-const CACHE_NAME = 'gomon-hub-v5.5';
+const CACHE_NAME = 'gomon-hub-v6.0';
 const PRECACHE_ASSETS = [
     '/',
-    '/static/css/style.css?v=5.4.1',
+    '/static/css/style.css?v=5.4.3',
     '/static/css/auth-components.css?v=5.4.1',
-    '/static/js/app.js?v=5.4.2',
+    '/static/js/app.js?v=5.4.3',
     '/manifest.json',
     '/favicon.ico',
     '/gomon_hub_logo.png'
@@ -42,7 +42,7 @@ self.addEventListener('message', (event) => {
     }
 });
 
-// Fetch Handler: Stale-While-Revalidate for Static Assets, Network-First for Pages & API
+// Fetch Handler: App Shell Cache-First (Ultra Bandwidth Saver), Network-Only for Dynamic APIs & WebSockets
 self.addEventListener('fetch', (event) => {
     // Only intercept GET requests
     if (event.request.method !== 'GET') {
@@ -51,63 +51,76 @@ self.addEventListener('fetch', (event) => {
 
     const url = new URL(event.request.url);
 
-    // Bypass API calls, websockets, and non-http schemes
-    if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/ws') || !url.protocol.startsWith('http')) {
+    // Bypass API calls, websockets, pingers, and non-http schemes directly to the live server
+    if (url.pathname.startsWith('/api/') || 
+        url.pathname.startsWith('/ws') || 
+        url.pathname === '/ping' ||
+        !url.protocol.startsWith('http')) {
         return;
     }
 
-    const isStaticAsset = url.pathname.startsWith('/static/') || 
-        url.pathname.endsWith('.css') || 
-        url.pathname.endsWith('.js') || 
-        url.pathname.endsWith('.png') || 
-        url.pathname.endsWith('.jpg') || 
-        url.pathname.endsWith('.ico') || 
-        url.pathname.endsWith('.svg');
-
-    // 1. Static Assets: Instant Cache-First with Background Revalidation (Zero-Lag UI)
-    if (isStaticAsset) {
+    // 1. Navigation / HTML pages (e.g., '/', '/index.html'): Cache-First with Network Fallback
+    if (event.request.mode === 'navigate' || url.pathname === '/' || url.pathname.endsWith('.html')) {
         event.respondWith(
-            caches.match(event.request).then((cachedResponse) => {
-                const networkFetch = fetch(event.request).then((networkResponse) => {
+            caches.match('/').then((cached) => {
+                if (cached) {
+                    return cached;
+                }
+                return fetch(event.request).then((networkResponse) => {
                     if (networkResponse && networkResponse.status === 200) {
                         const clone = networkResponse.clone();
-                        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+                        caches.open(CACHE_NAME).then((cache) => cache.put('/', clone));
                     }
                     return networkResponse;
-                }).catch(() => cachedResponse);
-
-                return cachedResponse || networkFetch;
+                }).catch(() => {
+                    return new Response('Offline: Network connection unavailable', {
+                        status: 503,
+                        statusText: 'Service Unavailable',
+                        headers: { 'Content-Type': 'text/plain; charset=utf-8' }
+                    });
+                });
             })
         );
         return;
     }
 
-    // 2. Navigation / HTML pages: Network-first with offline fallback
-    event.respondWith(
-        fetch(event.request)
-            .then((networkResponse) => {
-                if (networkResponse && networkResponse.status === 200) {
-                    const responseClone = networkResponse.clone();
-                    caches.open(CACHE_NAME).then((cache) => {
-                        cache.put(event.request, responseClone);
+    // 2. Static Assets (CSS, JS, Images, Icons, Fonts, Manifest): Cache-First
+    const isStaticAsset = url.pathname.startsWith('/static/') || 
+        url.pathname.endsWith('.css') || 
+        url.pathname.endsWith('.js') || 
+        url.pathname.endsWith('.png') || 
+        url.pathname.endsWith('.jpg') || 
+        url.pathname.endsWith('.jpeg') || 
+        url.pathname.endsWith('.webp') || 
+        url.pathname.endsWith('.ico') || 
+        url.pathname.endsWith('.svg') ||
+        url.pathname.endsWith('.woff2') ||
+        url.pathname === '/manifest.json' ||
+        url.pathname === '/favicon.ico';
+
+    if (isStaticAsset) {
+        event.respondWith(
+            caches.match(event.request, { ignoreSearch: false }).then((cached) => {
+                if (cached) {
+                    return cached;
+                }
+                // Fallback check with ignoreSearch for versioned static assets
+                return caches.match(event.request, { ignoreSearch: true }).then((cachedFuzzy) => {
+                    if (cachedFuzzy) {
+                        return cachedFuzzy;
+                    }
+                    return fetch(event.request).then((networkResponse) => {
+                        if (networkResponse && networkResponse.status === 200) {
+                            const clone = networkResponse.clone();
+                            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+                        }
+                        return networkResponse;
                     });
-                }
-                return networkResponse;
-            })
-            .catch(async () => {
-                const cached = await caches.match(event.request);
-                if (cached) return cached;
-                if (event.request.mode === 'navigate') {
-                    const rootCached = await caches.match('/');
-                    if (rootCached) return rootCached;
-                }
-                return new Response('Offline: Network connection unavailable', {
-                    status: 503,
-                    statusText: 'Service Unavailable',
-                    headers: { 'Content-Type': 'text/plain; charset=utf-8' }
                 });
             })
-    );
+        );
+        return;
+    }
 });
 
 self.addEventListener('push', (event) => {

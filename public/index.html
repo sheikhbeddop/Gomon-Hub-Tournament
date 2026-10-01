@@ -1622,68 +1622,104 @@
 
     <!-- MODAL: WITHDRAW (Opened from Profile Menu) -->
     <div class="modal-overlay" id="withdrawModal">
-        <div class="modal-box" style="max-width: 480px;">
-            <div class="modal-header">
+        <div class="modal-box" style="max-width: 440px; max-height: 88vh; overflow-y: auto;">
+            <div class="modal-header" style="padding: 12px 16px;">
                 <div style="display: flex; align-items: center; gap: 8px;">
-                    <span style="font-size: 1.4rem;">💸</span>
-                    <h3 style="font-family: 'Rajdhani', sans-serif; font-size: 1.25rem; font-weight: 800; color: #0284c7;">
+                    <span style="font-size: 1.15rem;">💸</span>
+                    <h3 style="font-family: 'Rajdhani', sans-serif; font-size: 1.05rem; font-weight: 900; color: #1d4ed8; margin: 0; line-height: 1.2;">
                         Withdraw Balance (Cashout)
                     </h3>
                 </div>
                 <button type="button" class="btn-close" onclick="closeModal('withdrawModal')">&times;</button>
             </div>
-            <div class="modal-body" style="padding: 20px;">
-                <div style="background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 10px; padding: 12px 14px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center;">
-                    <span style="font-size: 0.85rem; color: #0369a1; font-weight: 600;">Withdrawable Balance:</span>
-                    <b id="withdrawUserBalance" style="font-family: 'Rajdhani', sans-serif; font-size: 1.3rem; color: #0284c7;">BDT 0</b>
+            <div class="modal-body" style="padding: 14px 16px;">
+                <!-- Withdrawable Balance Banner -->
+                <div style="background: #ffffff; border: 1.5px solid #0284c7; border-radius: 12px; padding: 10px 14px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 8px rgba(2, 132, 199, 0.08);">
+                    <div>
+                        <div style="font-size: 0.72rem; text-transform: uppercase; color: #475569; font-weight: 800; letter-spacing: 0.3px; white-space: nowrap;">Withdrawable Balance</div>
+                        <div id="withdrawUserBalance" style="font-family: 'Rajdhani', sans-serif; font-size: 1.15rem; font-weight: 900; color: #0284c7; margin-top: 1px; white-space: nowrap;">BDT 0</div>
+                    </div>
+                    <div style="background: #f0f9ff; color: #0284c7; border: 1px solid #bae6fd; padding: 4px 10px; border-radius: 99px; font-weight: 800; font-size: 0.74rem; white-space: nowrap;">
+                        Min: 50 BDT
+                    </div>
+                </div>
+
+                <!-- Minimum Withdraw Packages -->
+                <h4 style="font-family: 'Rajdhani', sans-serif; font-size: 0.95rem; font-weight: 800; color: #0f172a; margin: 0 0 8px 0; white-space: nowrap;">Minimum Withdraw</h4>
+                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 14px;">
+                    <div class="shop-pkg-card" onclick="var inp=document.getElementById('withdrawAmount'); if(inp){ inp.value=50; inp.focus(); } showToast('50 BDT selected', 'info');" style="cursor: pointer; background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%); border: 1.5px solid #cbd5e1; border-radius: 10px; padding: 9px 3px; text-align: center; box-shadow: 0 2px 5px rgba(0,0,0,0.03); transition: all 0.2s ease;">
+                        <span style="font-size: 1.1rem; display: block; line-height: 1;">💸</span>
+                        <div style="font-family:'Rajdhani',sans-serif; font-size: 1.05rem; font-weight: 900; color: #0f172a; margin-top: 3px; line-height: 1.1; white-space: nowrap;">50</div>
+                        <div style="font-weight: 800; color: #0284c7; font-size: 0.68rem; margin-top: 2px; white-space: nowrap;">50 BDT</div>
+                    </div>
+                    <div class="shop-pkg-card" onclick="var inp=document.getElementById('withdrawAmount'); if(inp){ inp.value=100; inp.focus(); } showToast('100 BDT selected', 'info');" style="cursor: pointer; background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%); border: 1.5px solid #cbd5e1; border-radius: 10px; padding: 9px 3px; text-align: center; box-shadow: 0 2px 5px rgba(0,0,0,0.03); transition: all 0.2s ease;">
+                        <span style="font-size: 1.1rem; display: block; line-height: 1;">💸</span>
+                        <div style="font-family:'Rajdhani',sans-serif; font-size: 1.05rem; font-weight: 900; color: #0f172a; margin-top: 3px; line-height: 1.1; white-space: nowrap;">100</div>
+                        <div style="font-weight: 800; color: #0284c7; font-size: 0.68rem; margin-top: 2px; white-space: nowrap;">100 BDT</div>
+                    </div>
+                    <div class="shop-pkg-card" onclick="var inp=document.getElementById('withdrawAmount'); if(inp){ inp.value=200; inp.focus(); } showToast('200 BDT selected', 'info');" style="cursor: pointer; background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%); border: 1.5px solid #cbd5e1; border-radius: 10px; padding: 9px 3px; text-align: center; box-shadow: 0 2px 5px rgba(0,0,0,0.03); transition: all 0.2s ease;">
+                        <span style="font-size: 1.1rem; display: block; line-height: 1;">💸</span>
+                        <div style="font-family:'Rajdhani',sans-serif; font-size: 1.05rem; font-weight: 900; color: #0f172a; margin-top: 3px; line-height: 1.1; white-space: nowrap;">200</div>
+                        <div style="font-weight: 800; color: #0284c7; font-size: 0.68rem; margin-top: 2px; white-space: nowrap;">200 BDT</div>
+                    </div>
+                    <div class="shop-pkg-card" onclick="var inp=document.getElementById('withdrawAmount'); if(inp){ inp.value=500; inp.focus(); } showToast('500 BDT selected', 'info');" style="cursor: pointer; background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%); border: 1.5px solid #cbd5e1; border-radius: 10px; padding: 9px 3px; text-align: center; box-shadow: 0 2px 5px rgba(0,0,0,0.03); transition: all 0.2s ease;">
+                        <span style="font-size: 1.1rem; display: block; line-height: 1;">💸</span>
+                        <div style="font-family:'Rajdhani',sans-serif; font-size: 1.05rem; font-weight: 900; color: #0f172a; margin-top: 3px; line-height: 1.1; white-space: nowrap;">500</div>
+                        <div style="font-weight: 800; color: #0284c7; font-size: 0.68rem; margin-top: 2px; white-space: nowrap;">500 BDT</div>
+                    </div>
                 </div>
 
                 <!-- Official Withdraw Helpline Banner -->
-                <div style="background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%); color: white; border-radius: 12px; padding: 12px 14px; margin-bottom: 16px; box-shadow: 0 3px 12px rgba(2, 132, 199, 0.2);">
-                    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+                <div style="background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%); color: white; border-radius: 12px; padding: 11px 14px; margin-bottom: 14px; box-shadow: 0 3px 12px rgba(2, 132, 199, 0.2);">
+                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
                         <div>
-                            <div style="font-size: 0.68rem; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px; color: #bae6fd;">অফিসিয়াল উইথড্র / হেল্পলাইন নাম্বার</div>
-                            <div style="font-family: 'Rajdhani', sans-serif; font-size: 1.22rem; font-weight: 900; letter-spacing: 1px; margin-top: 1px;">
-                                <span id="displayWithdrawNumber" class="displayWithdrawNumber">01988279285 (Personal)</span>
+                            <div style="font-size: 0.68rem; text-transform: uppercase; font-weight: 700; letter-spacing: 0.4px; color: #bae6fd; white-space: nowrap;">অফিসিয়াল উইথড্র / হেল্পলাইন নাম্বার</div>
+                            <div style="font-family: 'Rajdhani', sans-serif; font-size: 1.25rem; font-weight: 900; letter-spacing: 1px; margin-top: 1px; white-space: nowrap;">
+                                <span id="displayWithdrawNumber" class="displayWithdrawNumber">01952851550</span>
                             </div>
                         </div>
-                        <button type="button" class="btn btn-sm" onclick="copyAdminWithdraw()" style="background: white; color: #0369a1; font-weight: 800; padding: 4px 10px; font-size: 0.74rem; border-radius: 6px; border: none; cursor: pointer;">
+                        <button type="button" class="btn btn-sm" onclick="copyAdminWithdraw()" style="background: white; color: #0284c7; font-weight: 800; padding: 5px 12px; font-size: 0.74rem; border-radius: 6px; border: none; cursor: pointer; white-space: nowrap; flex-shrink: 0;">
                             📋 নাম্বার কপি
                         </button>
                     </div>
-                    <div style="font-size: 0.72rem; color: #e0f2fe; margin-top: 6px; line-height: 1.35;">
+                    <div style="font-size: 0.67rem; color: #e0f2fe; margin-top: 5px; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="উইথড্র বা ক্যাশআউট সংক্রান্ত যে কোনো তথ্যের জন্য এই নাম্বারে যোগাযোগ করতে পারেন।">
                         ℹ️ উইথড্র বা ক্যাশআউট সংক্রান্ত যে কোনো তথ্যের জন্য এই নাম্বারে যোগাযোগ করতে পারেন।
                     </div>
                 </div>
 
-                <form id="withdrawForm" onsubmit="submitWithdrawForm(event)">
-                    <div style="margin-bottom: 14px;">
-                        <label style="display: block; font-size: 0.85rem; font-weight: 700; color: #334155; margin-bottom: 6px;">Your bKash Personal Number</label>
-                        <input type="text" id="withdrawPhone" class="input-glow" placeholder="01XXXXXXXXX" maxlength="11" required autocomplete="off" value="" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #cbd5e1;">
-                    </div>
-                    <div style="margin-bottom: 18px;">
-                        <label style="display: block; font-size: 0.85rem; font-weight: 700; color: #334155; margin-bottom: 6px;">Withdraw Amount (BDT) [Minimum 50 BDT / সর্বনিম্ন ৫০ টাকা]</label>
-                        <input type="number" id="withdrawAmount" class="input-glow" placeholder="e.g. 100 (Min: 50 BDT)" min="50" required style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #cbd5e1;">
-                    </div>
-                    <button type="submit" id="btnSubmitWithdraw" class="btn btn-neon" style="width: 100%; padding: 14px; font-weight: 800; font-size: 1rem;">
-                        💸 Submit Withdrawal Request
-                    </button>
-                </form>
+                <!-- Direct Withdraw Form -->
+                <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px; margin-bottom: 14px;">
+                    <h4 style="font-family: 'Rajdhani', sans-serif; font-size: 0.95rem; font-weight: 800; color: #0f172a; margin: 0 0 10px 0; white-space: nowrap;">টাকা উত্তোলনের তথ্য দিন</h4>
+                    <form id="withdrawForm" onsubmit="submitWithdrawForm(event)">
+                        <div style="margin-bottom: 10px;">
+                            <label style="display: block; font-size: 0.74rem; font-weight: 700; color: #334155; margin-bottom: 3px; white-space: nowrap;">Your bKash Personal Number (বিকাশ নাম্বার)</label>
+                            <input type="text" id="withdrawPhone" class="input-glow" placeholder="01XXXXXXXXX" maxlength="11" required autocomplete="off" value="" style="width: 100%; padding: 8px 10px; font-size: 0.82rem; border-radius: 6px; border: 1px solid #cbd5e1; box-sizing: border-box;">
+                        </div>
+                        <div style="margin-bottom: 12px;">
+                            <label style="display: block; font-size: 0.74rem; font-weight: 700; color: #334155; margin-bottom: 3px; white-space: nowrap;">Withdraw Amount [সর্বনিম্ন ৫০ টাকা / Min: 50 BDT]</label>
+                            <input type="number" id="withdrawAmount" class="input-glow" placeholder="e.g. 100 (Min: 50 BDT)" min="50" required style="width: 100%; padding: 8px 10px; font-size: 0.82rem; border-radius: 6px; border: 1px solid #cbd5e1; box-sizing: border-box;">
+                        </div>
+                        <button type="submit" id="btnSubmitWithdraw" class="btn btn-neon" style="width: 100%; padding: 11px; font-weight: 800; font-size: 0.95rem; background: linear-gradient(135deg, #16a34a, #15803d); border: none; color: white; border-radius: 8px; cursor: pointer; box-shadow: 0 3px 10px rgba(22, 163, 74, 0.3); letter-spacing: 0.5px; white-space: nowrap;">
+                            Submit
+                        </button>
+                    </form>
+                </div>
 
-                <div style="margin-top: 22px;">
-                    <h4 style="font-family: 'Rajdhani', sans-serif; font-size: 1rem; font-weight: 800; color: #334155; margin-bottom: 8px;">Recent Withdrawal Requests</h4>
-                    <div style="overflow-x: auto;">
-                        <table class="data-table" id="withdrawHistoryTable" style="width: 100%; font-size: 0.82rem;">
-                            <thead>
+                <!-- Withdrawal History Section -->
+                <div>
+                    <h4 style="font-family: 'Rajdhani', sans-serif; font-size: 0.92rem; font-weight: 800; color: #0f172a; margin: 0 0 8px 0; white-space: nowrap;">Recent Withdrawal Requests</h4>
+                    <div style="overflow-x: auto; background: white; border: 1px solid #e2e8f0; border-radius: 8px;">
+                        <table class="data-table" id="withdrawHistoryTable" style="width: 100%; font-size: 0.74rem; border-collapse: collapse; text-align: left;">
+                            <thead style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
                                 <tr>
-                                    <th>Amount</th>
-                                    <th>bKash Number</th>
-                                    <th>Status</th>
-                                    <th>Date</th>
+                                    <th style="padding: 7px 10px; font-weight: 700; color: #475569; white-space: nowrap;">Amount</th>
+                                    <th style="padding: 7px 10px; font-weight: 700; color: #475569; white-space: nowrap;">bKash Number</th>
+                                    <th style="padding: 7px 10px; font-weight: 700; color: #475569; white-space: nowrap;">Status</th>
+                                    <th style="padding: 7px 10px; font-weight: 700; color: #475569; white-space: nowrap;">Date</th>
                                 </tr>
                             </thead>
                             <tbody id="withdrawHistoryBody">
-                                <tr><td colspan="4" style="text-align: center; color: #94a3b8; padding: 12px;">No withdrawal records found</td></tr>
+                                <tr><td colspan="4" style="text-align: center; color: #94a3b8; padding: 12px; font-size: 0.75rem;">No withdrawal records found</td></tr>
                             </tbody>
                         </table>
                     </div>

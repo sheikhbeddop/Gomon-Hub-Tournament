@@ -3179,4 +3179,22 @@ body:has(#tab-admin.active) .main-container,
     border-radius: 10px;
     padding: 10px 12px;
     line-height: 1.45;
+}
+
+/* Professional Deposit Package Card Interaction */
+.shop-pkg-card {
+    transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.shop-pkg-card:hover {
+    border-color: #0d9488 !important;
+    background: #f0fdfa !important;
+    transform: translateY(-2px);
+    box-shadow: 0 5px 12px rgba(13, 148, 136, 0.16) !important;
+}
+
+.shop-pkg-card:active {
+    transform: scale(0.96) !important;
 }

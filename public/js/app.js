@@ -217,9 +217,43 @@ async function startApp() {
         if (impBanner) impBanner.style.display = 'block';
     }
 
+    initTheme();
     await initAuth();
     loadPublicInfo();
     initServiceWorker();
+}
+
+// -------------------------------------------------------------
+// Dark / Light Theme Management
+// -------------------------------------------------------------
+function initTheme() {
+    const saved = localStorage.getItem('gomon_theme');
+    const icon = document.getElementById('themeToggleIcon');
+    if (saved === 'dark') {
+        document.documentElement.setAttribute('data-theme', 'dark');
+        if (icon) icon.innerText = '☀️';
+    } else {
+        document.documentElement.removeAttribute('data-theme');
+        if (icon) icon.innerText = '🌙';
+    }
+}
+
+function toggleTheme() {
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    const newTheme = isDark ? 'light' : 'dark';
+    const icon = document.getElementById('themeToggleIcon');
+
+    if (newTheme === 'dark') {
+        document.documentElement.setAttribute('data-theme', 'dark');
+        localStorage.setItem('gomon_theme', 'dark');
+        if (icon) icon.innerText = '☀️';
+        showToast('Dark mode enabled 🌙', 'info');
+    } else {
+        document.documentElement.removeAttribute('data-theme');
+        localStorage.setItem('gomon_theme', 'light');
+        if (icon) icon.innerText = '🌙';
+        showToast('Light mode enabled ☀️', 'info');
+    }
 }
 
 if (document.readyState === 'loading') {

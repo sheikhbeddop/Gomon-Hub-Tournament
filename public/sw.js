@@ -1,11 +1,11 @@
 // Service Worker for GOMON HUB TOURNAMENT (PWA Offline & Push Engine)
 
-const CACHE_NAME = 'gomon-hub-v6.1';
+const CACHE_NAME = 'gomon-hub-v6.2';
 const PRECACHE_ASSETS = [
     '/',
-    '/static/css/style.css?v=5.4.3',
+    '/static/css/style.css?v=5.4.5',
     '/static/css/auth-components.css?v=5.4.1',
-    '/static/js/app.js?v=5.4.4',
+    '/static/js/app.js?v=5.4.5',
     '/manifest.json',
     '/favicon.ico',
     '/gomon_hub_logo.png'

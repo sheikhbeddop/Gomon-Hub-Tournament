@@ -887,7 +887,7 @@ def generate_unique_promo_code(conn) -> str:
     return f"GOMONHUB-{secrets.choice(charset)}{secrets.choice(charset)}{secrets.choice(charset)}{int(time.time()) % 1000}"
 
 def ensure_promo_codes_initialized():
-    """Ensures promo_code column exists in users table and all existing users have a unique permanent promo code."""
+    """Ensures promo_code column exists in users table, user_referrals table exists, and all existing users have a unique permanent promo code."""
     try:
         conn = get_db()
         with conn:
@@ -897,6 +897,26 @@ def ensure_promo_codes_initialized():
                 pass
             try:
                 conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_promo_code ON users(promo_code)")
+            except Exception:
+                pass
+            try:
+                conn.execute("""
+                CREATE TABLE IF NOT EXISTS user_referrals (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    referrer_id INTEGER NOT NULL,
+                    referee_id INTEGER UNIQUE NOT NULL,
+                    promo_code_used TEXT,
+                    referee_bonus INTEGER DEFAULT 5,
+                    referrer_bonus INTEGER DEFAULT 5,
+                    is_deposit_rewarded INTEGER DEFAULT 0,
+                    deposit_rewarded_at DATETIME DEFAULT NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (referrer_id) REFERENCES users(id) ON DELETE CASCADE,
+                    FOREIGN KEY (referee_id) REFERENCES users(id) ON DELETE CASCADE
+                );
+                """)
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_referrals_referee ON user_referrals(referee_id);")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_referrals_referrer ON user_referrals(referrer_id);")
             except Exception:
                 pass
             users_without_code = conn.execute("SELECT id, username FROM users WHERE promo_code IS NULL OR promo_code = '' ORDER BY id ASC").fetchall()
@@ -1062,6 +1082,56 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 # -------------------------------------------------------------
+# Referral Reward Dispatcher (Triggers on 1st Deposit Approval)
+# -------------------------------------------------------------
+async def check_and_reward_first_deposit_referral(conn, user_id: int):
+    """
+    Rewards the referrer with +5 Taka digits_balance upon referee's 1st approved deposit.
+    """
+    try:
+        ref = conn.execute("""
+            SELECT id, referrer_id, referee_id, is_deposit_rewarded, referrer_bonus
+            FROM user_referrals
+            WHERE referee_id = ? AND is_deposit_rewarded = 0
+            LIMIT 1
+        """, (user_id,)).fetchone()
+
+        if not ref:
+            return
+
+        referrer_id = ref["referrer_id"]
+        bonus_amount = ref["referrer_bonus"] or 5
+
+        if referrer_id and referrer_id != user_id:
+            conn.execute("UPDATE users SET digits_balance = digits_balance + ? WHERE id = ?", (bonus_amount, referrer_id))
+            conn.execute("""
+                UPDATE user_referrals 
+                SET is_deposit_rewarded = 1, deposit_rewarded_at = CURRENT_TIMESTAMP 
+                WHERE id = ?
+            """, (ref["id"],))
+
+            referee = conn.execute("SELECT username FROM users WHERE id = ?", (user_id,)).fetchone()
+            referee_name = referee["username"] if referee else "New Player"
+
+            conn.execute("""
+                INSERT INTO audit_logs (admin_id, target_user_id, action, amount, reason)
+                VALUES (0, ?, 'REFERRAL_REWARD_CREDITED', ?, ?)
+            """, (referrer_id, bonus_amount, f"Referral reward: User @{referee_name} completed first deposit"))
+
+            try:
+                fresh_ref = conn.execute("SELECT digits_balance FROM users WHERE id = ?", (referrer_id,)).fetchone()
+                ref_bal = fresh_ref["digits_balance"] if fresh_ref else 0
+                await manager.send_to_user(referrer_id, {
+                    "type": "BALANCE_UPDATED",
+                    "digits_balance": ref_bal,
+                    "notice": f"🎉 অভিনন্দন! আপনার প্রোমো কোড ব্যবহারকারী @{referee_name} প্রথম ডিপোজিট সম্পন্ন করেছেন! আপনার ওয়ালেটে +{bonus_amount} টাকা যোগ হয়েছে।"
+                })
+            except Exception:
+                pass
+    except Exception as e:
+        print(f"[Referral Reward Notice] {e}")
+
+# -------------------------------------------------------------
 # Dependencies (Authentication & Role Verification)
 # -------------------------------------------------------------
 def check_user_timeout(user: dict) -> tuple[bool, int]:
@@ -1152,6 +1222,7 @@ class RegisterRequest(BaseModel):
     email: str
     ff_ign: Optional[str] = ""
     ff_uid: str
+    promo_code: Optional[str] = ""
 
 class LoginRequest(BaseModel):
     username: str
@@ -1482,6 +1553,24 @@ def register(data: RegisterRequest):
         if existing["email"] and existing["email"].lower() == email.lower():
             raise HTTPException(status_code=400, detail="এই ইমেইল দিয়ে ইতিমধ্যে অ্যাকাউন্ট রয়েছে।")
 
+    raw_promo = (data.promo_code or "").strip()
+    referrer_user = None
+    initial_bonus = 0
+
+    if raw_promo:
+        try:
+            referrer_user = conn.execute("""
+                SELECT id, username, promo_code 
+                FROM users 
+                WHERE (promo_code IS NOT NULL AND promo_code != '' AND promo_code = ? COLLATE NOCASE)
+                   OR (username = ? COLLATE NOCASE AND username != '')
+                LIMIT 1
+            """, (raw_promo, raw_promo)).fetchone()
+            if referrer_user:
+                initial_bonus = 5
+        except Exception:
+            referrer_user = None
+
     rand_id = f"GOMONHUB-{secrets.randbelow(90000) + 10000}"
     pass_hash = hash_password(data.password)
 
@@ -1490,9 +1579,23 @@ def register(data: RegisterRequest):
     with conn:
         cursor = conn.execute("""
         INSERT INTO users (player_id, username, password_hash, plain_password, phone, email, ff_ign, ff_uid, digits_balance, role, status, promo_code)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 'player', 'active', ?)
-        """, (rand_id, username, pass_hash, data.password.strip(), phone, email, ff_ign, ff_uid, user_promo))
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'player', 'active', ?)
+        """, (rand_id, username, pass_hash, data.password.strip(), phone, email, ff_ign, ff_uid, initial_bonus, user_promo))
         user_id = cursor.lastrowid
+
+        if referrer_user and referrer_user["id"] != user_id:
+            try:
+                conn.execute("""
+                    INSERT INTO user_referrals (referrer_id, referee_id, promo_code_used, referee_bonus, referrer_bonus, is_deposit_rewarded)
+                    VALUES (?, ?, ?, ?, ?, 0)
+                """, (referrer_user["id"], user_id, raw_promo, initial_bonus, 5))
+
+                conn.execute("""
+                    INSERT INTO audit_logs (admin_id, target_user_id, action, amount, reason)
+                    VALUES (0, ?, 'SIGNUP_PROMO_BONUS', ?, ?)
+                """, (user_id, initial_bonus, f"Instant 5 Tk signup bonus for using promo code: {raw_promo} (Referrer: @{referrer_user['username']})"))
+            except Exception as re:
+                print(f"[Referral Record Error] {re}")
 
     token = generate_token(user_id, username, "player", pass_hash)
     conn.close()
@@ -1500,12 +1603,13 @@ def register(data: RegisterRequest):
     return {
         "success": True,
         "token": token,
+        "bonus_received": initial_bonus,
         "user": {
             "id": user_id,
             "player_id": rand_id,
             "username": username,
             "promo_code": user_promo,
-            "digits_balance": 0,
+            "digits_balance": initial_bonus,
             "role": "player",
             "ff_ign": data.ff_ign.strip(),
             "ff_uid": data.ff_uid.strip(),
@@ -2228,6 +2332,7 @@ async def process_incoming_payment(trx_id: str, amount: int, sender_phone: str =
                 """, (matched_user_id, inc_id))
 
                 conn.execute("UPDATE users SET digits_balance = digits_balance + ? WHERE id = ?", (approved_amount, matched_user_id))
+                await check_and_reward_first_deposit_referral(conn, matched_user_id)
 
                 conn.execute("""
                     INSERT INTO audit_logs (admin_id, target_user_id, action, amount, reason)
@@ -2390,6 +2495,7 @@ async def submit_deposit(data: DepositRequest, user: dict = Depends(get_current_
                         """, (user["id"], incoming["id"]))
 
                         conn.execute("UPDATE users SET digits_balance = digits_balance + ? WHERE id = ?", (actual_credit_amount, user["id"]))
+                        await check_and_reward_first_deposit_referral(conn, user["id"])
 
                         conn.execute("""
                             INSERT INTO audit_logs (admin_id, target_user_id, action, amount, reason)
@@ -3482,6 +3588,7 @@ async def admin_review_deposit(deposit_id: int, action: str, admin: dict = Depen
             new_balance = None
             if action == "approve":
                 conn.execute("UPDATE users SET digits_balance = digits_balance + ? WHERE id = ?", (deposit["amount"], deposit["user_id"]))
+                await check_and_reward_first_deposit_referral(conn, deposit["user_id"])
                 u = conn.execute("SELECT digits_balance FROM users WHERE id = ?", (deposit["user_id"],)).fetchone()
                 new_balance = u["digits_balance"] if u else 0
 

@@ -2080,6 +2080,119 @@
             </form>
         </div>
 
+        <!-- 4. FORGOT PASSWORD STEP 1: IDENTIFIER REQUEST CARD -->
+        <div class="auth-card" id="authForgotRequestCard" style="display: none;">
+            <div class="auth-avatar-circle">
+                <img src="/gomon_hub_logo.png?v=2" alt="GOMON HUB TOURNAMENT Avatar" class="auth-avatar-img" onerror="this.onerror=null;this.src=window.GOMON_HUB_LOGO;">
+            </div>
+            <button type="button" class="auth-close-btn" onclick="closeModal('authModal')" title="Close">&times;</button>
+
+            <div class="auth-header">
+                <h2 class="auth-title">Reset Password</h2>
+                <p class="auth-subtitle">Enter your username or phone number to receive a 6-digit recovery code</p>
+            </div>
+
+            <form id="forgotRequestForm" class="auth-form" onsubmit="handleForgotRequestSubmit(event)">
+                <div id="forgotRequestErrorAlert" class="auth-error-alert" style="display: none;"></div>
+
+                <div class="auth-input-group">
+                    <span class="auth-input-icon">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                    </span>
+                    <input type="text" class="auth-input" id="forgotIdentifier" required placeholder="Username or Mobile (01XXXXXXXXX)" autocomplete="username">
+                </div>
+
+                <button type="submit" class="auth-submit-btn" id="forgotRequestSubmitBtn">
+                    Send Verification Code
+                </button>
+
+                <div class="auth-toggle-prompt">
+                    Remember password? <a href="javascript:void(0)" onclick="setAuthMode('login')" class="auth-toggle-link">Back to Sign In</a>
+                </div>
+            </form>
+        </div>
+
+        <!-- 5. FORGOT PASSWORD STEP 2: 6-DIGIT OTP VERIFY CARD -->
+        <div class="auth-card" id="authForgotOtpCard" style="display: none;">
+            <div class="auth-avatar-circle">
+                <img src="/gomon_hub_logo.png?v=2" alt="GOMON HUB TOURNAMENT Avatar" class="auth-avatar-img" onerror="this.onerror=null;this.src=window.GOMON_HUB_LOGO;">
+            </div>
+            <button type="button" class="auth-close-btn" onclick="closeModal('authModal')" title="Close">&times;</button>
+
+            <div class="auth-header">
+                <h2 class="auth-title">Enter Recovery Code</h2>
+                <p class="auth-subtitle">6-digit reset code sent to <br><span id="forgotMaskedEmail" style="color: #00f59b; font-weight: 700;">your email</span></p>
+            </div>
+
+            <form id="forgotOtpForm" class="auth-form" onsubmit="handleForgotOtpSubmit(event)">
+                <div id="forgotOtpErrorAlert" class="auth-error-alert" style="display: none;"></div>
+
+                <!-- 6 Individual Digit Boxes -->
+                <div class="otp-boxes-container">
+                    <input type="text" inputmode="numeric" class="otp-box-input forgot-otp-box" maxlength="1" data-index="0" autocomplete="one-time-code" required>
+                    <input type="text" inputmode="numeric" class="otp-box-input forgot-otp-box" maxlength="1" data-index="1" autocomplete="off" required>
+                    <input type="text" inputmode="numeric" class="otp-box-input forgot-otp-box" maxlength="1" data-index="2" autocomplete="off" required>
+                    <input type="text" inputmode="numeric" class="otp-box-input forgot-otp-box" maxlength="1" data-index="3" autocomplete="off" required>
+                    <input type="text" inputmode="numeric" class="otp-box-input forgot-otp-box" maxlength="1" data-index="4" autocomplete="off" required>
+                    <input type="text" inputmode="numeric" class="otp-box-input forgot-otp-box" maxlength="1" data-index="5" autocomplete="off" required>
+                </div>
+
+                <div class="otp-resend-row">
+                    <span id="forgotTimerWrap">Resend code in <b id="forgotCountdownTimer" style="color: #00f59b;">03:00</b></span>
+                    <button type="button" id="forgotResendBtn" class="otp-resend-button" style="display: none;" onclick="triggerForgotResendOtp()">Resend Code</button>
+                </div>
+
+                <button type="submit" class="auth-submit-btn" id="forgotOtpSubmitBtn">
+                    Verify & Proceed
+                </button>
+
+                <div class="auth-toggle-prompt">
+                    <a href="javascript:void(0)" onclick="setAuthMode('forgot-request')" class="auth-toggle-link">Change Username / Mobile</a>
+                </div>
+            </form>
+        </div>
+
+        <!-- 6. FORGOT PASSWORD STEP 3: SET NEW PASSWORD CARD -->
+        <div class="auth-card" id="authForgotNewPassCard" style="display: none;">
+            <div class="auth-avatar-circle">
+                <img src="/gomon_hub_logo.png?v=2" alt="GOMON HUB TOURNAMENT Avatar" class="auth-avatar-img" onerror="this.onerror=null;this.src=window.GOMON_HUB_LOGO;">
+            </div>
+            <button type="button" class="auth-close-btn" onclick="closeModal('authModal')" title="Close">&times;</button>
+
+            <div class="auth-header">
+                <h2 class="auth-title">Set New Password</h2>
+                <p class="auth-subtitle">Create a strong password (minimum 8 characters, letters, digits, @ or #)</p>
+            </div>
+
+            <form id="forgotNewPassForm" class="auth-form" onsubmit="handleForgotNewPassSubmit(event)">
+                <div id="forgotNewPassErrorAlert" class="auth-error-alert" style="display: none;"></div>
+
+                <div class="auth-input-group">
+                    <span class="auth-input-icon">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                    </span>
+                    <input type="password" class="auth-input auth-input-password" id="forgotNewPassword" required placeholder="New Password" autocomplete="new-password">
+                    <span class="auth-eye-icon" onclick="togglePasswordVisibility('forgotNewPassword', this)" title="Toggle visibility">
+                        <svg class="eye-svg" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                    </span>
+                </div>
+
+                <div class="auth-input-group">
+                    <span class="auth-input-icon">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+                    </span>
+                    <input type="password" class="auth-input auth-input-password" id="forgotConfirmPassword" required placeholder="Confirm New Password" autocomplete="new-password">
+                    <span class="auth-eye-icon" onclick="togglePasswordVisibility('forgotConfirmPassword', this)" title="Toggle visibility">
+                        <svg class="eye-svg" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                    </span>
+                </div>
+
+                <button type="submit" class="auth-submit-btn" id="forgotNewPassSubmitBtn">
+                    Save Password & Sign In
+                </button>
+            </form>
+        </div>
+
         <!-- 2. SIGN UP VIEW (User Mockup 2: Let's Start / Create an account) -->
         <div class="auth-signup-view" id="authSignupCard" style="display: none;">
             <div class="signup-top-header">
@@ -2165,6 +2278,12 @@
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
                 24/7 dedicated support available anytime
             </div>
+
+            <!-- Instant Email Password Reset Button -->
+            <button type="button" onclick="startEmailForgotPasswordFlow()" style="display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; padding: 14px; background: linear-gradient(135deg, #00f59b 0%, #00d2ff 100%); color: #080b11; border: none; border-radius: 14px; font-weight: 800; font-size: 1rem; box-shadow: 0 6px 18px rgba(0, 245, 155, 0.35); margin-bottom: 12px; box-sizing: border-box; cursor: pointer; transition: transform 0.15s ease, box-shadow 0.15s ease;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
+                Email Verification
+            </button>
 
             <a href="https://wa.me/8801952851550?text=Hello%20GOMON%20HUB%20Admin%2C%20amar%20password%20recovery%20lagbe" target="_blank" style="display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; padding: 14px; background: #25D366; color: #ffffff; text-decoration: none; border-radius: 14px; font-weight: 700; font-size: 1rem; box-shadow: 0 6px 16px rgba(37, 211, 102, 0.35); margin-bottom: 12px; box-sizing: border-box;">
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.711 2.598 2.664-.699c.971.53 1.77.813 2.796.814 3.184 0 5.77-2.587 5.77-5.767 0-3.18-2.586-5.767-5.77-5.767zm7.643 5.767c0 4.22-3.433 7.653-7.653 7.653-1.306 0-2.531-.334-3.606-.921l-4.415 1.157 1.178-4.305c-.694-1.127-1.077-2.45-1.077-3.884 0-4.22 3.433-7.653 7.653-7.653 4.22 0 7.653 3.433 7.653 7.653z"/></svg>

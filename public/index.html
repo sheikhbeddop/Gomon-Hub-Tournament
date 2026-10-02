@@ -1762,10 +1762,7 @@
                 <div style="background: #f8fafc; border-radius: 12px; border: 1px solid #e2e8f0; padding: 14px 16px; margin-bottom: 16px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #f1f5f9;">
                         <span style="font-size: 0.85rem; color: #64748b;">Player ID:</span>
-                        <div style="display: flex; align-items: center; gap: 6px;">
-                            <b id="profPlayerId" style="color: #0f172a; font-family: monospace;">ID N/A</b>
-                            <button type="button" class="btn btn-sm btn-ghost" onclick="copyProfilePlayerId()" style="padding: 2px 6px; font-size: 0.72rem;">📋 Copy</button>
-                        </div>
+                        <b id="profPlayerId" onclick="copyProfilePlayerId()" title="Click to copy player ID" style="color: #2563eb; font-family: monospace; font-size: 0.95rem; font-weight: 800; cursor: pointer; padding: 2px 6px; border-radius: 4px; transition: background 0.2s;" onmouseover="this.style.backgroundColor='#eff6ff'" onmouseout="this.style.backgroundColor='transparent'">ID N/A</b>
                     </div>
                     <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #f1f5f9;">
                         <span style="font-size: 0.85rem; color: #64748b;">Promo Code:</span>
@@ -3151,7 +3148,7 @@
     <!-- Toast Notification Container -->
     <div class="toast-container" id="toastContainer"></div>
 
-    <script src="/static/js/app.js?v=5.4.7"></script>
+    <script src="/static/js/app.js?v=5.4.8"></script>
 
 </body>
 </html>

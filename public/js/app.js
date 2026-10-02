@@ -5923,9 +5923,27 @@ function renderUserProfile() {
 
 
 function copyProfilePlayerId() {
-    if (currentUser && currentUser.player_id) {
-        navigator.clipboard.writeText(currentUser.player_id);
-        showToast(`Player ID (${currentUser.player_id}) copied to clipboard!`, 'success');
+    if (!currentUser || !currentUser.player_id) {
+        showToast('Player ID not available!', 'info');
+        return;
+    }
+    const pid = currentUser.player_id;
+    try {
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(pid);
+        } else {
+            const ta = document.createElement('textarea');
+            ta.value = pid;
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+        }
+        showToast(`Player ID (${pid}) copied to clipboard!`, 'success');
+    } catch (e) {
+        showToast(`Player ID: ${pid}`, 'info');
     }
 }
 

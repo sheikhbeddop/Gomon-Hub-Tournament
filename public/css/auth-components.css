@@ -669,3 +669,103 @@
         top: auto;
     }
 }
+
+/* =============================================================
+   OTP DEVICE VERIFICATION COMPONENT STYLES (Matches Login Card)
+   ============================================================= */
+#authModal #authOtpCard {
+    animation: authCardPopIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+#authModal .otp-boxes-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    margin: 16px 0 20px 0;
+}
+
+#authModal .otp-box-input {
+    width: 44px;
+    height: 52px;
+    text-align: center;
+    font-size: 1.55rem;
+    font-weight: 800;
+    font-family: 'Rajdhani', -apple-system, BlinkMacSystemFont, monospace, sans-serif;
+    color: #1a2233;
+    background: #f8fafc;
+    border: 2px solid #e2e8f0;
+    border-radius: 12px;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    outline: none;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.04);
+    box-sizing: border-box;
+    padding: 0;
+}
+
+#authModal .otp-box-input:focus {
+    border-color: #00f59b;
+    background: #ffffff;
+    box-shadow: 0 0 0 3px rgba(0, 245, 155, 0.22), 0 4px 12px rgba(0, 245, 155, 0.15);
+    transform: translateY(-2px);
+}
+
+#authModal .otp-resend-row {
+    text-align: center;
+    margin-bottom: 20px;
+    font-size: 0.86rem;
+    color: #64748b;
+    min-height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#authModal .otp-resend-button {
+    background: none;
+    border: none;
+    color: #00b875;
+    font-weight: 700;
+    font-size: 0.88rem;
+    cursor: pointer;
+    text-decoration: underline;
+    padding: 2px 6px;
+    transition: color 0.2s ease;
+}
+
+#authModal .otp-resend-button:hover {
+    color: #008f5b;
+}
+
+/* Dark Mode Support for OTP Inputs */
+[data-theme="dark"] #authModal .otp-box-input,
+.dark #authModal .otp-box-input {
+    background: #131b29;
+    border-color: #2a364f;
+    color: #ffffff;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+[data-theme="dark"] #authModal .otp-box-input:focus,
+.dark #authModal .otp-box-input:focus {
+    border-color: #00f59b;
+    background: #182234;
+    box-shadow: 0 0 0 3px rgba(0, 245, 155, 0.25), 0 4px 14px rgba(0, 245, 155, 0.2);
+}
+
+[data-theme="dark"] #authModal .otp-resend-button,
+.dark #authModal .otp-resend-button {
+    color: #00f59b;
+}
+
+@media (max-width: 360px) {
+    #authModal .otp-boxes-container {
+        gap: 5px;
+    }
+    #authModal .otp-box-input {
+        width: 38px;
+        height: 48px;
+        font-size: 1.35rem;
+    }
+}
+

@@ -5872,6 +5872,9 @@ function renderUserProfile() {
     const elPid = document.getElementById('profPlayerId');
     if (elPid) elPid.innerText = currentUser.player_id || 'ID N/A';
 
+    const elPromo = document.getElementById('profPromoCode');
+    if (elPromo) elPromo.innerText = currentUser.promo_code || 'GOMONHUB-N/A';
+
     const elPhone = document.getElementById('profPhone');
     if (elPhone) elPhone.innerText = currentUser.phone || 'Not provided';
 
@@ -5915,6 +5918,31 @@ function copyProfilePlayerId() {
     if (currentUser && currentUser.player_id) {
         navigator.clipboard.writeText(currentUser.player_id);
         showToast(`Player ID (${currentUser.player_id}) copied to clipboard!`, 'success');
+    }
+}
+
+function copyProfilePromoCode() {
+    if (!currentUser || !currentUser.promo_code) {
+        showToast('Promo Code not available!', 'info');
+        return;
+    }
+    const code = currentUser.promo_code;
+    try {
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(code);
+        } else {
+            const ta = document.createElement('textarea');
+            ta.value = code;
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+        }
+        showToast(`Promo Code (${code}) copied to clipboard!`, 'success');
+    } catch (e) {
+        showToast(`Promo Code: ${code}`, 'info');
     }
 }
 
@@ -6170,13 +6198,26 @@ async function loadWithdrawHistory() {
     }
 }
 
-function openMyProfileModal() {
+async function openMyProfileModal() {
     if (!currentUser) {
         openModal('authModal');
         return;
     }
     renderUserProfile();
     openModal('myProfileDetailsModal');
+    if (!currentUser.promo_code) {
+        try {
+            const token = localStorage.getItem('ff_token');
+            if (token) {
+                const res = await fetch('/api/auth/me', { headers: { 'Authorization': `Bearer ${token}` } });
+                if (res.ok) {
+                    currentUser = await res.json();
+                    localStorage.setItem('ff_user', JSON.stringify(currentUser));
+                    renderUserProfile();
+                }
+            }
+        } catch (e) {}
+    }
 }
 
 function openRulesModal() {

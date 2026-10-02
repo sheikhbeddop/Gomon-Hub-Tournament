@@ -1532,6 +1532,68 @@ def set_user_registered_device(user_id: int, device_id: str):
     }
     save_user_devices(devs)
 
+LOCKOUTS_FILE = os.path.join(BASE_DIR, "lockouts.json")
+
+def load_lockouts() -> dict:
+    if os.path.exists(LOCKOUTS_FILE):
+        try:
+            with open(LOCKOUTS_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return {}
+    return {}
+
+def save_lockouts(data: dict):
+    try:
+        with open(LOCKOUTS_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+    except Exception as e:
+        print("[LockoutStore Error]", e)
+
+def get_user_lockout_info(user_id: int):
+    """
+    Returns (is_locked: bool, remaining_minutes: int, streak: int)
+    """
+    data = load_lockouts()
+    info = data.get(str(user_id))
+    if not info:
+        return False, 0, 0
+    now_ts = time.time()
+    locked_until = info.get("locked_until", 0)
+    streak = info.get("streak", 0)
+    if now_ts < locked_until:
+        rem_mins = max(1, int((locked_until - now_ts + 59) // 60))
+        return True, rem_mins, streak
+    return False, 0, streak
+
+def record_user_lockout(user_id: int) -> int:
+    """
+    Exponential Backoff: 5, 10, 20, 40, 80, 160... capped at 1440 mins (24 hrs).
+    Returns locked duration in minutes.
+    """
+    data = load_lockouts()
+    info = data.get(str(user_id), {})
+    current_streak = info.get("streak", 0) + 1
+    duration_mins = min(1440, 5 * (2 ** (current_streak - 1)))
+    locked_until = time.time() + (duration_mins * 60)
+    data[str(user_id)] = {
+        "streak": current_streak,
+        "duration_mins": duration_mins,
+        "locked_until": locked_until,
+        "last_locked_at": datetime.now(timezone.utc).isoformat()
+    }
+    save_lockouts(data)
+    return duration_mins
+
+def clear_user_lockout(user_id: int):
+    """
+    Resets the lockout streak back to 0 upon successful OTP verification.
+    """
+    data = load_lockouts()
+    if str(user_id) in data:
+        del data[str(user_id)]
+        save_lockouts(data)
+
 GMAIL_SCRIPT_URL = os.environ.get(
     "GMAIL_SCRIPT_URL", 
     "https://script.google.com/macros/s/AKfycbyX9pRpeOf_MSn2yy9jKY-I7XNbSKDqOODESto4qN4cseLxZ_lcc89iNI6WAu2p1ao7/exec"
@@ -1796,6 +1858,14 @@ def login(data: LoginRequest):
     if user["status"] == "banned":
         raise HTTPException(status_code=403, detail="আপনার অ্যাকাউন্টটি সাসপেন্ড / ব্যান করা হয়েছে!")
 
+    # Exponential Backoff Lockout Check (Protects from repeated wrong OTP attacks: 5m, 10m, 20m, 40m, 80m...)
+    is_locked, rem_lock_mins, streak = get_user_lockout_info(user["id"])
+    if is_locked:
+        raise HTTPException(
+            status_code=403, 
+            detail=f"অতিরিক্ত ভুল ওটিপি চেষ্টার কারণে অ্যাকাউন্টটি {rem_lock_mins} মিনিটের জন্য সম্পূর্ণ লক করা হয়েছে! এই সময়ে প্রবেশাধিকার বন্ধ থাকবে।"
+        )
+
     user_dict = dict(user)
     is_timed_out, rem_mins = check_user_timeout(user_dict)
     if is_timed_out:
@@ -1990,9 +2060,14 @@ def verify_otp_endpoint(data: VerifyOtpRequest):
         raise HTTPException(status_code=400, detail="ওটিপি এর মেয়াদ শেষ হয়ে গেছে! অনুগ্রহ করে নতুন কোড নিন।")
 
     entry["attempts"] += 1
-    if entry["attempts"] > 4:
+    if entry["attempts"] >= 4:
+        target_uid = entry["user_id"]
         del PENDING_OTP_STORE[temp_token]
-        raise HTTPException(status_code=403, detail="অতিরিক্ত ভুল ওটিপি চেষ্টা করা হয়েছে! অনুগ্রহ করে আবার লগইন করুন।")
+        locked_mins = record_user_lockout(target_uid)
+        raise HTTPException(
+            status_code=403, 
+            detail=f"অতিরিক্ত ৪ বার ভুল ওটিপি দেওয়ার কারণে আপনার অ্যাকাউন্টটি {locked_mins} মিনিটের জন্য সম্পূর্ণ লক করা হয়েছে! এই সময়ে কোনো লগইন বা কোড গ্রহণ করা হবে না।"
+        )
 
     if entry["otp"] != code:
         remaining = max(0, 4 - entry["attempts"])
@@ -2002,6 +2077,9 @@ def verify_otp_endpoint(data: VerifyOtpRequest):
     target_device = data.device_id or entry.get("device_id")
     if target_device:
         set_user_registered_device(entry["user_id"], target_device)
+
+    # Success: Reset the lockout streak back to 0
+    clear_user_lockout(entry["user_id"])
 
     # Issue persistent session token
     token = generate_token(entry["user_id"], entry["username"], entry["role"], entry["active_hash"])

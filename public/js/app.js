@@ -615,20 +615,28 @@ function exitImpersonation() {
 function setAuthMode(mode) {
     const loginCard = document.getElementById('authLoginCard');
     const signupCard = document.getElementById('authSignupCard');
+    const otpCard = document.getElementById('authOtpCard');
     clearLoginError();
     clearSignupError();
+    if (typeof clearOtpError === 'function') clearOtpError();
 
     if (mode === 'login') {
         if (loginCard) loginCard.style.display = 'block';
         if (signupCard) signupCard.style.display = 'none';
+        if (otpCard) otpCard.style.display = 'none';
         const saved = localStorage.getItem('saved_login_user');
         const uInp = document.getElementById('loginUsername');
         if (uInp && !uInp.value && saved) {
             uInp.value = saved;
         }
+    } else if (mode === 'otp') {
+        if (loginCard) loginCard.style.display = 'none';
+        if (signupCard) signupCard.style.display = 'none';
+        if (otpCard) otpCard.style.display = 'block';
     } else {
         if (loginCard) loginCard.style.display = 'none';
         if (signupCard) signupCard.style.display = 'flex';
+        if (otpCard) otpCard.style.display = 'none';
     }
 }
 
@@ -684,6 +692,223 @@ function showLoginError(msg) {
     playSound('alert');
 }
 
+// Device ID & OTP State Management
+function getOrCreateDeviceId() {
+    let devId = localStorage.getItem('gomon_hub_device_id');
+    if (!devId) {
+        devId = 'dev_' + Math.random().toString(36).substring(2, 10) + '_' + Date.now().toString(36);
+        localStorage.setItem('gomon_hub_device_id', devId);
+    }
+    return devId;
+}
+
+let currentOtpTempToken = null;
+let otpCountdownTimerInterval = null;
+
+function clearOtpError() {
+    const alertBox = document.getElementById('otpErrorAlert');
+    if (alertBox) {
+        alertBox.style.display = 'none';
+        alertBox.innerText = '';
+    }
+}
+
+function showOtpError(msg) {
+    const alertBox = document.getElementById('otpErrorAlert');
+    if (alertBox) {
+        alertBox.style.display = 'block';
+        alertBox.innerText = msg;
+    }
+    showToast(msg, 'error');
+    playSound('alert');
+}
+
+function initOtpInputs() {
+    clearOtpError();
+    const boxes = document.querySelectorAll('.otp-box-input');
+    boxes.forEach((box, idx) => {
+        box.value = '';
+        box.oninput = (e) => {
+            const val = e.target.value.replace(/[^0-9]/g, '');
+            e.target.value = val ? val[val.length - 1] : '';
+            if (val && idx < boxes.length - 1) {
+                boxes[idx + 1].focus();
+            }
+            checkAutoSubmitOtp();
+        };
+        box.onkeydown = (e) => {
+            if (e.key === 'Backspace' && !box.value && idx > 0) {
+                boxes[idx - 1].focus();
+            }
+        };
+        box.onpaste = (e) => {
+            e.preventDefault();
+            const pasteData = (e.clipboardData || window.clipboardData).getData('text').trim().replace(/[^0-9]/g, '');
+            if (pasteData) {
+                for (let i = 0; i < boxes.length; i++) {
+                    boxes[i].value = pasteData[i] || '';
+                }
+                const focusIdx = Math.min(pasteData.length, boxes.length - 1);
+                boxes[focusIdx].focus();
+                checkAutoSubmitOtp();
+            }
+        };
+    });
+    setTimeout(() => {
+        if (boxes[0]) boxes[0].focus();
+    }, 100);
+}
+
+function checkAutoSubmitOtp() {
+    const boxes = document.querySelectorAll('.otp-box-input');
+    let code = '';
+    boxes.forEach(b => code += b.value.trim());
+    if (code.length === 6) {
+        handleVerifyOtpSubmit();
+    }
+}
+
+function startOtpCountdown(seconds) {
+    if (otpCountdownTimerInterval) clearInterval(otpCountdownTimerInterval);
+    const timerWrap = document.getElementById('otpTimerWrap');
+    const timerEl = document.getElementById('otpCountdownTimer');
+    const resendBtn = document.getElementById('otpResendBtn');
+    if (timerWrap) timerWrap.style.display = 'inline';
+    if (resendBtn) resendBtn.style.display = 'none';
+
+    let rem = seconds;
+    const update = () => {
+        const m = Math.floor(rem / 60).toString().padStart(2, '0');
+        const s = (rem % 60).toString().padStart(2, '0');
+        if (timerEl) timerEl.innerText = `${m}:${s}`;
+        if (rem <= 0) {
+            clearInterval(otpCountdownTimerInterval);
+            if (timerWrap) timerWrap.style.display = 'none';
+            if (resendBtn) resendBtn.style.display = 'inline-block';
+        }
+        rem--;
+    };
+    update();
+    otpCountdownTimerInterval = setInterval(update, 1000);
+}
+
+async function handleVerifyOtpSubmit(e) {
+    if (e && e.preventDefault) e.preventDefault();
+    clearOtpError();
+    const boxes = document.querySelectorAll('.otp-box-input');
+    let code = '';
+    boxes.forEach(b => code += b.value.trim());
+    if (code.length < 6) {
+        showOtpError('অনুগ্রহ করে ৬ ডিজিটের সম্পূর্ণ ওটিপি কোড দিন');
+        return;
+    }
+    if (!currentOtpTempToken) {
+        showOtpError('সেশনের মেয়াদ শেষ হয়ে গেছে! অনুগ্রহ করে পুনরায় লগইন করুন।');
+        setAuthMode('login');
+        return;
+    }
+
+    const btn = document.getElementById('otpVerifySubmitBtn');
+    const origText = btn ? btn.innerText : 'Verify & Continue';
+    if (btn) {
+        btn.disabled = true;
+        btn.innerText = 'Verifying...';
+    }
+
+    try {
+        const deviceId = getOrCreateDeviceId();
+        const res = await fetch('/api/auth/verify-otp', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                temp_token: currentOtpTempToken,
+                otp_code: code,
+                device_id: deviceId
+            })
+        });
+        const data = await res.json();
+        if (res.ok) {
+            token = data.token;
+            currentUser = data.user;
+            localStorage.setItem('ff_token', token);
+            localStorage.setItem('ff_user', JSON.stringify(currentUser));
+            document.documentElement.classList.remove('not-authenticated');
+            document.documentElement.classList.add('authenticated');
+            document.body.classList.remove('not-authenticated');
+            document.body.classList.add('authenticated');
+            const mainApp = document.getElementById('mainAppWrapper');
+            if (mainApp) mainApp.style.display = 'block';
+            closeModal('authModal');
+            dismissSplashScreen();
+            showToast(`Welcome, ${currentUser.username}! Device verified successfully.`, 'success');
+            playSound('success');
+
+            sessionStorage.removeItem('welcome_notice_dismissed');
+            try { openWelcomeNotice(true); } catch(err) {}
+            try { renderLoggedInNav(); } catch(err) {}
+            try { renderUserProfile(); } catch(err) {}
+            try { loadMatches(); } catch(err) {}
+            try { loadWalletHistory(); } catch(err) {}
+            try { initWebSocket(); } catch(err) {}
+            if (currentUser.role === 'admin') {
+                const adminBtn = document.getElementById('tabBtn-admin');
+                if (adminBtn) adminBtn.style.display = 'inline-flex';
+                try { loadAdminOverview(); } catch(err) {}
+            }
+        } else {
+            showOtpError(data.detail || 'ভুল ওটিপি কোড! অনুগ্রহ করে আবার চেষ্টা করুন।');
+            playSound('alert');
+        }
+    } catch (err) {
+        console.error('Verify OTP network error:', err);
+        showOtpError('সার্ভারে সংযোগ করা সম্ভব হয়নি। ইন্টারনেট কানেকশন চেক করুন।');
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerText = origText;
+        }
+    }
+}
+
+async function triggerResendOtp() {
+    if (!currentOtpTempToken) return;
+    const btn = document.getElementById('otpResendBtn');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerText = 'Sending...';
+    }
+    clearOtpError();
+    try {
+        const res = await fetch('/api/auth/resend-otp', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ temp_token: currentOtpTempToken })
+        });
+        const data = await res.json();
+        if (res.ok) {
+            startOtpCountdown(180);
+            if (data.dev_otp) {
+                console.log('%c[GOMON HUB NEW OTP]: ' + data.dev_otp, 'color: #00f59b; font-size: 16px; font-weight: bold;');
+                showToast(`[Dev Mode] নতুন ওটিপি কোড: ${data.dev_otp}`, 'info');
+            } else {
+                showToast(data.message || 'নতুন ওটিপি কোড আপনার ইমেইলে পাঠানো হয়েছে।', 'success');
+            }
+            const boxes = document.querySelectorAll('.otp-box-input');
+            boxes.forEach(b => b.value = '');
+            if (boxes[0]) boxes[0].focus();
+        } else {
+            showOtpError(data.detail || 'নতুন কোড পাঠানো যায়নি। অনুগ্রহ করে কিছুক্ষণ পর চেষ্টা করুন।');
+        }
+    } catch (err) {
+        showOtpError('নেটওয়ার্ক সমস্যা! অনুগ্রহ করে পুনরায় চেষ্টা করুন।');
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerText = 'Resend Code';
+        }
+    }
+}
+
 function clearLoginError() {
     const alertBox = document.getElementById('loginErrorAlert');
     if (alertBox) alertBox.style.display = 'none';
@@ -716,14 +941,32 @@ async function handleLoginSubmit(e) {
     try {
         const pinInput = document.getElementById('loginAdminPin');
         const pinVal = pinInput ? pinInput.value.trim() : '';
+        const deviceId = getOrCreateDeviceId();
 
         const res = await fetch('/api/auth/login', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username: u, password: p, admin_pin: pinVal })
+            body: JSON.stringify({ username: u, password: p, admin_pin: pinVal, device_id: deviceId })
         });
         const data = await res.json();
         if (res.ok) {
+            // Check if New Device Verification OTP is required
+            if (data.otp_required) {
+                currentOtpTempToken = data.temp_token;
+                const emailEl = document.getElementById('otpMaskedEmail');
+                if (emailEl) emailEl.innerText = data.masked_email || 'your email';
+                setAuthMode('otp');
+                initOtpInputs();
+                startOtpCountdown(180);
+                if (data.dev_otp) {
+                    console.log('%c[GOMON HUB OTP TEST CODE]: ' + data.dev_otp, 'color: #00f59b; font-size: 16px; font-weight: bold;');
+                    showToast(`[Dev Mode] আপনার ওটিপি কোড: ${data.dev_otp}`, 'info');
+                } else {
+                    showToast(data.message || 'নতুন ডিভাইস শনাক্ত হয়েছে! ইমেইলে ওটিপি পাঠানো হয়েছে।', 'info');
+                }
+                return;
+            }
+
             token = data.token;
             currentUser = data.user;
             localStorage.setItem('ff_token', token);

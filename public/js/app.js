@@ -218,6 +218,7 @@ async function startApp() {
     }
 
     initTheme();
+    initAppNavigationBarrier();
     await initAuth();
     loadPublicInfo();
     initServiceWorker();
@@ -6681,22 +6682,112 @@ function restoreLastActiveView(isCached = false) {
     }
 }
 
-// Browser Back/Forward navigation listener
+// -------------------------------------------------------------
+// Smart Mobile Navigation Stack & Double-Back to Exit Engine
+// -------------------------------------------------------------
+const EXIT_DOUBLE_PRESS_WINDOW = 1000; // 1 second window
+let lastBackPressTime = 0;
+let appTabHistory = ['tab-matches'];
+let isProgrammaticBack = false;
+
+function initAppNavigationBarrier() {
+    try {
+        const clean = (window.location.hash || '#matches').replace('#', '').trim();
+        const initialTab = (clean && document.getElementById('tab-' + clean)) ? ('tab-' + clean) : 'tab-matches';
+        appTabHistory = [initialTab];
+        history.replaceState({ type: 'root', tabId: initialTab }, '', '#' + initialTab.replace('tab-', ''));
+        history.pushState({ type: 'barrier', tabId: initialTab }, '', '#' + initialTab.replace('tab-', ''));
+    } catch (e) {}
+}
+
+// Browser Back/Forward hardware & gesture navigation listener
 window.addEventListener('popstate', () => {
-    if (window.location.hash) {
-        const clean = window.location.hash.replace('#', '').trim();
-        if (clean && document.getElementById('tab-' + clean)) {
-            switchTab('tab-' + clean, true);
+    if (isProgrammaticBack) {
+        isProgrammaticBack = false;
+        return;
+    }
+
+    // 1. If user is NOT logged in (Auth Modal is active)
+    if (!currentUser) {
+        const signupCard = document.getElementById('authSignupCard');
+        const forgotReqCard = document.getElementById('authForgotRequestCard');
+        const forgotOtpCard = document.getElementById('authForgotOtpCard');
+        const forgotNewPassCard = document.getElementById('authForgotNewPassCard');
+        const fpModal = document.getElementById('forgotPasswordModal');
+
+        // If in forgotPasswordModal popup, close it
+        if (fpModal && fpModal.classList.contains('show')) {
+            closeModal('forgotPasswordModal', true);
+            history.pushState({ type: 'barrier' }, '', window.location.hash || '#matches');
+            return;
         }
+
+        // If in signup or forgot cards inside authModal, return to Sign In
+        const isSubAuthOpen = (signupCard && signupCard.style.display !== 'none' && signupCard.style.display !== '') ||
+                              (forgotReqCard && forgotReqCard.style.display !== 'none' && forgotReqCard.style.display !== '') ||
+                              (forgotOtpCard && forgotOtpCard.style.display !== 'none' && forgotOtpCard.style.display !== '') ||
+                              (forgotNewPassCard && forgotNewPassCard.style.display !== 'none' && forgotNewPassCard.style.display !== '');
+
+        if (isSubAuthOpen) {
+            setAuthMode('login');
+            history.pushState({ type: 'barrier' }, '', window.location.hash || '#matches');
+            return;
+        }
+
+        // On Sign In (root auth screen): Double tap back within 1 second to exit
+        const now = Date.now();
+        if (now - lastBackPressTime <= EXIT_DOUBLE_PRESS_WINDOW) {
+            showToast('Exiting...', 'info');
+            try { window.close(); } catch (err) {}
+            return; // Natural exit allowed
+        } else {
+            lastBackPressTime = now;
+            history.pushState({ type: 'barrier' }, '', window.location.hash || '#matches');
+            showToast('Press back again to exit', 'info');
+            return;
+        }
+    }
+
+    // 2. Priority 1 (Logged-in): Check if ANY modal is currently open
+    const openModals = Array.from(document.querySelectorAll('.modal-overlay.show')).filter(m => m.id !== 'authModal');
+    if (openModals.length > 0) {
+        const topModal = openModals[openModals.length - 1];
+        closeModal(topModal.id, true);
+        history.pushState({ type: 'barrier' }, '', window.location.hash);
+        return;
+    }
+
+    // 3. Priority 2: Check Tab Navigation History Stack (LIFO)
+    if (appTabHistory.length > 1) {
+        appTabHistory.pop(); // Remove current tab from stack
+        const prevTab = appTabHistory[appTabHistory.length - 1]; // Previous visited tab
+        if (prevTab && document.getElementById(prevTab)) {
+            switchTab(prevTab, false, true);
+            history.pushState({ type: 'barrier' }, '', '#' + prevTab.replace('tab-', ''));
+            return;
+        }
+    }
+
+    // 4. Priority 3: Root Tab reached (tab-matches or no more previous tabs)
+    // Double Tap Back to Exit within 1 second (1000ms)
+    const now = Date.now();
+    if (now - lastBackPressTime <= EXIT_DOUBLE_PRESS_WINDOW) {
+        showToast('Exiting app...', 'info');
+        try { window.close(); } catch (err) {}
+        // Natural exit allowed (no barrier pushed)
+    } else {
+        lastBackPressTime = now;
+        history.pushState({ type: 'barrier' }, '', window.location.hash || '#matches');
+        showToast('Press back again to exit', 'info');
     }
 });
 
 // -------------------------------------------------------------
 // Tab Switching & Modal Helpers
 // -------------------------------------------------------------
-function switchTab(tabId, isRestore = false) {
+function switchTab(tabId, isRestore = false, fromPopstate = false) {
     if (tabId === 'tab-recharge' || tabId === 'tab-shop') {
-        switchTab('tab-profile', isRestore);
+        switchTab('tab-profile', isRestore, fromPopstate);
         openWalletModal();
         return;
     }
@@ -6726,11 +6817,22 @@ function switchTab(tabId, isRestore = false) {
 
     // Save active tab state
     sessionStorage.setItem('current_active_tab', tabId);
-    try {
-        if (window.location.hash !== '#' + cleanName) {
-            history.replaceState(null, '', '#' + cleanName);
+
+    // Track tab navigation stack for hardware back button
+    if (!fromPopstate && !isRestore) {
+        if (appTabHistory[appTabHistory.length - 1] !== tabId) {
+            appTabHistory.push(tabId);
+            try {
+                history.pushState({ type: 'tab', tabId: tabId }, '', '#' + cleanName);
+            } catch (e) {}
         }
-    } catch (e) {}
+    } else {
+        try {
+            if (window.location.hash !== '#' + cleanName) {
+                history.replaceState({ type: 'tab', tabId: tabId }, '', '#' + cleanName);
+            }
+        } catch (e) {}
+    }
 
     if (tabId === 'tab-profile') {
         renderUserProfile();
@@ -7090,14 +7192,23 @@ function closeWelcomeNoticeOnBackdrop(e) {
 
 function openModal(id) {
     const modal = document.getElementById(id);
-    if (modal) modal.classList.add('show');
+    if (modal) {
+        modal.classList.add('show');
+        modal.style.removeProperty('display');
+    }
     const persistableModals = ['walletModal', 'withdrawModal', 'myProfileDetailsModal', 'allRulesModal', 'topPlayersModal', 'devProfileModal', 'supportModal', 'adminAuditLogsModal'];
     if (persistableModals.includes(id)) {
         sessionStorage.setItem('current_active_modal', id);
     }
+    // Track modal in browser history for hardware back button support
+    if (id !== 'authModal' || currentUser) {
+        try {
+            history.pushState({ type: 'modal', modalId: id }, '', window.location.hash);
+        } catch (e) {}
+    }
 }
 
-function closeModal(id) {
+function closeModal(id, fromPopstate = false) {
     if (id === 'authModal' && !currentUser) {
         return; // Non-logged-in users cannot dismiss login modal to enter app
     }
@@ -7106,6 +7217,15 @@ function closeModal(id) {
     if (sessionStorage.getItem('current_active_modal') === id) {
         sessionStorage.removeItem('current_active_modal');
     }
+    if (!fromPopstate) {
+        if (history.state && history.state.type === 'modal' && history.state.modalId === id) {
+            isProgrammaticBack = true;
+            try {
+                history.back();
+            } catch (e) {}
+            setTimeout(() => { isProgrammaticBack = false; }, 150);
+        }
+    }
 }
 
 window.onclick = (e) => {
@@ -7113,10 +7233,7 @@ window.onclick = (e) => {
         if (e.target.id === 'authModal' && !currentUser) {
             return; // Non-logged-in users cannot dismiss login modal by clicking background
         }
-        e.target.classList.remove('show');
-        if (sessionStorage.getItem('current_active_modal') === e.target.id) {
-            sessionStorage.removeItem('current_active_modal');
-        }
+        closeModal(e.target.id);
     }
 };
 

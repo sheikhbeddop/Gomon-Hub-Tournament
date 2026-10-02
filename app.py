@@ -870,6 +870,45 @@ def init_db():
 
 init_db()
 
+# -------------------------------------------------------------
+# Permanent Unique Promo Code Management Engine
+# -------------------------------------------------------------
+def generate_unique_promo_code(conn) -> str:
+    """
+    Generates a permanent, unique promo code in format GOMONHUB-XXXX
+    where XXXX is 4 alphanumeric uppercase characters (excluding confusing chars 0, O, 1, I).
+    """
+    charset = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
+    for _ in range(100):
+        code = "GOMONHUB-" + "".join(secrets.choice(charset) for _ in range(4))
+        row = conn.execute("SELECT id FROM users WHERE promo_code = ?", (code,)).fetchone()
+        if not row:
+            return code
+    return f"GOMONHUB-{secrets.choice(charset)}{secrets.choice(charset)}{secrets.choice(charset)}{int(time.time()) % 1000}"
+
+def ensure_promo_codes_initialized():
+    """Ensures promo_code column exists in users table and all existing users have a unique permanent promo code."""
+    try:
+        conn = get_db()
+        with conn:
+            try:
+                conn.execute("ALTER TABLE users ADD COLUMN promo_code TEXT")
+            except Exception:
+                pass
+            try:
+                conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_promo_code ON users(promo_code)")
+            except Exception:
+                pass
+            users_without_code = conn.execute("SELECT id, username FROM users WHERE promo_code IS NULL OR promo_code = '' ORDER BY id ASC").fetchall()
+            for u in users_without_code:
+                code = generate_unique_promo_code(conn)
+                conn.execute("UPDATE users SET promo_code = ? WHERE id = ?", (code, u["id"]))
+        conn.close()
+    except Exception as e:
+        print(f"[Promo Code Init Notice] {e}")
+
+ensure_promo_codes_initialized()
+
 
 # -------------------------------------------------------------
 # FastAPI App & WebSocket Connection Manager
@@ -878,6 +917,10 @@ app = FastAPI(title="Free Fire Tournament Platform API")
 
 @app.on_event("startup")
 async def on_startup():
+    try:
+        ensure_promo_codes_initialized()
+    except Exception:
+        pass
     # Run 15-day auto-purge on startup
     try:
         purge_records_older_than_15_days()
@@ -1442,11 +1485,13 @@ def register(data: RegisterRequest):
     rand_id = f"GOMONHUB-{secrets.randbelow(90000) + 10000}"
     pass_hash = hash_password(data.password)
 
+    user_promo = generate_unique_promo_code(conn)
+
     with conn:
         cursor = conn.execute("""
-        INSERT INTO users (player_id, username, password_hash, plain_password, phone, email, ff_ign, ff_uid, digits_balance, role, status)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 'player', 'active')
-        """, (rand_id, username, pass_hash, data.password.strip(), phone, email, ff_ign, ff_uid))
+        INSERT INTO users (player_id, username, password_hash, plain_password, phone, email, ff_ign, ff_uid, digits_balance, role, status, promo_code)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 'player', 'active', ?)
+        """, (rand_id, username, pass_hash, data.password.strip(), phone, email, ff_ign, ff_uid, user_promo))
         user_id = cursor.lastrowid
 
     token = generate_token(user_id, username, "player", pass_hash)
@@ -1459,6 +1504,7 @@ def register(data: RegisterRequest):
             "id": user_id,
             "player_id": rand_id,
             "username": username,
+            "promo_code": user_promo,
             "digits_balance": 0,
             "role": "player",
             "ff_ign": data.ff_ign.strip(),
@@ -1587,6 +1633,17 @@ def login(data: LoginRequest):
         pass
     matches_won = win_points // 100 if win_points >= 100 else (1 if win_points > 0 else 0)
 
+    user_promo = u_dict.get("promo_code") or ""
+    if not user_promo:
+        try:
+            c_pc = get_db()
+            with c_pc:
+                user_promo = generate_unique_promo_code(c_pc)
+                c_pc.execute("UPDATE users SET promo_code = ? WHERE id = ?", (user_promo, u_dict["id"]))
+            c_pc.close()
+        except Exception:
+            pass
+
     return {
         "success": True,
         "token": token,
@@ -1594,6 +1651,7 @@ def login(data: LoginRequest):
             "id": u_dict["id"],
             "player_id": u_dict["player_id"],
             "username": u_dict["username"],
+            "promo_code": user_promo,
             "phone": u_dict.get("phone", ""),
             "email": email,
             "digits_balance": u_dict.get("digits_balance", 0),
@@ -1615,22 +1673,29 @@ def get_me(user: dict = Depends(get_current_user)):
     email = ""
     status = "active"
     created_at = ""
+    promo_code = ""
     try:
         conn = get_db()
         j_row = conn.execute("SELECT COUNT(*) FROM participations WHERE user_id = ?", (user["id"],)).fetchone()
         if j_row:
             matches_joined = j_row[0]
-        u_row = conn.execute("SELECT win_points, email, status, created_at FROM users WHERE id = ?", (user["id"],)).fetchone()
+        u_row = conn.execute("SELECT win_points, email, status, created_at, promo_code FROM users WHERE id = ?", (user["id"],)).fetchone()
         if u_row:
             win_points = u_row["win_points"] if "win_points" in u_row.keys() and u_row["win_points"] is not None else 0
             email = u_row["email"] if "email" in u_row.keys() and u_row["email"] else ""
             status = u_row["status"] if "status" in u_row.keys() and u_row["status"] else "active"
             created_at = str(u_row["created_at"]) if "created_at" in u_row.keys() and u_row["created_at"] else ""
+            promo_code = u_row["promo_code"] if ("promo_code" in u_row.keys() and u_row["promo_code"]) else ""
+        if not promo_code:
+            promo_code = generate_unique_promo_code(conn)
+            with conn:
+                conn.execute("UPDATE users SET promo_code = ? WHERE id = ?", (promo_code, user["id"]))
         conn.close()
     except Exception:
         win_points = user.get("win_points") or 0
         email = user.get("email") or ""
         status = user.get("status") or "active"
+        promo_code = user.get("promo_code") or ""
 
     matches_won = win_points // 100 if win_points >= 100 else (1 if win_points > 0 else 0)
 
@@ -1638,6 +1703,7 @@ def get_me(user: dict = Depends(get_current_user)):
         "id": user["id"],
         "player_id": user["player_id"],
         "username": user["username"],
+        "promo_code": promo_code,
         "phone": user.get("phone", ""),
         "email": email,
         "digits_balance": user["digits_balance"],
@@ -3211,11 +3277,13 @@ async def admin_create_user(data: AdminCreateUserRequest, admin: dict = Depends(
         rand_id = f"GOMONHUB-{secrets.randbelow(90000) + 10000}"
         pass_hash = hash_password(password)
 
+        user_promo = generate_unique_promo_code(conn)
+
         with conn:
             cursor = conn.execute("""
-                INSERT INTO users (player_id, username, password_hash, plain_password, phone, email, ff_ign, ff_uid, digits_balance, role, status)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')
-            """, (rand_id, username, pass_hash, password, phone, email, ff_ign, ff_uid, initial_balance, role))
+                INSERT INTO users (player_id, username, password_hash, plain_password, phone, email, ff_ign, ff_uid, digits_balance, role, status, promo_code)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?)
+            """, (rand_id, username, pass_hash, password, phone, email, ff_ign, ff_uid, initial_balance, role, user_promo))
             new_user_id = cursor.lastrowid
 
             conn.execute("""
@@ -3232,6 +3300,7 @@ async def admin_create_user(data: AdminCreateUserRequest, admin: dict = Depends(
             "id": new_user_id,
             "player_id": rand_id,
             "username": username,
+            "promo_code": user_promo,
             "phone": phone,
             "plain_password": password,
             "digits_balance": initial_balance,

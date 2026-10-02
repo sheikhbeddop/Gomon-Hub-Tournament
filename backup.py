@@ -40,6 +40,9 @@ files_to_backup = [
     "cloudflared.exe",
     "icon.png",
     "gomon_hub_logo.png",
+    "devices.json",
+    "lockouts.json",
+    "reset_security.json",
     ".gitignore"
 ]
 

@@ -1238,6 +1238,21 @@ class VerifyOtpRequest(BaseModel):
 class ResendOtpRequest(BaseModel):
     temp_token: str
 
+class ForgotPasswordRequest(BaseModel):
+    identifier: str
+    device_id: Optional[str] = None
+
+class ForgotVerifyOtpRequest(BaseModel):
+    reset_token: str
+    otp_code: str
+    device_id: Optional[str] = None
+
+class ForgotResetPasswordRequest(BaseModel):
+    change_token: str
+    new_password: str
+    confirm_password: str
+
+
 class DepositRequest(BaseModel):
     bkash_number: str
     amount: int
@@ -1593,6 +1608,68 @@ def clear_user_lockout(user_id: int):
     if str(user_id) in data:
         del data[str(user_id)]
         save_lockouts(data)
+
+RESET_SECURITY_FILE = os.path.join(BASE_DIR, "reset_security.json")
+
+def load_reset_security() -> dict:
+    if os.path.exists(RESET_SECURITY_FILE):
+        try:
+            with open(RESET_SECURITY_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return {}
+    return {}
+
+def save_reset_security(data: dict):
+    try:
+        with open(RESET_SECURITY_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+    except Exception as e:
+        print("[ResetSecurity Error]", e)
+
+def is_device_reset_locked(device_id: str) -> tuple[bool, int]:
+    if not device_id:
+        return False, 0
+    data = load_reset_security()
+    lockouts = data.get("lockouts", {})
+    entry = lockouts.get(device_id)
+    if not entry:
+        return False, 0
+    locked_until = entry.get("locked_until", 0)
+    now_ts = time.time()
+    if now_ts < locked_until:
+        rem_hours = max(1, int((locked_until - now_ts + 3599) // 3600))
+        return True, rem_hours
+    return False, 0
+
+def lock_device_from_reset(device_id: str, hours: int = 30):
+    if not device_id:
+        return
+    data = load_reset_security()
+    if "lockouts" not in data:
+        data["lockouts"] = {}
+    data["lockouts"][device_id] = {
+        "locked_until": time.time() + (hours * 3600),
+        "locked_at": datetime.now(timezone.utc).isoformat()
+    }
+    save_reset_security(data)
+
+def check_and_increment_daily_reset_count(user_id: int, max_per_day: int = 5) -> tuple[bool, int]:
+    data = load_reset_security()
+    daily = data.get("daily_counts", {})
+    key = str(user_id)
+    today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    user_entry = daily.get(key, {"date": today_str, "count": 0})
+    if user_entry.get("date") != today_str:
+        user_entry = {"date": today_str, "count": 0}
+    if user_entry.get("count", 0) >= max_per_day:
+        return False, user_entry["count"]
+    user_entry["count"] = user_entry.get("count", 0) + 1
+    user_entry["date"] = today_str
+    daily[key] = user_entry
+    data["daily_counts"] = daily
+    save_reset_security(data)
+    return True, user_entry["count"]
 
 GMAIL_SCRIPT_URL = os.environ.get(
     "GMAIL_SCRIPT_URL", 
@@ -2161,6 +2238,247 @@ def resend_otp_endpoint(data: ResendOtpRequest):
         "success": True,
         "dev_otp": dev_hint,
         "message": "নতুন ওটিপি কোড আপনার ইমেইলে পাঠানো হয়েছে।"
+    }
+
+# -------------------------------------------------------------
+# High-Security Forgot Password / Password Reset Architecture
+# -------------------------------------------------------------
+RESET_PASS_STORE = {}    # reset_token -> session dict
+RESET_CHANGE_STORE = {}  # change_token -> session dict
+
+@app.post("/api/auth/forgot-password/request")
+def forgot_password_request(data: ForgotPasswordRequest):
+    device_id = (data.device_id or "").strip()
+    
+    # 1. Check if caller's device is locked for 30 hours
+    is_locked, rem_hours = is_device_reset_locked(device_id)
+    if is_locked:
+        raise HTTPException(
+            status_code=403, 
+            detail=f"অতিরিক্ত ভুল ওটিপি চেষ্টার কারণে এই ডিভাইসটি ৩০ ঘণ্টার জন্য পাসওয়ার্ড রিসেট থেকে ব্লক করা হয়েছে! অবশিষ্ট সময়: {rem_hours} ঘণ্টা।"
+        )
+
+    identifier = (data.identifier or "").strip()
+    if not identifier:
+        raise HTTPException(status_code=400, detail="মোবাইল নম্বর অথবা ইউজারনেম প্রদান করুন")
+
+    clean_id = re.sub(r'[\s\-+]', '', identifier)
+    clean_phone = clean_id[2:] if (clean_id.startswith("8801") and len(clean_id) == 13) else clean_id
+
+    conn = get_db()
+    user = conn.execute("""
+        SELECT * FROM users 
+        WHERE username = ? COLLATE NOCASE 
+           OR phone = ? 
+           OR phone = ? 
+           OR player_id = ? COLLATE NOCASE 
+           OR (email != '' AND email = ? COLLATE NOCASE)
+    """, (identifier, identifier, clean_phone, identifier, identifier)).fetchone()
+    conn.close()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="এই ইউজারনেম বা নম্বরে কোনো অ্যাকাউন্ট খুঁজে পাওয়া যায়নি!")
+
+    if user["status"] == "banned":
+        raise HTTPException(status_code=403, detail="এই অ্যাকাউন্টটি স্থায়ীভাবে ব্যান করা রয়েছে! পাসওয়ার্ড পরিবর্তন সম্ভব নয়।")
+
+    user_email = str(user["email"] or "").strip().lower()
+    if not user_email or "@" not in user_email:
+        raise HTTPException(
+            status_code=400, 
+            detail="এই অ্যাকাউন্টে কোনো ইমেইল যুক্ত নেই! পাসওয়ার্ড উদ্ধারের জন্য হোয়াটসঅ্যাপে অ্যাডমিনের সাথে যোগাযোগ করুন।"
+        )
+
+    # 2. Daily limit check: Max 5 emails per day per account
+    allowed, count = check_and_increment_daily_reset_count(user["id"], max_per_day=5)
+    if not allowed:
+        raise HTTPException(
+            status_code=429, 
+            detail="নিরাপত্তার স্বার্থে আজকের মতো এই অ্যাকাউন্টে সর্বোচ্চ ৫ বার কোড পাঠানো হয়েছে! অনুগ্রহ করে আগামীকাল আবার চেষ্টা করুন।"
+        )
+
+    # 3. Check 60-second cooldown if an existing token is active
+    now_ts = time.time()
+    for tok, entry in list(RESET_PASS_STORE.items()):
+        if entry.get("user_id") == user["id"] and (now_ts - entry.get("last_sent", 0) < 60):
+            rem_s = int(60 - (now_ts - entry.get("last_sent", 0)))
+            raise HTTPException(status_code=429, detail=f"অনুগ্রহ করে {rem_s} সেকেন্ড অপেক্ষা করে আবার কোড চান।")
+
+    # 4. Generate 6-digit OTP & reset_token
+    otp_code = str(secrets.randbelow(900000) + 100000)
+    reset_token = secrets.token_urlsafe(32)
+
+    RESET_PASS_STORE[reset_token] = {
+        "user_id": user["id"],
+        "username": user["username"],
+        "email": user_email,
+        "otp": otp_code,
+        "expires_at": now_ts + 300, # 5 minutes
+        "device_id": device_id,
+        "attempts": 0,
+        "last_sent": now_ts
+    }
+
+    # Mask email for UI: e.g. "s***n@gmail.com"
+    parts = user_email.split("@")
+    masked_u = parts[0][0] + "***" + (parts[0][-1] if len(parts[0]) > 1 else "")
+    masked_email = f"{masked_u}@{parts[1]}"
+
+    # Send email asynchronously via Google Webhook
+    threading.Thread(
+        target=send_otp_email,
+        args=(user_email, user["username"], otp_code),
+        daemon=True
+    ).start()
+
+    # Clean up expired tokens
+    for k in list(RESET_PASS_STORE.keys()):
+        if RESET_PASS_STORE[k]["expires_at"] < now_ts:
+            del RESET_PASS_STORE[k]
+
+    return {
+        "success": True,
+        "reset_token": reset_token,
+        "masked_email": masked_email,
+        "message": f"আপনার ইমেইল {masked_email}-এ ৬ ডিজিটের পাসওয়ার্ড রিসেট কোড পাঠানো হয়েছে।"
+    }
+
+@app.post("/api/auth/forgot-password/verify")
+def forgot_password_verify(data: ForgotVerifyOtpRequest):
+    reset_token = (data.reset_token or "").strip()
+    code = (data.otp_code or "").strip()
+    device_id = (data.device_id or "").strip()
+
+    # Check 30-hour device lockout
+    is_locked, rem_hours = is_device_reset_locked(device_id)
+    if is_locked:
+        raise HTTPException(
+            status_code=403, 
+            detail=f"অতিরিক্ত ভুল ওটিপি চেষ্টার কারণে এই ডিভাইসটি ৩০ ঘণ্টার জন্য ব্লক রয়েছে! অবশিষ্ট সময়: {rem_hours} ঘণ্টা।"
+        )
+
+    entry = RESET_PASS_STORE.get(reset_token)
+    if not entry:
+        raise HTTPException(status_code=400, detail="ওটিপি সেশনের মেয়াদ শেষ হয়ে গেছে! অনুগ্রহ করে পুনরায় প্রথম থেকে শুরু করুন।")
+
+    if time.time() > entry["expires_at"]:
+        del RESET_PASS_STORE[reset_token]
+        raise HTTPException(status_code=400, detail="ওটিপি কোডের মেয়াদ (৫ মিনিট) শেষ হয়ে গেছে! নতুন কোড নিন।")
+
+    entry["attempts"] += 1
+    # 4 wrong attempts = Lock attacking device for 30 hours!
+    if entry["attempts"] >= 4:
+        target_dev = device_id or entry.get("device_id")
+        del RESET_PASS_STORE[reset_token]
+        if target_dev:
+            lock_device_from_reset(target_dev, hours=30)
+        raise HTTPException(
+            status_code=403, 
+            detail="অতিরিক্ত ৪ বার ভুল কোড দেওয়ার কারণে এই ডিভাইসটি ৩০ ঘণ্টার জন্য পাসওয়ার্ড রিসেট থেকে লক করা হয়েছে! (আসল অ্যাকাউন্টের কোনো ক্ষতি হয়নি)"
+        )
+
+    if entry["otp"] != code:
+        remaining = max(0, 4 - entry["attempts"])
+        warn = " (সতর্কবার্তা: আর মাত্র ১ বার ভুল দিলে এই ডিভাইস ৩০ ঘণ্টার জন্য লক হয়ে যাবে!)" if remaining == 1 else ""
+        raise HTTPException(status_code=400, detail=f"ভুল ওটিপি কোড! সঠিক কোড দিন (অবশিষ্ট সুযোগ: {remaining} বার){warn}।")
+
+    # Correct OTP: Issue authorized change_token (valid for 5 minutes)
+    change_token = secrets.token_urlsafe(32)
+    RESET_CHANGE_STORE[change_token] = {
+        "user_id": entry["user_id"],
+        "username": entry["username"],
+        "email": entry["email"],
+        "expires_at": time.time() + 300
+    }
+    del RESET_PASS_STORE[reset_token]
+
+    return {
+        "success": True,
+        "change_token": change_token,
+        "username": entry["username"],
+        "message": "ওটিপি সফলভাবে যাচাই হয়েছে! এবার নতুন পাসওয়ার্ড সেট করুন।"
+    }
+
+@app.post("/api/auth/forgot-password/resend")
+def forgot_password_resend(data: dict):
+    reset_token = (data.get("reset_token") or "").strip()
+    entry = RESET_PASS_STORE.get(reset_token)
+    if not entry:
+        raise HTTPException(status_code=400, detail="ওটিপি সেশনের মেয়াদ শেষ হয়ে গেছে! পুনরায় শুরু করুন।")
+
+    now_ts = time.time()
+    if now_ts - entry.get("last_sent", 0) < 60:
+        rem_sec = int(60 - (now_ts - entry.get("last_sent", 0)))
+        raise HTTPException(status_code=429, detail=f"অনুগ্রহ করে {rem_sec} সেকেন্ড অপেক্ষা করুন।")
+
+    # Daily count check
+    allowed, _ = check_and_increment_daily_reset_count(entry["user_id"], max_per_day=5)
+    if not allowed:
+        raise HTTPException(status_code=429, detail="আজকের কোড পাঠানোর সীমা শেষ হয়েছে!")
+
+    otp_code = str(secrets.randbelow(900000) + 100000)
+    entry["otp"] = otp_code
+    entry["expires_at"] = now_ts + 300
+    entry["last_sent"] = now_ts
+    entry["attempts"] = 0
+
+    threading.Thread(
+        target=send_otp_email,
+        args=(entry["email"], entry["username"], otp_code),
+        daemon=True
+    ).start()
+
+    return {"success": True, "message": "নতুন পাসওয়ার্ড রিসেট কোড আপনার ইমেইলে পাঠানো হয়েছে।"}
+
+@app.post("/api/auth/forgot-password/complete")
+def forgot_password_complete(data: ForgotResetPasswordRequest):
+    change_token = (data.change_token or "").strip()
+    new_pass = data.new_password
+    confirm_pass = data.confirm_password
+
+    entry = RESET_CHANGE_STORE.get(change_token)
+    if not entry or time.time() > entry["expires_at"]:
+        if entry:
+            del RESET_CHANGE_STORE[change_token]
+        raise HTTPException(status_code=400, detail="পাসওয়ার্ড পরিবর্তনের সময় শেষ হয়ে গেছে! অনুগ্রহ করে প্রথম থেকে আবার শুরু করুন।")
+
+    if new_pass != confirm_pass:
+        raise HTTPException(status_code=400, detail="পাসওয়ার্ড দুটি মেলেনি! উভয় ঘরে একই পাসওয়ার্ড দিন।")
+
+    is_valid, err_msg = validate_password_strength(new_pass)
+    if not is_valid:
+        raise HTTPException(status_code=400, detail=err_msg)
+
+    new_hash = hash_password(new_pass.strip())
+    user_id = entry["user_id"]
+
+    conn = get_db()
+    with conn:
+        conn.execute("UPDATE users SET password_hash = ?, plain_password = ?, timeout_until = NULL, status = 'active' WHERE id = ?", (new_hash, new_pass.strip(), user_id))
+    user = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+    conn.close()
+
+    del RESET_CHANGE_STORE[change_token]
+    clear_user_lockout(user_id)
+
+    # Invalidate all old sessions on all other devices by issuing fresh token with new_hash
+    token = generate_token(user["id"], user["username"], user["role"], new_hash)
+
+    u_dict = dict(user)
+    return {
+        "success": True,
+        "token": token,
+        "user": {
+            "id": u_dict["id"],
+            "player_id": u_dict["player_id"],
+            "username": u_dict["username"],
+            "role": u_dict.get("role", "player"),
+            "phone": u_dict.get("phone", ""),
+            "email": u_dict.get("email", ""),
+            "status": "active",
+            "digits_balance": u_dict.get("digits_balance", 0)
+        },
+        "message": "পাসওয়ার্ড সফলভাবে পরিবর্তন করা হয়েছে! স্বাগতম।"
     }
 
 @app.get("/api/auth/me")

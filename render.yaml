@@ -17,4 +17,13 @@ services:
         sync: false
       - key: VAPID_PRIVATE_KEY
         sync: false
+      - key: GMAIL_USER
+        sync: false
+      - key: GMAIL_APP_PASSWORD
+        sync: false
+      - key: DEVICE_OTP_SCRIPT_URL
+        sync: false
+      - key: RESET_PASS_SCRIPT_URL
+        sync: false
+
 

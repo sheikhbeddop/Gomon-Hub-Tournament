@@ -1671,45 +1671,54 @@ def check_and_increment_daily_reset_count(user_id: int, max_per_day: int = 5) ->
     save_reset_security(data)
     return True, user_entry["count"]
 
-GMAIL_SCRIPT_URL = os.environ.get(
-    "GMAIL_SCRIPT_URL", 
-    "https://script.google.com/macros/s/AKfycbyX9pRpeOf_MSn2yy9jKY-I7XNbSKDqOODESto4qN4cseLxZ_lcc89iNI6WAu2p1ao7/exec"
+# -------------------------------------------------------------
+# Dual-Engine Dedicated Email Transmitters (Google Webhook + SMTP)
+# -------------------------------------------------------------
+DEVICE_OTP_SCRIPT_URL = os.environ.get(
+    "DEVICE_OTP_SCRIPT_URL", 
+    "https://script.google.com/macros/s/AKfycbzCZ_OGKh_1eWp151EElCJ_XLSkqHeiu9CRzSpWFauAjVPLCP8GwYbcLCqlsY4GtJ-lwA/exec"
 ).strip()
 
-def send_otp_email(to_email: str, username: str, otp_code: str):
+RESET_PASS_SCRIPT_URL = os.environ.get(
+    "RESET_PASS_SCRIPT_URL", 
+    "https://script.google.com/macros/s/AKfycbzdYKeIWwfIk91vvVrNZr_F8En2FbCoGXHoiFZugyRM7fgN7ES-9TlkoTo8nbRMwsqQ9w/exec"
+).strip()
+GMAIL_SCRIPT_URL = DEVICE_OTP_SCRIPT_URL
+
+def send_device_otp_email(to_email: str, username: str, otp_code: str):
     """
-    Sends 6-digit OTP verification email directly from sheikhgomon@gmail.com
-    via Google Apps Script Webhook (Port 443 HTTPS - 100% bypasses Render SMTP port blocks).
-    Has fallback to standard Gmail SMTP SSL 465 / 587.
+    Sends 6-digit Device Verification OTP email from gomonhub@gmail.com
+    Style: Neon Cyan / Emerald Shield 2FA Security Alert
     """
-    # 1. Primary: Google Apps Script Webhook (Fast, 100% Reliable on Render Free Tier)
-    if GMAIL_SCRIPT_URL:
+    # 1. Primary: Google Apps Script Webhook (gomonhub@gmail.com)
+    if DEVICE_OTP_SCRIPT_URL:
         try:
             import urllib.request
             import urllib.parse
             params = urllib.parse.urlencode({
                 "to": to_email,
                 "code": otp_code,
-                "user": username
+                "user": username,
+                "type": "device"
             })
-            req_url = f"{GMAIL_SCRIPT_URL}?{params}"
+            req_url = f"{DEVICE_OTP_SCRIPT_URL}?{params}"
             req = urllib.request.Request(req_url, headers={"User-Agent": "Mozilla/5.0"})
             with urllib.request.urlopen(req, timeout=12) as resp:
                 resp_text = resp.read().decode("utf-8")
                 if "SUCCESS" in resp_text:
-                    print(f"[OTP SUCCESS] Delivered verification email to {to_email} via Google Apps Script")
+                    print(f"[DEVICE OTP SUCCESS] Delivered to {to_email} via Google Apps Script (gomonhub@gmail.com)")
                     return True, "SENT"
                 else:
-                    print(f"[OTP SCRIPT] Response: {resp_text}")
+                    print(f"[DEVICE OTP SCRIPT] Response: {resp_text}")
         except Exception as e_script:
-            print(f"[OTP SCRIPT NOTICE] Google script webhook error: {e_script}, trying SMTP fallback...")
+            print(f"[DEVICE OTP SCRIPT NOTICE] Error: {e_script}, trying SMTP fallback...")
 
-    # 2. Fallback: Direct SMTP (Port 465 SSL / 587 STARTTLS)
-    gmail_user = os.environ.get("GMAIL_USER", "sheikhgomon@gmail.com").strip()
-    gmail_app_password = os.environ.get("GMAIL_APP_PASSWORD", "").strip().replace(" ", "")
+    # 2. Fallback: Direct SMTP (gomonhub@gmail.com)
+    gmail_user = os.environ.get("DEVICE_GMAIL_USER", os.environ.get("GMAIL_USER", "gomonhub@gmail.com")).strip()
+    gmail_app_password = os.environ.get("DEVICE_GMAIL_APP_PASSWORD", os.environ.get("GMAIL_APP_PASSWORD", "")).strip().replace(" ", "")
 
     if not gmail_user or not gmail_app_password:
-        print(f"[OTP DEV MODE] SMTPOtpNotConfigured: To='{to_email}', User='{username}', Code='{otp_code}'")
+        print(f"[DEVICE OTP DEV MODE] To='{to_email}', User='{username}', Code='{otp_code}'")
         return True, "DEV_LOGGED"
 
     try:
@@ -1770,6 +1779,118 @@ def send_otp_email(to_email: str, username: str, otp_code: str):
     except Exception as e:
         print(f"[OTP ERROR] Failed to send email to {to_email}: {e}")
         return False, str(e)
+
+
+def send_reset_password_email(to_email: str, username: str, otp_code: str):
+    """
+    Sends 6-digit Password Reset code from gomonhubsecurity@gmail.com
+    Style: Ruby Crimson / Padlock Emergency Account Recovery
+    """
+    # 1. Primary: Google Apps Script Webhook (gomonhubsecurity@gmail.com)
+    if RESET_PASS_SCRIPT_URL:
+        try:
+            import urllib.request
+            import urllib.parse
+            params = urllib.parse.urlencode({
+                "to": to_email,
+                "code": otp_code,
+                "user": username,
+                "type": "reset"
+            })
+            req_url = f"{RESET_PASS_SCRIPT_URL}?{params}"
+            req = urllib.request.Request(req_url, headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(req, timeout=12) as resp:
+                resp_text = resp.read().decode("utf-8")
+                if "SUCCESS" in resp_text:
+                    print(f"[RESET OTP SUCCESS] Delivered to {to_email} via Google Apps Script (gomonhubsecurity@gmail.com)")
+                    return True, "SENT"
+                else:
+                    print(f"[RESET OTP SCRIPT] Response: {resp_text}")
+        except Exception as e_script:
+            print(f"[RESET OTP SCRIPT NOTICE] Error: {e_script}, trying SMTP fallback...")
+
+    # 2. Fallback: Direct SMTP (gomonhubsecurity@gmail.com)
+    gmail_user = os.environ.get("RESET_GMAIL_USER", "gomonhubsecurity@gmail.com").strip()
+    gmail_app_password = os.environ.get("RESET_GMAIL_APP_PASSWORD", os.environ.get("GMAIL_APP_PASSWORD", "")).strip().replace(" ", "")
+
+    if not gmail_user or not gmail_app_password:
+        print(f"[RESET OTP DEV MODE] To='{to_email}', User='{username}', Code='{otp_code}'")
+        return True, "DEV_LOGGED"
+
+    try:
+        import smtplib
+        from email.mime.text import MIMEText
+        from email.mime.multipart import MIMEMultipart
+
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = f"{otp_code} is your GOMON HUB Password Reset Code"
+        msg["From"] = f"GOMON HUB RECOVERY <{gmail_user}>"
+        msg["To"] = to_email
+
+        html_content = f"""<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0b0709; color: #ffffff; margin: 0; padding: 24px 12px; }}
+    .card {{ max-width: 480px; margin: auto; background: linear-gradient(180deg, #180d12 0%, #0d0609 100%); border-radius: 20px; padding: 36px 26px; border: 1px solid rgba(239, 68, 68, 0.4); text-align: center; box-shadow: 0 15px 40px rgba(239, 68, 68, 0.15); }}
+    .badge {{ display: inline-block; background: rgba(239, 68, 68, 0.15); border: 1px solid #ef4444; color: #f87171; padding: 6px 14px; border-radius: 20px; font-size: 11px; font-weight: 800; letter-spacing: 1px; margin-bottom: 16px; text-transform: uppercase; }}
+    .title {{ font-size: 24px; font-weight: 900; color: #ffffff; margin: 0 0 6px 0; letter-spacing: 0.5px; }}
+    .subtitle {{ color: #ef4444; font-size: 13px; font-weight: 700; margin-bottom: 20px; }}
+    .msg {{ color: #cbd5e1; font-size: 14px; line-height: 1.6; margin-bottom: 24px; }}
+    .code-box {{ background: rgba(239, 68, 68, 0.1); border: 2px dashed #ef4444; border-radius: 14px; padding: 18px; font-size: 36px; font-weight: 900; letter-spacing: 10px; color: #ff5555; margin: 20px 0; }}
+    .alert-box {{ background: rgba(220, 38, 38, 0.12); border-left: 4px solid #dc2626; border-radius: 8px; padding: 14px; text-align: left; font-size: 13px; color: #fca5a5; line-height: 1.5; margin: 20px 0; }}
+    .footer {{ font-size: 11px; color: #64748b; margin-top: 28px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 16px; }}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="badge">🔒 Emergency Account Recovery</div>
+    <h1 class="title">GOMON HUB SECURITY</h1>
+    <div class="subtitle">Password Reset Verification Code</div>
+    <p class="msg">
+      Attention <b>{username}</b>,<br>
+      A password reset request was initiated for your GOMON HUB account. Enter this 6-digit recovery code to set a new password:
+    </p>
+    <div class="code-box">{otp_code}</div>
+    <div class="alert-box">
+      🚨 <b>CRITICAL WARNING:</b><br>
+      • This code is valid for <b>5 minutes</b> only.<br>
+      • <b>NEVER SHARE THIS CODE</b> with anyone, not even GOMON HUB staff.<br>
+      • Anyone with this code can change your password!
+    </div>
+    <p style="color: #94a3b8; font-size: 12px; margin-top: 16px;">
+      If you did not request this, please disregard this email. Your current password remains 100% safe and unaffected.
+    </p>
+    <div class="footer">
+      Official Account Recovery Service | GOMON HUB Esports<br>
+      Sent via gomonhubsecurity@gmail.com
+    </div>
+  </div>
+</body>
+</html>"""
+        msg.attach(MIMEText(html_content, "html"))
+
+        try:
+            with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=8) as server:
+                server.login(gmail_user, gmail_app_password)
+                server.sendmail(gmail_user, [to_email], msg.as_string())
+                print(f"[RESET OTP SUCCESS] Sent to {to_email} via SMTP 465")
+                return True, "SENT"
+        except Exception:
+            with smtplib.SMTP("smtp.gmail.com", 587, timeout=8) as server:
+                server.ehlo()
+                server.starttls()
+                server.login(gmail_user, gmail_app_password)
+                server.sendmail(gmail_user, [to_email], msg.as_string())
+                print(f"[RESET OTP SUCCESS] Sent to {to_email} via SMTP 587")
+                return True, "SENT"
+    except Exception as e:
+        print(f"[RESET OTP ERROR] Failed to send email to {to_email}: {e}")
+        return False, str(e)
+
+# Backward-compatibility alias
+send_otp_email = send_device_otp_email
 
 @app.post("/api/auth/register", dependencies=[Depends(check_rate_limit("register", 5, 60, "খুব বেশি অ্যাকাউন্ট তৈরির চেষ্টা করা হয়েছে! অনুগ্রহ করে কিছুক্ষণ অপেক্ষা করুন।"))])
 def register(data: RegisterRequest):
@@ -2037,9 +2158,9 @@ def login(data: LoginRequest):
                 masked_u = parts[0][0] + "***" + (parts[0][-1] if len(parts[0]) > 1 else "")
                 masked_email = f"{masked_u}@{parts[1]}"
                 
-                # Send email asynchronously
+                # Send email asynchronously via gomonhub@gmail.com
                 threading.Thread(
-                    target=send_otp_email,
+                    target=send_device_otp_email,
                     args=(user_email, user["username"], otp_code),
                     daemon=True
                 ).start()
@@ -2228,7 +2349,7 @@ def resend_otp_endpoint(data: ResendOtpRequest):
     entry["attempts"] = 0
 
     threading.Thread(
-        target=send_otp_email,
+        target=send_device_otp_email,
         args=(entry["email"], entry["username"], otp_code),
         daemon=True
     ).start()
@@ -2324,9 +2445,9 @@ def forgot_password_request(data: ForgotPasswordRequest):
     masked_u = parts[0][0] + "***" + (parts[0][-1] if len(parts[0]) > 1 else "")
     masked_email = f"{masked_u}@{parts[1]}"
 
-    # Send email asynchronously via Google Webhook
+    # Send email asynchronously via Dedicated Password Reset Webhook
     threading.Thread(
-        target=send_otp_email,
+        target=send_reset_password_email,
         args=(user_email, user["username"], otp_code),
         daemon=True
     ).start()
@@ -2423,7 +2544,7 @@ def forgot_password_resend(data: dict):
     entry["attempts"] = 0
 
     threading.Thread(
-        target=send_otp_email,
+        target=send_reset_password_email,
         args=(entry["email"], entry["username"], otp_code),
         daemon=True
     ).start()

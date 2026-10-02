@@ -2296,6 +2296,43 @@
         </div>
     </div>
 
+    <!-- Inline Fallback for Instant Password Reset Access -->
+    <script>
+    function startEmailForgotPasswordFlow() {
+        try {
+            const fpModal = document.getElementById('forgotPasswordModal');
+            if (fpModal) {
+                fpModal.classList.remove('show');
+                fpModal.style.display = 'none';
+            }
+            const authModal = document.getElementById('authModal');
+            if (authModal) {
+                authModal.classList.add('show');
+                authModal.style.display = 'flex';
+            }
+            if (typeof setAuthMode === 'function') {
+                setAuthMode('forgot-request');
+            } else {
+                const loginCard = document.getElementById('authLoginCard');
+                const signupCard = document.getElementById('authSignupCard');
+                const otpCard = document.getElementById('authOtpCard');
+                const forgotReqCard = document.getElementById('authForgotRequestCard');
+                if (loginCard) loginCard.style.display = 'none';
+                if (signupCard) signupCard.style.display = 'none';
+                if (otpCard) otpCard.style.display = 'none';
+                if (forgotReqCard) {
+                    forgotReqCard.style.display = 'block';
+                    const fi = document.getElementById('forgotIdentifier');
+                    if (fi) setTimeout(() => fi.focus(), 150);
+                }
+            }
+        } catch (e) {
+            console.error('Error starting forgot password flow:', e);
+        }
+    }
+    window.startEmailForgotPasswordFlow = startEmailForgotPasswordFlow;
+    </script>
+
     <!-- MODAL 2: ADMIN ADJUST DIGITS MODAL -->
     <div class="modal-overlay" id="adjustDigitsModal">
         <div class="modal-box">
@@ -3312,7 +3349,7 @@
     <!-- Toast Notification Container -->
     <div class="toast-container" id="toastContainer"></div>
 
-    <script src="/static/js/app.js?v=5.4.9"></script>
+    <script src="/static/js/app.js?v=5.5.0"></script>
 
 </body>
 </html>

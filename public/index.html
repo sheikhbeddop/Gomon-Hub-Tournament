@@ -79,7 +79,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Rajdhani:wght@600;700;800&display=swap">
     <link rel="stylesheet" href="/static/css/style.css?v=5.4.5">
-    <link rel="stylesheet" href="/static/css/auth-components.css?v=5.4.1">
+    <link rel="stylesheet" href="/static/css/auth-components.css?v=5.4.2">
 
     <script>
         (function() {
@@ -2035,6 +2035,51 @@
             </form>
         </div>
 
+        <!-- 3. DEVICE VERIFICATION OTP VIEW (Matches Login Card 100%) -->
+        <div class="auth-card" id="authOtpCard" style="display: none;">
+            <!-- Top Overlapping Circular Avatar with New Rabbit Logo -->
+            <div class="auth-avatar-circle">
+                <img src="/gomon_hub_logo.png?v=2" alt="GOMON HUB TOURNAMENT Avatar" class="auth-avatar-img" onerror="this.onerror=null;this.src=window.GOMON_HUB_LOGO;">
+            </div>
+
+            <!-- Modal Close Button -->
+            <button type="button" class="auth-close-btn" onclick="closeModal('authModal')" title="Close">&times;</button>
+
+            <!-- Card Header -->
+            <div class="auth-header">
+                <h2 class="auth-title">Device Verification</h2>
+                <p class="auth-subtitle">New device detected! Enter code sent to <br><span id="otpMaskedEmail" style="color: #00f59b; font-weight: 700;">your email</span></p>
+            </div>
+
+            <!-- OTP FORM -->
+            <form id="otpForm" class="auth-form" onsubmit="handleVerifyOtpSubmit(event)">
+                <div id="otpErrorAlert" class="auth-error-alert" style="display: none;"></div>
+
+                <!-- 6 Individual Digit Boxes -->
+                <div class="otp-boxes-container">
+                    <input type="text" inputmode="numeric" class="otp-box-input" maxlength="1" data-index="0" autocomplete="one-time-code" required>
+                    <input type="text" inputmode="numeric" class="otp-box-input" maxlength="1" data-index="1" autocomplete="off" required>
+                    <input type="text" inputmode="numeric" class="otp-box-input" maxlength="1" data-index="2" autocomplete="off" required>
+                    <input type="text" inputmode="numeric" class="otp-box-input" maxlength="1" data-index="3" autocomplete="off" required>
+                    <input type="text" inputmode="numeric" class="otp-box-input" maxlength="1" data-index="4" autocomplete="off" required>
+                    <input type="text" inputmode="numeric" class="otp-box-input" maxlength="1" data-index="5" autocomplete="off" required>
+                </div>
+
+                <div class="otp-resend-row">
+                    <span id="otpTimerWrap">Resend code in <b id="otpCountdownTimer" style="color: #00f59b;">03:00</b></span>
+                    <button type="button" id="otpResendBtn" class="otp-resend-button" style="display: none;" onclick="triggerResendOtp()">Resend Code</button>
+                </div>
+
+                <button type="submit" class="auth-submit-btn" id="otpVerifySubmitBtn">
+                    Verify & Continue
+                </button>
+
+                <div class="auth-toggle-prompt">
+                    Wrong account? <a href="javascript:void(0)" onclick="setAuthMode('login')" class="auth-toggle-link">Back to Sign In</a>
+                </div>
+            </form>
+        </div>
+
         <!-- 2. SIGN UP VIEW (User Mockup 2: Let's Start / Create an account) -->
         <div class="auth-signup-view" id="authSignupCard" style="display: none;">
             <div class="signup-top-header">
@@ -3148,7 +3193,7 @@
     <!-- Toast Notification Container -->
     <div class="toast-container" id="toastContainer"></div>
 
-    <script src="/static/js/app.js?v=5.4.8"></script>
+    <script src="/static/js/app.js?v=5.4.9"></script>
 
 </body>
 </html>

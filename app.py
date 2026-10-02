@@ -1747,16 +1747,17 @@ def send_device_otp_email(to_email: str, username: str, otp_code: str):
 </head>
 <body>
   <div class="card">
-    <div class="logo">🔥 GOMON HUB TOURNAMENT</div>
-    <div class="subtitle">Device Verification Security Alert</div>
+    <div class="badge">2-FACTOR AUTHENTICATION</div>
+    <div class="logo">GOMON HUB TOURNAMENT</div>
+    <div class="subtitle">New Device Authorization Code</div>
     <p style="color: #cbd5e1; font-size: 14px; line-height: 1.5;">
       Hello <b>{username}</b>,<br>
-      Someone is attempting to sign into your account from a <b>NEW DEVICE</b>. Use the verification code below to authorize this device:
+      A new device is trying to access your GOMON HUB TOURNAMENT ACCOUNT. Please use the authorization code below to complete sign in:
     </p>
-    <div class="otp-box">{otp_code}</div>
+    <div class="code-box">{otp_code}</div>
     <p style="color: #94a3b8; font-size: 13px;">This code will expire in <b>5 minutes</b>. Never share this code with anyone.</p>
-    <div class="warning">⚠️ If you did not make this request, please log into your account and change your password immediately.</div>
-    <div class="footer">© {datetime.now().year} GOMON HUB Esports Platform. All rights reserved.</div>
+    <div class="warning">Notice: If you did NOT attempt to sign in, someone might know your password. Change your password immediately to protect your account.</div>
+    <div class="footer">Sent via gomonhub@gmail.com | GOMON HUB VERIFICATION</div>
   </div>
 </body>
 </html>"""
@@ -1845,16 +1846,16 @@ def send_reset_password_email(to_email: str, username: str, otp_code: str):
 </head>
 <body>
   <div class="card">
-    <div class="badge">🔒 Emergency Account Recovery</div>
+    <div class="badge">EMERGENCY ACCOUNT RECOVERY</div>
     <h1 class="title">GOMON HUB SECURITY</h1>
     <div class="subtitle">Password Reset Verification Code</div>
     <p class="msg">
       Attention <b>{username}</b>,<br>
-      A password reset request was initiated for your GOMON HUB account. Enter this 6-digit recovery code to set a new password:
+      A password reset request was initiated for your GOMON HUB TOURNAMENT account. Enter this 6-digit recovery code to set a new password:
     </p>
     <div class="code-box">{otp_code}</div>
     <div class="alert-box">
-      🚨 <b>CRITICAL WARNING:</b><br>
+      <b>CRITICAL SECURITY NOTICE:</b><br>
       • This code is valid for <b>5 minutes</b> only.<br>
       • <b>NEVER SHARE THIS CODE</b> with anyone, not even GOMON HUB staff.<br>
       • Anyone with this code can change your password!
@@ -1863,7 +1864,7 @@ def send_reset_password_email(to_email: str, username: str, otp_code: str):
       If you did not request this, please disregard this email. Your current password remains 100% safe and unaffected.
     </p>
     <div class="footer">
-      Official Account Recovery Service | GOMON HUB Esports<br>
+      Official Account Recovery | GOMON HUB VERIFICATION<br>
       Sent via gomonhubsecurity@gmail.com
     </div>
   </div>

@@ -6205,15 +6205,18 @@ async function openMyProfileModal() {
     }
     renderUserProfile();
     openModal('myProfileDetailsModal');
-    if (!currentUser.promo_code) {
+    if (!currentUser.promo_code || currentUser.promo_code === 'GOMONHUB-N/A') {
         try {
             const token = localStorage.getItem('ff_token');
             if (token) {
                 const res = await fetch('/api/auth/me', { headers: { 'Authorization': `Bearer ${token}` } });
                 if (res.ok) {
-                    currentUser = await res.json();
-                    localStorage.setItem('ff_user', JSON.stringify(currentUser));
-                    renderUserProfile();
+                    const freshUser = await res.json();
+                    if (freshUser && freshUser.promo_code) {
+                        currentUser = freshUser;
+                        localStorage.setItem('ff_user', JSON.stringify(currentUser));
+                        renderUserProfile();
+                    }
                 }
             }
         } catch (e) {}

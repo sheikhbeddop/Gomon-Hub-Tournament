@@ -677,6 +677,7 @@ function togglePasswordVisibility(inputId, el) {
 function handleForgotPassword() {
     const modal = document.getElementById('forgotPasswordModal');
     if (modal) {
+        modal.style.removeProperty('display');
         openModal('forgotPasswordModal');
     } else {
         alert("Need help resetting your password?\n\nPlease contact GOMON HUB Admin on WhatsApp.\n\nWhatsApp: 01952851550\n24/7 dedicated support available anytime.");
@@ -691,10 +692,19 @@ let currentForgotChangeToken = null;
 let forgotCountdownTimerInterval = null;
 
 function startEmailForgotPasswordFlow() {
-    closeModal('forgotPasswordModal');
-    openModal('authModal');
+    const fpModal = document.getElementById('forgotPasswordModal');
+    if (fpModal) {
+        fpModal.classList.remove('show');
+        fpModal.style.display = 'none';
+    }
+    const authModal = document.getElementById('authModal');
+    if (authModal) {
+        authModal.classList.add('show');
+        authModal.style.display = 'flex';
+    }
     setAuthMode('forgot-request');
 }
+window.startEmailForgotPasswordFlow = startEmailForgotPasswordFlow;
 
 function clearForgotRequestError() {
     const alertBox = document.getElementById('forgotRequestErrorAlert');

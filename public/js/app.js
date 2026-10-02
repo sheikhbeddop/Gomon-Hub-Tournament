@@ -616,27 +616,49 @@ function setAuthMode(mode) {
     const loginCard = document.getElementById('authLoginCard');
     const signupCard = document.getElementById('authSignupCard');
     const otpCard = document.getElementById('authOtpCard');
+    const forgotReqCard = document.getElementById('authForgotRequestCard');
+    const forgotOtpCard = document.getElementById('authForgotOtpCard');
+    const forgotNewPassCard = document.getElementById('authForgotNewPassCard');
+
     clearLoginError();
     clearSignupError();
     if (typeof clearOtpError === 'function') clearOtpError();
+    if (typeof clearForgotRequestError === 'function') clearForgotRequestError();
+    if (typeof clearForgotOtpError === 'function') clearForgotOtpError();
+    if (typeof clearForgotNewPassError === 'function') clearForgotNewPassError();
+
+    if (loginCard) loginCard.style.display = 'none';
+    if (signupCard) signupCard.style.display = 'none';
+    if (otpCard) otpCard.style.display = 'none';
+    if (forgotReqCard) forgotReqCard.style.display = 'none';
+    if (forgotOtpCard) forgotOtpCard.style.display = 'none';
+    if (forgotNewPassCard) forgotNewPassCard.style.display = 'none';
 
     if (mode === 'login') {
         if (loginCard) loginCard.style.display = 'block';
-        if (signupCard) signupCard.style.display = 'none';
-        if (otpCard) otpCard.style.display = 'none';
         const saved = localStorage.getItem('saved_login_user');
         const uInp = document.getElementById('loginUsername');
         if (uInp && !uInp.value && saved) {
             uInp.value = saved;
         }
     } else if (mode === 'otp') {
-        if (loginCard) loginCard.style.display = 'none';
-        if (signupCard) signupCard.style.display = 'none';
         if (otpCard) otpCard.style.display = 'block';
+    } else if (mode === 'forgot-request') {
+        if (forgotReqCard) forgotReqCard.style.display = 'block';
+        setTimeout(() => {
+            const fi = document.getElementById('forgotIdentifier');
+            if (fi) fi.focus();
+        }, 100);
+    } else if (mode === 'forgot-otp') {
+        if (forgotOtpCard) forgotOtpCard.style.display = 'block';
+    } else if (mode === 'forgot-newpass') {
+        if (forgotNewPassCard) forgotNewPassCard.style.display = 'block';
+        setTimeout(() => {
+            const fp = document.getElementById('forgotNewPassword');
+            if (fp) fp.focus();
+        }, 100);
     } else {
-        if (loginCard) loginCard.style.display = 'none';
         if (signupCard) signupCard.style.display = 'flex';
-        if (otpCard) otpCard.style.display = 'none';
     }
 }
 
@@ -658,6 +680,374 @@ function handleForgotPassword() {
         openModal('forgotPasswordModal');
     } else {
         alert("Need help resetting your password?\n\nPlease contact GOMON HUB Admin on WhatsApp.\n\nWhatsApp: 01952851550\n24/7 dedicated support available anytime.");
+    }
+}
+
+// -------------------------------------------------------------
+// Forgot Password Flow (High-Security Email OTP)
+// -------------------------------------------------------------
+let currentForgotResetToken = null;
+let currentForgotChangeToken = null;
+let forgotCountdownTimerInterval = null;
+
+function startEmailForgotPasswordFlow() {
+    closeModal('forgotPasswordModal');
+    openModal('authModal');
+    setAuthMode('forgot-request');
+}
+
+function clearForgotRequestError() {
+    const alertBox = document.getElementById('forgotRequestErrorAlert');
+    if (alertBox) {
+        alertBox.style.display = 'none';
+        alertBox.innerText = '';
+    }
+}
+
+function showForgotRequestError(msg) {
+    const alertBox = document.getElementById('forgotRequestErrorAlert');
+    if (alertBox) {
+        alertBox.style.display = 'block';
+        alertBox.innerText = msg;
+    }
+    showToast(msg, 'error');
+    playSound('alert');
+}
+
+function clearForgotOtpError() {
+    const alertBox = document.getElementById('forgotOtpErrorAlert');
+    if (alertBox) {
+        alertBox.style.display = 'none';
+        alertBox.innerText = '';
+    }
+}
+
+function showForgotOtpError(msg) {
+    const alertBox = document.getElementById('forgotOtpErrorAlert');
+    if (alertBox) {
+        alertBox.style.display = 'block';
+        alertBox.innerText = msg;
+    }
+    showToast(msg, 'error');
+    playSound('alert');
+}
+
+function clearForgotNewPassError() {
+    const alertBox = document.getElementById('forgotNewPassErrorAlert');
+    if (alertBox) {
+        alertBox.style.display = 'none';
+        alertBox.innerText = '';
+    }
+}
+
+function showForgotNewPassError(msg) {
+    const alertBox = document.getElementById('forgotNewPassErrorAlert');
+    if (alertBox) {
+        alertBox.style.display = 'block';
+        alertBox.innerText = msg;
+    }
+    showToast(msg, 'error');
+    playSound('alert');
+}
+
+async function handleForgotRequestSubmit(e) {
+    if (e && e.preventDefault) e.preventDefault();
+    clearForgotRequestError();
+
+    const idInput = document.getElementById('forgotIdentifier');
+    const identifier = idInput ? idInput.value.trim() : '';
+
+    if (!identifier) {
+        showForgotRequestError('অনুগ্রহ করে ইউজারনেম অথবা মোবাইল নম্বর দিন');
+        return;
+    }
+
+    const btn = document.getElementById('forgotRequestSubmitBtn');
+    const origText = btn ? btn.innerText : 'Send Verification Code';
+    if (btn) {
+        btn.disabled = true;
+        btn.innerText = 'Sending Code...';
+    }
+
+    try {
+        const deviceId = getOrCreateDeviceId();
+        const res = await fetch('/api/auth/forgot-password/request', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ identifier: identifier, device_id: deviceId })
+        });
+        const data = await res.json();
+        if (res.ok) {
+            currentForgotResetToken = data.reset_token;
+            const maskEl = document.getElementById('forgotMaskedEmail');
+            if (maskEl) maskEl.innerText = data.masked_email || 'আপনার ইমেইলে';
+            setAuthMode('forgot-otp');
+            initForgotOtpInputs();
+            startForgotOtpCountdown(180);
+            showToast(data.message || 'পাসওয়ার্ড রিসেট কোড আপনার ইমেইলে পাঠানো হয়েছে।', 'success');
+            playSound('success');
+        } else {
+            showForgotRequestError(data.detail || 'কোড পাঠানো সম্ভব হয়নি!');
+        }
+    } catch (err) {
+        console.error('Forgot Request Error:', err);
+        showForgotRequestError('সার্ভারে সংযোগ করা সম্ভব হয়নি। ইন্টারনেট কানেকশন চেক করুন।');
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerText = origText;
+        }
+    }
+}
+
+function initForgotOtpInputs() {
+    clearForgotOtpError();
+    const boxes = document.querySelectorAll('#forgotOtpForm .forgot-otp-box');
+    boxes.forEach((box, idx) => {
+        box.value = '';
+        box.oninput = (e) => {
+            const val = e.target.value.replace(/[^0-9]/g, '');
+            e.target.value = val ? val[val.length - 1] : '';
+            if (val && idx < boxes.length - 1) {
+                boxes[idx + 1].focus();
+            }
+            checkAutoSubmitForgotOtp();
+        };
+        box.onkeydown = (e) => {
+            if (e.key === 'Backspace' && !box.value && idx > 0) {
+                boxes[idx - 1].focus();
+            }
+        };
+        box.onpaste = (e) => {
+            e.preventDefault();
+            const pasteData = (e.clipboardData || window.clipboardData).getData('text').trim().replace(/[^0-9]/g, '');
+            if (pasteData) {
+                for (let i = 0; i < boxes.length; i++) {
+                    boxes[i].value = pasteData[i] || '';
+                }
+                const focusIdx = Math.min(pasteData.length, boxes.length - 1);
+                boxes[focusIdx].focus();
+                checkAutoSubmitForgotOtp();
+            }
+        };
+    });
+    setTimeout(() => {
+        if (boxes[0]) boxes[0].focus();
+    }, 100);
+}
+
+function checkAutoSubmitForgotOtp() {
+    const boxes = document.querySelectorAll('#forgotOtpForm .forgot-otp-box');
+    let code = '';
+    boxes.forEach(b => code += b.value.trim());
+    if (code.length === 6) {
+        handleForgotOtpSubmit();
+    }
+}
+
+function startForgotOtpCountdown(seconds) {
+    if (forgotCountdownTimerInterval) clearInterval(forgotCountdownTimerInterval);
+    const timerWrap = document.getElementById('forgotTimerWrap');
+    const timerEl = document.getElementById('forgotCountdownTimer');
+    const resendBtn = document.getElementById('forgotResendBtn');
+    if (timerWrap) timerWrap.style.display = 'inline';
+    if (resendBtn) resendBtn.style.display = 'none';
+
+    let rem = seconds;
+    const update = () => {
+        const m = Math.floor(rem / 60).toString().padStart(2, '0');
+        const s = (rem % 60).toString().padStart(2, '0');
+        if (timerEl) timerEl.innerText = `${m}:${s}`;
+        if (rem <= 0) {
+            clearInterval(forgotCountdownTimerInterval);
+            if (timerWrap) timerWrap.style.display = 'none';
+            if (resendBtn) resendBtn.style.display = 'inline-block';
+        }
+        rem--;
+    };
+    update();
+    forgotCountdownTimerInterval = setInterval(update, 1000);
+}
+
+async function triggerForgotResendOtp() {
+    if (!currentForgotResetToken) {
+        showForgotOtpError('ওটিপি সেশনের মেয়াদ শেষ হয়ে গেছে! অনুগ্রহ করে পুনরায় শুরু করুন।');
+        return;
+    }
+    const btn = document.getElementById('forgotResendBtn');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerText = 'Sending...';
+    }
+    clearForgotOtpError();
+    try {
+        const res = await fetch('/api/auth/forgot-password/resend', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reset_token: currentForgotResetToken })
+        });
+        const data = await res.json();
+        if (res.ok) {
+            startForgotOtpCountdown(180);
+            showToast(data.message || 'নতুন ওটিপি কোড আপনার ইমেইলে পাঠানো হয়েছে।', 'success');
+            playSound('success');
+            const boxes = document.querySelectorAll('#forgotOtpForm .forgot-otp-box');
+            boxes.forEach(b => b.value = '');
+            if (boxes[0]) boxes[0].focus();
+        } else {
+            showForgotOtpError(data.detail || 'নতুন কোড পাঠানো যায়নি।');
+        }
+    } catch (err) {
+        showForgotOtpError('নেটওয়ার্ক সমস্যা! অনুগ্রহ করে পুনরায় চেষ্টা করুন।');
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerText = 'Resend Code';
+        }
+    }
+}
+
+async function handleForgotOtpSubmit(e) {
+    if (e && e.preventDefault) e.preventDefault();
+    clearForgotOtpError();
+
+    const boxes = document.querySelectorAll('#forgotOtpForm .forgot-otp-box');
+    let code = '';
+    boxes.forEach(b => code += b.value.trim());
+
+    if (code.length < 6) {
+        showForgotOtpError('অনুগ্রহ করে ৬ ডিজিটের সম্পূর্ণ ওটিপি কোড দিন');
+        return;
+    }
+    if (!currentForgotResetToken) {
+        showForgotOtpError('ওটিপি সেশনের মেয়াদ শেষ হয়ে গেছে! অনুগ্রহ করে পুনরায় শুরু করুন।');
+        setAuthMode('forgot-request');
+        return;
+    }
+
+    const btn = document.getElementById('forgotOtpSubmitBtn');
+    const origText = btn ? btn.innerText : 'Verify & Proceed';
+    if (btn) {
+        btn.disabled = true;
+        btn.innerText = 'Verifying...';
+    }
+
+    try {
+        const deviceId = getOrCreateDeviceId();
+        const res = await fetch('/api/auth/forgot-password/verify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                reset_token: currentForgotResetToken,
+                otp_code: code,
+                device_id: deviceId
+            })
+        });
+        const data = await res.json();
+        if (res.ok) {
+            currentForgotChangeToken = data.change_token;
+            if (forgotCountdownTimerInterval) clearInterval(forgotCountdownTimerInterval);
+            setAuthMode('forgot-newpass');
+            showToast(data.message || 'ওটিপি যাচাই হয়েছে! এবার নতুন পাসওয়ার্ড সেট করুন।', 'success');
+            playSound('success');
+        } else {
+            showForgotOtpError(data.detail || 'ভুল ওটিপি কোড! অনুগ্রহ করে আবার চেষ্টা করুন।');
+        }
+    } catch (err) {
+        console.error('Forgot Verify OTP Error:', err);
+        showForgotOtpError('সার্ভারে সংযোগ করা সম্ভব হয়নি। ইন্টারনেট কানেকশন চেক করুন।');
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerText = origText;
+        }
+    }
+}
+
+async function handleForgotNewPassSubmit(e) {
+    if (e && e.preventDefault) e.preventDefault();
+    clearForgotNewPassError();
+
+    const passInput = document.getElementById('forgotNewPassword');
+    const confInput = document.getElementById('forgotConfirmPassword');
+    const p1 = passInput ? passInput.value : '';
+    const p2 = confInput ? confInput.value : '';
+
+    if (!p1 || !p2) {
+        showForgotNewPassError('উভয় ঘরে পাসওয়ার্ড প্রদান করুন');
+        return;
+    }
+    if (p1 !== p2) {
+        showForgotNewPassError('পাসওয়ার্ড দুটি মেলেনি! উভয় ঘরে একই পাসওয়ার্ড দিন।');
+        return;
+    }
+    if (p1.length < 8) {
+        showForgotNewPassError('পাসওয়ার্ড কমপক্ষে ৮ অক্ষরের হতে হবে (কমপক্ষে ১টি অক্ষর এবং ১টি সংখ্যা)!');
+        return;
+    }
+    if (!currentForgotChangeToken) {
+        showForgotNewPassError('সেশনের মেয়াদ শেষ হয়ে গেছে! অনুগ্রহ করে প্রথম থেকে আবার শুরু করুন।');
+        setAuthMode('forgot-request');
+        return;
+    }
+
+    const btn = document.getElementById('forgotNewPassSubmitBtn');
+    const origText = btn ? btn.innerText : 'Save Password & Sign In';
+    if (btn) {
+        btn.disabled = true;
+        btn.innerText = 'Saving Password...';
+    }
+
+    try {
+        const res = await fetch('/api/auth/forgot-password/complete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                change_token: currentForgotChangeToken,
+                new_password: p1,
+                confirm_password: p2
+            })
+        });
+        const data = await res.json();
+        if (res.ok) {
+            token = data.token;
+            currentUser = data.user;
+            localStorage.setItem('ff_token', token);
+            localStorage.setItem('ff_user', JSON.stringify(currentUser));
+            document.documentElement.classList.remove('not-authenticated');
+            document.documentElement.classList.add('authenticated');
+            document.body.classList.remove('not-authenticated');
+            document.body.classList.add('authenticated');
+            const mainApp = document.getElementById('mainAppWrapper');
+            if (mainApp) mainApp.style.display = 'block';
+            closeModal('authModal');
+            dismissSplashScreen();
+            showToast('পাসওয়ার্ড সফলভাবে পরিবর্তিত হয়েছে! আপনাকে স্বাগতম।', 'success');
+            playSound('success');
+
+            sessionStorage.removeItem('welcome_notice_dismissed');
+            try { openWelcomeNotice(true); } catch(err) {}
+            try { renderLoggedInNav(); } catch(err) {}
+            try { renderUserProfile(); } catch(err) {}
+            try { loadMatches(); } catch(err) {}
+            try { loadWalletHistory(); } catch(err) {}
+            try { initWebSocket(); } catch(err) {}
+            if (currentUser.role === 'admin') {
+                const adminBtn = document.getElementById('tabBtn-admin');
+                if (adminBtn) adminBtn.style.display = 'inline-flex';
+                try { loadAdminOverview(); } catch(err) {}
+            }
+        } else {
+            showForgotNewPassError(data.detail || 'পাসওয়ার্ড পরিবর্তন করা সম্ভব হয়নি!');
+        }
+    } catch (err) {
+        console.error('Forgot New Pass Error:', err);
+        showForgotNewPassError('সার্ভারে সংযোগ করা সম্ভব হয়নি। ইন্টারনেট কানেকশন চেক করুন।');
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerText = origText;
+        }
     }
 }
 
@@ -725,7 +1115,7 @@ function showOtpError(msg) {
 
 function initOtpInputs() {
     clearOtpError();
-    const boxes = document.querySelectorAll('.otp-box-input');
+    const boxes = document.querySelectorAll('#otpForm .otp-box-input');
     boxes.forEach((box, idx) => {
         box.value = '';
         box.oninput = (e) => {
@@ -760,7 +1150,7 @@ function initOtpInputs() {
 }
 
 function checkAutoSubmitOtp() {
-    const boxes = document.querySelectorAll('.otp-box-input');
+    const boxes = document.querySelectorAll('#otpForm .otp-box-input');
     let code = '';
     boxes.forEach(b => code += b.value.trim());
     if (code.length === 6) {
@@ -795,7 +1185,7 @@ function startOtpCountdown(seconds) {
 async function handleVerifyOtpSubmit(e) {
     if (e && e.preventDefault) e.preventDefault();
     clearOtpError();
-    const boxes = document.querySelectorAll('.otp-box-input');
+    const boxes = document.querySelectorAll('#otpForm .otp-box-input');
     let code = '';
     boxes.forEach(b => code += b.value.trim());
     if (code.length < 6) {
@@ -893,7 +1283,7 @@ async function triggerResendOtp() {
             } else {
                 showToast(data.message || 'নতুন ওটিপি কোড আপনার ইমেইলে পাঠানো হয়েছে।', 'success');
             }
-            const boxes = document.querySelectorAll('.otp-box-input');
+            const boxes = document.querySelectorAll('#otpForm .otp-box-input');
             boxes.forEach(b => b.value = '');
             if (boxes[0]) boxes[0].focus();
         } else {

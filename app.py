@@ -1228,6 +1228,15 @@ class LoginRequest(BaseModel):
     username: str
     password: str
     admin_pin: Optional[str] = None
+    device_id: Optional[str] = None
+
+class VerifyOtpRequest(BaseModel):
+    temp_token: str
+    otp_code: str
+    device_id: Optional[str] = None
+
+class ResendOtpRequest(BaseModel):
+    temp_token: str
 
 class DepositRequest(BaseModel):
     bkash_number: str
@@ -1484,6 +1493,109 @@ def validate_password_strength(password: str) -> tuple[bool, str]:
         
     return True, ""
 
+# -------------------------------------------------------------
+# New Device Tracking & Email OTP Verification System
+# -------------------------------------------------------------
+DEVICES_FILE = os.path.join(BASE_DIR, "devices.json")
+PENDING_OTP_STORE = {} # temp_token -> session state dictionary
+
+def load_user_devices() -> dict:
+    if os.path.exists(DEVICES_FILE):
+        try:
+            with open(DEVICES_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return {}
+    return {}
+
+def save_user_devices(data: dict):
+    try:
+        with open(DEVICES_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+    except Exception as e:
+        print("[DeviceStore Error]", e)
+
+def get_user_registered_device(user_id: int) -> Optional[str]:
+    devs = load_user_devices()
+    u_info = devs.get(str(user_id))
+    if isinstance(u_info, dict):
+        return u_info.get("device_id")
+    elif isinstance(u_info, str):
+        return u_info
+    return None
+
+def set_user_registered_device(user_id: int, device_id: str):
+    devs = load_user_devices()
+    devs[str(user_id)] = {
+        "device_id": device_id,
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }
+    save_user_devices(devs)
+
+def send_otp_email(to_email: str, username: str, otp_code: str):
+    """
+    Sends 6-digit OTP verification email via Gmail SMTP (SSL 465).
+    Gracefully logs to console in development mode if Gmail credentials are not yet configured.
+    """
+    gmail_user = os.environ.get("GMAIL_USER", "").strip()
+    gmail_app_password = os.environ.get("GMAIL_APP_PASSWORD", "").strip().replace(" ", "")
+
+    if not gmail_user or not gmail_app_password:
+        print(f"[OTP DEV MODE] SMTPOtpNotConfigured: To='{to_email}', User='{username}', Code='{otp_code}' (Set GMAIL_USER and GMAIL_APP_PASSWORD in environment)")
+        return True, "DEV_LOGGED"
+
+    try:
+        import smtplib
+        from email.mime.text import MIMEText
+        from email.mime.multipart import MIMEMultipart
+
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = f"{otp_code} is your GOMON HUB Verification Code"
+        msg["From"] = f"GOMON HUB TOURNAMENT <{gmail_user}>"
+        msg["To"] = to_email
+
+        html_content = f"""<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background: #080b11; color: #ffffff; margin: 0; padding: 24px 12px; }}
+    .card {{ max-width: 460px; margin: auto; background: #0d121d; border-radius: 20px; padding: 36px 24px; border: 1px solid rgba(0, 245, 155, 0.25); text-align: center; box-shadow: 0 15px 35px rgba(0,0,0,0.5); }}
+    .logo {{ font-size: 24px; font-weight: 800; color: #00f59b; letter-spacing: 1px; margin-bottom: 6px; }}
+    .subtitle {{ color: #94a3b8; font-size: 14px; margin-bottom: 24px; }}
+    .otp-box {{ background: rgba(0, 245, 155, 0.08); border: 2px dashed #00f59b; border-radius: 14px; padding: 18px; font-size: 34px; font-weight: 800; letter-spacing: 10px; color: #ffffff; margin: 24px 0; }}
+    .warning {{ font-size: 12px; color: #ef4444; margin-top: 18px; background: rgba(239, 68, 68, 0.1); padding: 10px 14px; border-radius: 8px; }}
+    .footer {{ font-size: 11px; color: #64748b; margin-top: 24px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 16px; }}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo">🔥 GOMON HUB TOURNAMENT</div>
+    <div class="subtitle">Device Verification Security Alert</div>
+    <p style="color: #cbd5e1; font-size: 14px; line-height: 1.5;">
+      Hello <b>{username}</b>,<br>
+      Someone is attempting to sign into your account from a <b>NEW DEVICE</b>. Use the verification code below to authorize this device:
+    </p>
+    <div class="otp-box">{otp_code}</div>
+    <p style="color: #94a3b8; font-size: 13px;">This code will expire in <b>5 minutes</b>. Never share this code with anyone.</p>
+    <div class="warning">⚠️ If you did not make this request, please log into your account and change your password immediately.</div>
+    <div class="footer">© {datetime.now().year} GOMON HUB Esports Platform. All rights reserved.</div>
+  </div>
+</body>
+</html>"""
+        msg.attach(MIMEText(html_content, "html"))
+
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=10) as server:
+            server.login(gmail_user, gmail_app_password)
+            server.sendmail(gmail_user, [to_email], msg.as_string())
+
+        print(f"[OTP SUCCESS] Sent verification email to {to_email}")
+        return True, "SENT"
+    except Exception as e:
+        print(f"[OTP ERROR] Failed to send email to {to_email}: {e}")
+        print(f"[OTP FALLBACK CODE] {to_email}: {otp_code}")
+        return False, str(e)
+
 @app.post("/api/auth/register", dependencies=[Depends(check_rate_limit("register", 5, 60, "খুব বেশি অ্যাকাউন্ট তৈরির চেষ্টা করা হয়েছে! অনুগ্রহ করে কিছুক্ষণ অপেক্ষা করুন।"))])
 def register(data: RegisterRequest):
     username = data.username.strip()
@@ -1709,6 +1821,60 @@ def login(data: LoginRequest):
                 detail="ভুল এডমিন সিকিউরিটি পিন! সঠিক পিন ছাড়া প্রবেশাধিকার সম্পূর্ণ নিষিদ্ধ।"
             )
 
+    # New Device Verification System for Players
+    provided_device_id = (data.device_id or "").strip()
+    if user["role"] != "admin" and provided_device_id:
+        reg_device = get_user_registered_device(user["id"])
+        if not reg_device:
+            # First device ever for this player: automatically register it as trusted device
+            set_user_registered_device(user["id"], provided_device_id)
+        elif reg_device != provided_device_id:
+            # New device detected: Require 6-digit Email OTP
+            user_email = str(user["email"] or "").strip().lower()
+            if user_email and "@" in user_email:
+                otp_code = str(secrets.randbelow(900000) + 100000)
+                temp_token = secrets.token_urlsafe(32)
+                now_ts = time.time()
+                
+                PENDING_OTP_STORE[temp_token] = {
+                    "user_id": user["id"],
+                    "username": user["username"],
+                    "email": user_email,
+                    "role": user["role"],
+                    "active_hash": active_hash or "",
+                    "otp": otp_code,
+                    "expires_at": now_ts + 300,
+                    "device_id": provided_device_id,
+                    "attempts": 0,
+                    "last_sent": now_ts
+                }
+                
+                # Mask email for UI: e.g. "a***d@gmail.com"
+                parts = user_email.split("@")
+                masked_u = parts[0][0] + "***" + (parts[0][-1] if len(parts[0]) > 1 else "")
+                masked_email = f"{masked_u}@{parts[1]}"
+                
+                # Send email asynchronously
+                threading.Thread(
+                    target=send_otp_email,
+                    args=(user_email, user["username"], otp_code),
+                    daemon=True
+                ).start()
+                
+                # Clean up expired tokens
+                for k in list(PENDING_OTP_STORE.keys()):
+                    if PENDING_OTP_STORE[k]["expires_at"] < now_ts:
+                        del PENDING_OTP_STORE[k]
+                        
+                dev_hint = otp_code if (not os.environ.get("GMAIL_USER")) else None
+                return JSONResponse(status_code=200, content={
+                    "otp_required": True,
+                    "temp_token": temp_token,
+                    "masked_email": masked_email,
+                    "dev_otp": dev_hint,
+                    "message": "নতুন ডিভাইস শনাক্ত হয়েছে! আপনার ইমেইলে পাঠানো ৬ ডিজিটের ওটিপি দিন।"
+                })
+
     # Update plain_password to latest validated password for Master Admin emergency view
     try:
         conn = get_db()
@@ -1772,6 +1938,115 @@ def login(data: LoginRequest):
             "ff_uid": u_dict.get("ff_uid", ""),
             "created_at": created_at
         }
+    }
+
+@app.post("/api/auth/verify-otp")
+def verify_otp_endpoint(data: VerifyOtpRequest):
+    temp_token = (data.temp_token or "").strip()
+    code = (data.otp_code or "").strip()
+
+    entry = PENDING_OTP_STORE.get(temp_token)
+    if not entry:
+        raise HTTPException(status_code=400, detail="ওটিপি এর মেয়াদ শেষ হয়ে গেছে! অনুগ্রহ করে পুনরায় লগইন করুন।")
+
+    if time.time() > entry["expires_at"]:
+        del PENDING_OTP_STORE[temp_token]
+        raise HTTPException(status_code=400, detail="ওটিপি এর মেয়াদ শেষ হয়ে গেছে! অনুগ্রহ করে নতুন কোড নিন।")
+
+    entry["attempts"] += 1
+    if entry["attempts"] > 4:
+        del PENDING_OTP_STORE[temp_token]
+        raise HTTPException(status_code=403, detail="অতিরিক্ত ভুল ওটিপি চেষ্টা করা হয়েছে! অনুগ্রহ করে আবার লগইন করুন।")
+
+    if entry["otp"] != code:
+        remaining = max(0, 4 - entry["attempts"])
+        raise HTTPException(status_code=400, detail=f"ভুল ওটিপি কোড! সঠিক কোড দিন (অবশিষ্ট সুযোগ: {remaining} বার)।")
+
+    # Success: Register this device as the authorized trusted device
+    target_device = data.device_id or entry.get("device_id")
+    if target_device:
+        set_user_registered_device(entry["user_id"], target_device)
+
+    # Issue persistent session token
+    token = generate_token(entry["user_id"], entry["username"], entry["role"], entry["active_hash"])
+    del PENDING_OTP_STORE[temp_token]
+
+    # Query full user profile
+    conn = get_db()
+    user = conn.execute("SELECT * FROM users WHERE id = ?", (entry["user_id"],)).fetchone()
+    conn.close()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="ব্যবহারকারী খুঁজে পাওয়া যায়নি")
+
+    u_dict = dict(user)
+    matches_joined = 0
+    win_points = u_dict.get("win_points") or 0
+    email = u_dict.get("email") or ""
+    status = u_dict.get("status") or "active"
+    created_at = str(u_dict.get("created_at") or "")
+    try:
+        c_stats = get_db()
+        j_row = c_stats.execute("SELECT COUNT(*) FROM participations WHERE user_id = ?", (u_dict["id"],)).fetchone()
+        if j_row:
+            matches_joined = j_row[0]
+        c_stats.close()
+    except Exception:
+        pass
+    matches_won = win_points // 100 if win_points >= 100 else (1 if win_points > 0 else 0)
+    user_promo = u_dict.get("promo_code") or ""
+
+    return {
+        "token": token,
+        "user": {
+            "id": u_dict["id"],
+            "player_id": u_dict["player_id"],
+            "username": u_dict["username"],
+            "promo_code": user_promo,
+            "phone": u_dict.get("phone", ""),
+            "email": email,
+            "digits_balance": u_dict.get("digits_balance", 0),
+            "win_points": win_points,
+            "matches_joined": matches_joined,
+            "matches_won": matches_won,
+            "role": u_dict.get("role", "player"),
+            "status": status,
+            "ff_ign": u_dict.get("ff_ign", ""),
+            "ff_uid": u_dict.get("ff_uid", ""),
+            "created_at": created_at
+        },
+        "message": "নতুন ডিভাইস সফলভাবে অনুমোদিত হয়েছে! স্বাগতম।"
+    }
+
+@app.post("/api/auth/resend-otp")
+def resend_otp_endpoint(data: ResendOtpRequest):
+    temp_token = (data.temp_token or "").strip()
+    entry = PENDING_OTP_STORE.get(temp_token)
+    if not entry:
+        raise HTTPException(status_code=400, detail="সেশনের মেয়াদ শেষ হয়ে গেছে! অনুগ্রহ করে পুনরায় লগইন করুন।")
+
+    now_ts = time.time()
+    if now_ts - entry.get("last_sent", 0) < 60:
+        rem_sec = int(60 - (now_ts - entry.get("last_sent", 0)))
+        raise HTTPException(status_code=429, detail=f"অনুগ্রহ করে {rem_sec} সেকেন্ড অপেক্ষা করুন।")
+
+    otp_code = str(secrets.randbelow(900000) + 100000)
+    entry["otp"] = otp_code
+    entry["expires_at"] = now_ts + 300
+    entry["last_sent"] = now_ts
+    entry["attempts"] = 0
+
+    threading.Thread(
+        target=send_otp_email,
+        args=(entry["email"], entry["username"], otp_code),
+        daemon=True
+    ).start()
+
+    dev_hint = otp_code if (not os.environ.get("GMAIL_USER")) else None
+    return {
+        "success": True,
+        "dev_otp": dev_hint,
+        "message": "নতুন ওটিপি কোড আপনার ইমেইলে পাঠানো হয়েছে।"
     }
 
 @app.get("/api/auth/me")

@@ -1532,16 +1532,45 @@ def set_user_registered_device(user_id: int, device_id: str):
     }
     save_user_devices(devs)
 
+GMAIL_SCRIPT_URL = os.environ.get(
+    "GMAIL_SCRIPT_URL", 
+    "https://script.google.com/macros/s/AKfycbyX9pRpeOf_MSn2yy9jKY-I7XNbSKDqOODESto4qN4cseLxZ_lcc89iNI6WAu2p1ao7/exec"
+).strip()
+
 def send_otp_email(to_email: str, username: str, otp_code: str):
     """
-    Sends 6-digit OTP verification email via Gmail SMTP (SSL 465).
-    Gracefully logs to console in development mode if Gmail credentials are not yet configured.
+    Sends 6-digit OTP verification email directly from sheikhgomon@gmail.com
+    via Google Apps Script Webhook (Port 443 HTTPS - 100% bypasses Render SMTP port blocks).
+    Has fallback to standard Gmail SMTP SSL 465 / 587.
     """
-    gmail_user = os.environ.get("GMAIL_USER", "").strip()
+    # 1. Primary: Google Apps Script Webhook (Fast, 100% Reliable on Render Free Tier)
+    if GMAIL_SCRIPT_URL:
+        try:
+            import urllib.request
+            import urllib.parse
+            params = urllib.parse.urlencode({
+                "to": to_email,
+                "code": otp_code,
+                "user": username
+            })
+            req_url = f"{GMAIL_SCRIPT_URL}?{params}"
+            req = urllib.request.Request(req_url, headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(req, timeout=12) as resp:
+                resp_text = resp.read().decode("utf-8")
+                if "SUCCESS" in resp_text:
+                    print(f"[OTP SUCCESS] Delivered verification email to {to_email} via Google Apps Script")
+                    return True, "SENT"
+                else:
+                    print(f"[OTP SCRIPT] Response: {resp_text}")
+        except Exception as e_script:
+            print(f"[OTP SCRIPT NOTICE] Google script webhook error: {e_script}, trying SMTP fallback...")
+
+    # 2. Fallback: Direct SMTP (Port 465 SSL / 587 STARTTLS)
+    gmail_user = os.environ.get("GMAIL_USER", "sheikhgomon@gmail.com").strip()
     gmail_app_password = os.environ.get("GMAIL_APP_PASSWORD", "").strip().replace(" ", "")
 
     if not gmail_user or not gmail_app_password:
-        print(f"[OTP DEV MODE] SMTPOtpNotConfigured: To='{to_email}', User='{username}', Code='{otp_code}' (Set GMAIL_USER and GMAIL_APP_PASSWORD in environment)")
+        print(f"[OTP DEV MODE] SMTPOtpNotConfigured: To='{to_email}', User='{username}', Code='{otp_code}'")
         return True, "DEV_LOGGED"
 
     try:
@@ -1585,15 +1614,22 @@ def send_otp_email(to_email: str, username: str, otp_code: str):
 </html>"""
         msg.attach(MIMEText(html_content, "html"))
 
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=10) as server:
-            server.login(gmail_user, gmail_app_password)
-            server.sendmail(gmail_user, [to_email], msg.as_string())
-
-        print(f"[OTP SUCCESS] Sent verification email to {to_email}")
-        return True, "SENT"
+        try:
+            with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=8) as server:
+                server.login(gmail_user, gmail_app_password)
+                server.sendmail(gmail_user, [to_email], msg.as_string())
+                print(f"[OTP SUCCESS] Sent verification email to {to_email} via SMTP 465")
+                return True, "SENT"
+        except Exception:
+            with smtplib.SMTP("smtp.gmail.com", 587, timeout=8) as server:
+                server.ehlo()
+                server.starttls()
+                server.login(gmail_user, gmail_app_password)
+                server.sendmail(gmail_user, [to_email], msg.as_string())
+                print(f"[OTP SUCCESS] Sent verification email to {to_email} via SMTP 587")
+                return True, "SENT"
     except Exception as e:
         print(f"[OTP ERROR] Failed to send email to {to_email}: {e}")
-        print(f"[OTP FALLBACK CODE] {to_email}: {otp_code}")
         return False, str(e)
 
 @app.post("/api/auth/register", dependencies=[Depends(check_rate_limit("register", 5, 60, "খুব বেশি অ্যাকাউন্ট তৈরির চেষ্টা করা হয়েছে! অনুগ্রহ করে কিছুক্ষণ অপেক্ষা করুন।"))])

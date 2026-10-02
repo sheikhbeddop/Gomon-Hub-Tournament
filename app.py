@@ -1638,6 +1638,10 @@ def login(data: LoginRequest):
         try:
             c_pc = get_db()
             with c_pc:
+                try:
+                    c_pc.execute("ALTER TABLE users ADD COLUMN promo_code TEXT")
+                except Exception:
+                    pass
                 user_promo = generate_unique_promo_code(c_pc)
                 c_pc.execute("UPDATE users SET promo_code = ? WHERE id = ?", (user_promo, u_dict["id"]))
             c_pc.close()
@@ -1676,6 +1680,10 @@ def get_me(user: dict = Depends(get_current_user)):
     promo_code = ""
     try:
         conn = get_db()
+        try:
+            conn.execute("ALTER TABLE users ADD COLUMN promo_code TEXT")
+        except Exception:
+            pass
         j_row = conn.execute("SELECT COUNT(*) FROM participations WHERE user_id = ?", (user["id"],)).fetchone()
         if j_row:
             matches_joined = j_row[0]

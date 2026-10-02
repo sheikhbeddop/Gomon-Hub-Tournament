@@ -962,6 +962,8 @@ async function handleRegisterSubmit(e) {
         submitBtn.innerText = 'Creating account...';
     }
 
+    const promoCode = document.getElementById('regPromoCode') ? document.getElementById('regPromoCode').value.trim() : '';
+
     let res;
     try {
         res = await fetch('/api/auth/register', {
@@ -973,7 +975,8 @@ async function handleRegisterSubmit(e) {
                 email,
                 password,
                 ff_ign: ffIgn || username,
-                ff_uid: ffUid
+                ff_uid: ffUid,
+                promo_code: promoCode
             })
         });
     } catch (networkErr) {
@@ -1030,6 +1033,11 @@ async function handleRegisterSubmit(e) {
     closeModal('authModal');
     dismissSplashScreen();
     showToast(`Account created successfully! Your Player ID: ${currentUser.player_id}`, 'success');
+    if (data.bonus_received && data.bonus_received > 0) {
+        setTimeout(() => {
+            showToast(`🎉 স্বাগতম! প্রোমো কোড ব্যবহারের জন্য আপনি ${data.bonus_received} টাকা বোনাস পেয়েছেন!`, 'success');
+        }, 800);
+    }
     playSound('success');
 
     // Safe background UI updates

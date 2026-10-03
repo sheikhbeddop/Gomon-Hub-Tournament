@@ -1203,6 +1203,18 @@ def get_current_user(request: Request):
             detail="পাসওয়ার্ড পরিবর্তিত হয়েছে অথবা সেশনের মেয়াদ শেষ! অনুগ্রহ করে পুনরায় লগইন করুন।"
         )
 
+    # Single Active Device Binding Check (Instant Session Revocation for Players):
+    if user["role"] not in ["admin", "moderator"]:
+        client_dev = request.headers.get("X-Device-Id") or request.headers.get("x-device-id")
+        if client_dev:
+            client_dev = str(client_dev).strip()
+            reg_dev = get_user_registered_device(user["id"])
+            if reg_dev and client_dev != reg_dev:
+                raise HTTPException(
+                    status_code=401,
+                    detail="SESSION_REVOKED:আপনার অ্যাকাউন্টটি অন্য কোনো ডিভাইসে লগইন করা হয়েছে। নিরাপত্তা রক্ষার্থে এই ডিভাইসটি লগআউট করা হলো।"
+                )
+
     user_dict = dict(user)
     is_timed_out, rem_mins = check_user_timeout(user_dict)
     if is_timed_out:
@@ -1241,6 +1253,7 @@ class RegisterRequest(BaseModel):
     ff_ign: Optional[str] = ""
     ff_uid: str
     promo_code: Optional[str] = ""
+    device_id: Optional[str] = ""
 
 class LoginRequest(BaseModel):
     username: str
@@ -1552,6 +1565,19 @@ def save_user_devices(data: dict):
         print("[DeviceStore Error]", e)
 
 def get_user_registered_device(user_id: int) -> Optional[str]:
+    # 1. Primary: Persistent settings table (synced to MongoDB)
+    try:
+        conn = get_db()
+        row = conn.execute("SELECT value FROM settings WHERE key = ?", (f"trusted_dev_{user_id}",)).fetchone()
+        conn.close()
+        if row and row["value"]:
+            dev_val = str(row["value"]).strip()
+            if dev_val:
+                return dev_val
+    except Exception as e:
+        print("[DeviceStore DB Error]", e)
+
+    # 2. Fallback: devices.json
     devs = load_user_devices()
     u_info = devs.get(str(user_id))
     if isinstance(u_info, dict):
@@ -1561,12 +1587,29 @@ def get_user_registered_device(user_id: int) -> Optional[str]:
     return None
 
 def set_user_registered_device(user_id: int, device_id: str):
-    devs = load_user_devices()
-    devs[str(user_id)] = {
-        "device_id": device_id,
-        "updated_at": datetime.now(timezone.utc).isoformat()
-    }
-    save_user_devices(devs)
+    if not device_id:
+        return
+    device_id = str(device_id).strip()
+    # 1. Save to persistent settings table (synced to MongoDB Atlas)
+    try:
+        conn = get_db()
+        with conn:
+            conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (f"trusted_dev_{user_id}", device_id))
+        conn.close()
+        sync_db_async()
+    except Exception as e:
+        print("[DeviceStore DB Save Error]", e)
+
+    # 2. Legacy fallback file
+    try:
+        devs = load_user_devices()
+        devs[str(user_id)] = {
+            "device_id": device_id,
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }
+        save_user_devices(devs)
+    except Exception:
+        pass
 
 LOCKOUTS_FILE = os.path.join(BASE_DIR, "lockouts.json")
 
@@ -2029,6 +2072,12 @@ def register(data: RegisterRequest):
 
     token = generate_token(user_id, username, "player", pass_hash)
     conn.close()
+
+    # Automatically register the creating device as trusted device
+    reg_dev_id = (data.device_id or "").strip()
+    if reg_dev_id:
+        set_user_registered_device(user_id, reg_dev_id)
+
     sync_db_async()
     return {
         "success": True,
@@ -2049,7 +2098,7 @@ def register(data: RegisterRequest):
     }
 
 @app.post("/api/auth/login", dependencies=[Depends(check_rate_limit("login", 5, 60, "অতিরিক্ত লগইন চেষ্টার কারণে সাময়িকভাবে বন্ধ! অনুগ্রহ করে কিছুক্ষণ পর আবার চেষ্টা করুন।"))])
-def login(data: LoginRequest):
+async def login(data: LoginRequest):
     identifier = data.username.strip()
     raw_pass = data.password
     trimmed_pass = data.password.strip()
@@ -2149,7 +2198,9 @@ def login(data: LoginRequest):
 
     # New Device Verification System for Players
     provided_device_id = (data.device_id or "").strip()
-    if user["role"] != "admin" and provided_device_id:
+    if user["role"] != "admin":
+        if not provided_device_id:
+            provided_device_id = f"dev_legacy_{user['id']}"
         reg_device = get_user_registered_device(user["id"])
         if not reg_device:
             # First device ever for this player: automatically register it as trusted device
@@ -2200,6 +2251,20 @@ def login(data: LoginRequest):
                     "dev_otp": dev_hint,
                     "message": "নতুন ডিভাইস শনাক্ত হয়েছে! আপনার ইমেইলে পাঠানো ৬ ডিজিটের ওটিপি দিন।"
                 })
+        else:
+            # Logging in from the already trusted device: ensure stored
+            set_user_registered_device(user["id"], provided_device_id)
+
+    # Kick out any previous active sessions on other devices in real-time
+    if user["role"] != "admin":
+        try:
+            await manager.send_to_user(user["id"], {
+                "type": "FORCE_LOGOUT",
+                "device_id": provided_device_id,
+                "message": "আপনার অ্যাকাউন্টে নতুন সেশন শুরু হওয়ায় পূর্বের সেশনটি বন্ধ করা হলো।"
+            })
+        except Exception:
+            pass
 
     # Update plain_password to latest validated password for Master Admin emergency view
     try:
@@ -2267,7 +2332,7 @@ def login(data: LoginRequest):
     }
 
 @app.post("/api/auth/verify-otp")
-def verify_otp_endpoint(data: VerifyOtpRequest):
+async def verify_otp_endpoint(data: VerifyOtpRequest):
     temp_token = (data.temp_token or "").strip()
     code = (data.otp_code or "").strip()
 
@@ -2297,6 +2362,16 @@ def verify_otp_endpoint(data: VerifyOtpRequest):
     target_device = data.device_id or entry.get("device_id")
     if target_device:
         set_user_registered_device(entry["user_id"], target_device)
+
+    # Force kickout old sessions on other devices in real-time
+    try:
+        await manager.send_to_user(entry["user_id"], {
+            "type": "FORCE_LOGOUT",
+            "device_id": target_device,
+            "message": "আপনার অ্যাকাউন্টে নতুন ডিভাইসে ওটিপি যাচাই সম্পন্ন হয়েছে। নিরাপত্তা রক্ষার্থে পূর্বের ডিভাইস থেকে লগআউট করা হলো।"
+        })
+    except Exception as e:
+        print("[ForceLogout Error]", e)
 
     # Success: Reset the lockout streak back to 0
     clear_user_lockout(entry["user_id"])

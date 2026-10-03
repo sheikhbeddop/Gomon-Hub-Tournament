@@ -5939,8 +5939,8 @@ function initWebSocket() {
     }
 
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const token = localStorage.getItem('token') || '';
-    const wsUrl = `${protocol}//${location.host}/ws${token ? `?token=${token}` : ''}`;
+    const activeToken = token || localStorage.getItem('ff_token') || localStorage.getItem('token') || '';
+    const wsUrl = `${protocol}//${location.host}/ws${activeToken ? `?token=${encodeURIComponent(activeToken)}` : ''}`;
 
     try {
         ws = new WebSocket(wsUrl);
@@ -5957,13 +5957,22 @@ function initWebSocket() {
         loadPublicInfo();
         loadMatches();
 
-        // Single heartbeat ping interval
+        // Send explicit AUTH packet if active token exists
+        if (activeToken && ws && ws.readyState === WebSocket.OPEN) {
+            try {
+                ws.send(JSON.stringify({ type: 'AUTH', token: activeToken }));
+            } catch (e) {}
+        }
+
+        // Single heartbeat ping interval with token & device_id
         if (wsPingInterval) clearInterval(wsPingInterval);
         wsPingInterval = setInterval(() => {
             if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send('ping');
+                const myDev = (typeof getOrCreateDeviceId === 'function') ? getOrCreateDeviceId() : '';
+                const curTok = token || localStorage.getItem('ff_token') || '';
+                ws.send(JSON.stringify({ type: 'ping', token: curTok, device_id: myDev }));
             }
-        }, 25000);
+        }, 15000);
     };
 
     ws.onmessage = (event) => {
@@ -5995,6 +6004,10 @@ function initWebSocket() {
 
 function handleWsMessage(data) {
     if (data.type === 'FORCE_LOGOUT') {
+        // If message targets a specific user ID, only proceed if this client is that user
+        if (data.target_user_id && currentUser && currentUser.id !== data.target_user_id) {
+            return;
+        }
         const myDev = (typeof getOrCreateDeviceId === 'function') ? getOrCreateDeviceId() : '';
         // If message targets a specific new device, do not logout if this client is that new device
         if (data.device_id && data.device_id === myDev) {
@@ -6007,7 +6020,7 @@ function handleWsMessage(data) {
             if (typeof logout === 'function') {
                 logout(false);
             }
-        }, 800);
+        }, 500);
         return;
     }
 

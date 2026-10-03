@@ -1081,11 +1081,31 @@ manager = ConnectionManager()
 # -------------------------------------------------------------
 # Referral Reward Dispatcher (Triggers on 1st Deposit Approval)
 # -------------------------------------------------------------
-async def check_and_reward_first_deposit_referral(conn, user_id: int):
+async def check_and_reward_first_deposit_referral(conn, user_id: int, deposit_amount: float = None):
     """
-    Rewards the referrer with +5 Taka digits_balance upon referee's 1st approved deposit.
+    Rewards the referrer with +5 Taka digits_balance upon referee's 1st qualifying approved deposit (minimum 10 BDT).
+    Only triggers once in a lifetime per referee (is_deposit_rewarded: 0 -> 1).
+    Deposits below 10 BDT credit normally to the user but do NOT unlock the referral bonus for the referrer.
     """
     try:
+        # Determine qualifying deposit amount
+        if deposit_amount is None:
+            latest_dep = conn.execute("""
+                SELECT amount FROM deposits 
+                WHERE user_id = ? AND status = 'approved' 
+                ORDER BY id DESC LIMIT 1
+            """, (user_id,)).fetchone()
+            deposit_amount = float(latest_dep["amount"]) if latest_dep and latest_dep["amount"] is not None else 0.0
+        else:
+            try:
+                deposit_amount = float(deposit_amount)
+            except (ValueError, TypeError):
+                deposit_amount = 0.0
+
+        # Anti-Fraud & Business Rule: Qualifying deposit must be at least 10 BDT
+        if deposit_amount < 10.0:
+            return
+
         ref = conn.execute("""
             SELECT id, referrer_id, referee_id, is_deposit_rewarded, referrer_bonus
             FROM user_referrals
@@ -1113,15 +1133,16 @@ async def check_and_reward_first_deposit_referral(conn, user_id: int):
             conn.execute("""
                 INSERT INTO audit_logs (admin_id, target_user_id, action, amount, reason)
                 VALUES (0, ?, 'REFERRAL_REWARD_CREDITED', ?, ?)
-            """, (referrer_id, bonus_amount, f"Referral reward: User @{referee_name} completed first deposit"))
+            """, (referrer_id, bonus_amount, f"Referral reward: User @{referee_name} completed qualifying first deposit of {deposit_amount:.2f} Tk (minimum 10 Tk required)"))
 
             try:
                 fresh_ref = conn.execute("SELECT digits_balance FROM users WHERE id = ?", (referrer_id,)).fetchone()
                 ref_bal = fresh_ref["digits_balance"] if fresh_ref else 0
+                dep_disp = int(deposit_amount) if deposit_amount.is_integer() else deposit_amount
                 await manager.send_to_user(referrer_id, {
                     "type": "BALANCE_UPDATED",
                     "digits_balance": ref_bal,
-                    "notice": f"🎉 অভিনন্দন! আপনার প্রোমো কোড ব্যবহারকারী @{referee_name} প্রথম ডিপোজিট সম্পন্ন করেছেন! আপনার ওয়ালেটে +{bonus_amount} টাকা যোগ হয়েছে।"
+                    "notice": f"🎉 অভিনন্দন! আপনার প্রোমো কোড ব্যবহারকারী @{referee_name} প্রথম ডিপোজিট (৳{dep_disp}) সম্পন্ন করেছেন! আপনার ওয়ালেটে +{bonus_amount} টাকা যোগ হয়েছে।"
                 })
             except Exception:
                 pass
@@ -3161,7 +3182,7 @@ async def process_incoming_payment(trx_id: str, amount: int, sender_phone: str =
                 """, (matched_user_id, inc_id))
 
                 conn.execute("UPDATE users SET digits_balance = digits_balance + ? WHERE id = ?", (approved_amount, matched_user_id))
-                await check_and_reward_first_deposit_referral(conn, matched_user_id)
+                await check_and_reward_first_deposit_referral(conn, matched_user_id, approved_amount)
 
                 conn.execute("""
                     INSERT INTO audit_logs (admin_id, target_user_id, action, amount, reason)
@@ -3324,7 +3345,7 @@ async def submit_deposit(data: DepositRequest, user: dict = Depends(get_current_
                         """, (user["id"], incoming["id"]))
 
                         conn.execute("UPDATE users SET digits_balance = digits_balance + ? WHERE id = ?", (actual_credit_amount, user["id"]))
-                        await check_and_reward_first_deposit_referral(conn, user["id"])
+                        await check_and_reward_first_deposit_referral(conn, user["id"], actual_credit_amount)
 
                         conn.execute("""
                             INSERT INTO audit_logs (admin_id, target_user_id, action, amount, reason)
@@ -4632,7 +4653,7 @@ async def admin_review_deposit(deposit_id: int, action: str, admin: dict = Depen
             new_balance = None
             if action == "approve":
                 conn.execute("UPDATE users SET digits_balance = digits_balance + ? WHERE id = ?", (deposit["amount"], deposit["user_id"]))
-                await check_and_reward_first_deposit_referral(conn, deposit["user_id"])
+                await check_and_reward_first_deposit_referral(conn, deposit["user_id"], deposit["amount"])
                 u = conn.execute("SELECT digits_balance FROM users WHERE id = ?", (deposit["user_id"],)).fetchone()
                 new_balance = u["digits_balance"] if u else 0
 

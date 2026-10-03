@@ -7932,28 +7932,34 @@ function handlePromoUrlInput(val) {
     const u = (val || '').toLowerCase().trim();
     if (!u) {
         badge.innerHTML = '🌐 লিংক পেস্ট করুন';
-        badge.style.background = 'rgba(148, 163, 184, 0.2)';
-        badge.style.color = '#94a3b8';
+        badge.style.background = 'var(--bg-card-hover)';
+        badge.style.borderColor = 'var(--border-glass)';
+        badge.style.color = 'var(--text-muted)';
     } else if (u.includes('youtube.com') || u.includes('youtu.be')) {
         badge.innerHTML = '🔴 YouTube Video';
-        badge.style.background = 'rgba(239, 68, 68, 0.25)';
-        badge.style.color = '#f87171';
+        badge.style.background = 'rgba(239, 68, 68, 0.12)';
+        badge.style.borderColor = 'rgba(239, 68, 68, 0.35)';
+        badge.style.color = '#dc2626';
     } else if (u.includes('tiktok.com')) {
         badge.innerHTML = '⬛ TikTok Video';
-        badge.style.background = 'rgba(0, 245, 155, 0.2)';
-        badge.style.color = '#00f59b';
+        badge.style.background = 'rgba(5, 150, 105, 0.12)';
+        badge.style.borderColor = 'rgba(5, 150, 105, 0.35)';
+        badge.style.color = '#059669';
     } else if (u.includes('facebook.com') || u.includes('fb.watch') || u.includes('fb.com')) {
         badge.innerHTML = '🔵 Facebook Reel/Video';
-        badge.style.background = 'rgba(59, 130, 246, 0.25)';
-        badge.style.color = '#60a5fa';
+        badge.style.background = 'rgba(37, 99, 235, 0.12)';
+        badge.style.borderColor = 'rgba(37, 99, 235, 0.35)';
+        badge.style.color = '#2563eb';
     } else if (u.includes('instagram.com')) {
         badge.innerHTML = '🟣 Instagram Reel';
-        badge.style.background = 'rgba(168, 85, 247, 0.25)';
-        badge.style.color = '#c084fc';
+        badge.style.background = 'rgba(147, 51, 234, 0.12)';
+        badge.style.borderColor = 'rgba(147, 51, 234, 0.35)';
+        badge.style.color = '#9333ea';
     } else {
         badge.innerHTML = '🌐 Other Video Link';
-        badge.style.background = 'rgba(234, 179, 8, 0.25)';
-        badge.style.color = '#facc15';
+        badge.style.background = 'rgba(217, 119, 6, 0.12)';
+        badge.style.borderColor = 'rgba(217, 119, 6, 0.35)';
+        badge.style.color = '#d97706';
     }
 }
 
@@ -8009,7 +8015,7 @@ async function loadMyPromotions() {
     const listEl = document.getElementById('promoMySubmissionsList');
     if (!listEl) return;
     if (!currentUser) {
-        listEl.innerHTML = '<div style="text-align: center; color: #94a3b8; padding: 12px; font-size: 0.8rem;">লগইন করলে আপনার ভিডিও লিস্ট দেখতে পাবেন</div>';
+        listEl.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 12px; font-size: 0.8rem;">লগইন করলে আপনার ভিডিও লিস্ট দেখতে পাবেন</div>';
         return;
     }
 
@@ -8019,7 +8025,7 @@ async function loadMyPromotions() {
         const items = await res.json();
 
         if (!items || items.length === 0) {
-            listEl.innerHTML = '<div style="text-align: center; color: #94a3b8; padding: 16px; font-size: 0.8rem; background: rgba(255,255,255,0.02); border-radius: 8px;">আপনি এখনো কোনো ভিডিও লিংক জমা দেননি। ভিডিও বানিয়ে লিংক দিন ও রিওয়ার্ড জিতুন! 🎁</div>';
+            listEl.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 16px; font-size: 0.82rem; background: var(--bg-card-hover); border: 1px solid var(--border-glass); border-radius: 8px;">আপনি এখনো কোনো ভিডিও লিংক জমা দেননি। ভিডিও বানিয়ে লিংক দিন ও রিওয়ার্ড জিতুন! 🎁</div>';
             return;
         }
 
@@ -8027,11 +8033,11 @@ async function loadMyPromotions() {
         items.forEach(item => {
             let statusBadge = '';
             if (item.status === 'approved') {
-                statusBadge = `<span style="background: rgba(16, 185, 129, 0.2); color: #10b981; font-weight: 800; font-size: 0.72rem; padding: 3px 8px; border-radius: 6px; border: 1px solid rgba(16, 185, 129, 0.4);">🟢 Approved (+৳${item.reward_amount})</span>`;
+                statusBadge = `<span style="background: rgba(16, 185, 129, 0.15); color: #059669; font-weight: 800; font-size: 0.72rem; padding: 3px 8px; border-radius: 6px; border: 1px solid rgba(16, 185, 129, 0.35);">🟢 Approved (+৳${item.reward_amount})</span>`;
             } else if (item.status === 'rejected') {
-                statusBadge = `<span style="background: rgba(239, 68, 68, 0.2); color: #f87171; font-weight: 800; font-size: 0.72rem; padding: 3px 8px; border-radius: 6px; border: 1px solid rgba(239, 68, 68, 0.4);">🔴 Rejected</span>`;
+                statusBadge = `<span style="background: rgba(239, 68, 68, 0.15); color: #dc2626; font-weight: 800; font-size: 0.72rem; padding: 3px 8px; border-radius: 6px; border: 1px solid rgba(239, 68, 68, 0.35);">🔴 Rejected</span>`;
             } else {
-                statusBadge = `<span style="background: rgba(234, 179, 8, 0.2); color: #facc15; font-weight: 800; font-size: 0.72rem; padding: 3px 8px; border-radius: 6px; border: 1px solid rgba(234, 179, 8, 0.4);">🟡 Pending Review</span>`;
+                statusBadge = `<span style="background: rgba(234, 179, 8, 0.15); color: #d97706; font-weight: 800; font-size: 0.72rem; padding: 3px 8px; border-radius: 6px; border: 1px solid rgba(234, 179, 8, 0.35);">🟡 Pending Review</span>`;
             }
 
             let platformIcon = '🌐';
@@ -8043,19 +8049,19 @@ async function loadMyPromotions() {
             else platformIcon = '🌐 ' + (item.platform || 'Link');
 
             html += `
-                <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 12px;">
+                <div style="background: var(--bg-card-hover); border: 1px solid var(--border-glass); border-radius: 10px; padding: 12px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; flex-wrap: wrap; gap: 6px;">
-                        <span style="font-size: 0.75rem; font-weight: 800; color: #94a3b8;">${platformIcon}</span>
+                        <span style="font-size: 0.75rem; font-weight: 800; color: var(--text-secondary);">${platformIcon}</span>
                         ${statusBadge}
                     </div>
                     <div style="margin-bottom: 6px;">
-                        <a href="${item.video_url}" target="_blank" rel="noopener noreferrer" style="color: #38bdf8; font-size: 0.78rem; text-decoration: underline; word-break: break-all; display: inline-block;">
+                        <a href="${item.video_url}" target="_blank" rel="noopener noreferrer" style="color: var(--neon-cyan, #0284c7); font-size: 0.78rem; text-decoration: underline; word-break: break-all; display: inline-block; font-weight: 600;">
                             🔗 ${item.video_url}
                         </a>
                     </div>
-                    ${item.notes ? `<div style="font-size: 0.74rem; color: #cbd5e1; margin-bottom: 4px;">📝 <i>${item.notes}</i></div>` : ''}
-                    ${item.admin_note ? `<div style="font-size: 0.74rem; color: ${item.status === 'approved' ? '#86efac' : '#fca5a5'}; margin-top: 4px; padding: 4px 8px; background: rgba(0,0,0,0.2); border-radius: 4px;"><b>অ্যাডমিন মন্তব্য:</b> ${item.admin_note}</div>` : ''}
-                    <div style="font-size: 0.68rem; color: #64748b; margin-top: 6px;">তারিখ: ${item.created_at || ''}</div>
+                    ${item.notes ? `<div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 4px;">📝 <i>${item.notes}</i></div>` : ''}
+                    ${item.admin_note ? `<div style="font-size: 0.75rem; color: ${item.status === 'approved' ? '#059669' : '#dc2626'}; margin-top: 4px; padding: 6px 10px; background: ${item.status === 'approved' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)'}; border: 1px solid ${item.status === 'approved' ? 'rgba(16, 185, 129, 0.25)' : 'rgba(239, 68, 68, 0.25)'}; border-radius: 6px;"><b>অ্যাডমিন মন্তব্য:</b> ${item.admin_note}</div>` : ''}
+                    <div style="font-size: 0.68rem; color: var(--text-muted); margin-top: 6px;">তারিখ: ${item.created_at || ''}</div>
                 </div>
             `;
         });
@@ -8142,28 +8148,28 @@ async function loadAdminPromotions() {
             html += `
                 <tr>
                     <td>
-                        <div style="font-weight: 800; color: #f1f5f9;">${it.username || 'User #' + it.user_id}</div>
-                        <div style="font-size: 0.75rem; color: #94a3b8;">${it.phone || 'No phone'}</div>
-                        <div style="font-size: 0.75rem; color: #00f59b; font-weight: 700;">Wallet: ৳${it.digits_balance || 0}</div>
+                        <div style="font-weight: 800; color: var(--text-primary);">${it.username || 'User #' + it.user_id}</div>
+                        <div style="font-size: 0.75rem; color: var(--text-muted);">${it.phone || 'No phone'}</div>
+                        <div style="font-size: 0.75rem; color: #059669; font-weight: 700;">Wallet: ৳${it.digits_balance || 0}</div>
                     </td>
                     <td>
-                        <span style="font-weight: 800; font-size: 0.75rem; color: ${platColor}; background: rgba(255,255,255,0.05); padding: 3px 8px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1);">
+                        <span style="font-weight: 800; font-size: 0.75rem; color: ${platColor}; background: var(--bg-card-hover); padding: 3px 8px; border-radius: 6px; border: 1px solid var(--border-glass);">
                             ${platBadge}
                         </span>
                     </td>
                     <td>
-                        <a href="${it.video_url}" target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-sm" style="display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; font-size: 0.75rem; color: #38bdf8; border-color: rgba(56, 189, 248, 0.4);">
+                        <a href="${it.video_url}" target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-sm" style="display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; font-size: 0.75rem; color: var(--neon-cyan, #0284c7); border-color: rgba(2, 132, 199, 0.4);">
                             ▶️ Open Video ↗️
                         </a>
-                        <div style="font-size: 0.7rem; color: #64748b; margin-top: 4px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                        <div style="font-size: 0.7rem; color: var(--text-muted); margin-top: 4px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
                             ${it.video_url}
                         </div>
                     </td>
-                    <td style="max-width: 160px; font-size: 0.78rem; color: #cbd5e1;">
-                        ${it.notes || '<span style="color:#64748b;">—</span>'}
+                    <td style="max-width: 160px; font-size: 0.78rem; color: var(--text-secondary);">
+                        ${it.notes || '<span style="color:var(--text-muted);">—</span>'}
                     </td>
                     <td>${statusHtml}</td>
-                    <td style="font-size: 0.75rem; color: #94a3b8; white-space: nowrap;">
+                    <td style="font-size: 0.75rem; color: var(--text-muted); white-space: nowrap;">
                         ${it.created_at ? it.created_at.replace('T', ' ').substring(0, 16) : ''}
                     </td>
                     <td>${actionsHtml}</td>

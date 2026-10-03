@@ -5273,7 +5273,9 @@ function handleBulkScheduleToggleChange(isChecked) {
     }
     if (badge) {
         badge.textContent = isChecked ? 'সক্রিয়' : 'ঐচ্ছিক';
-        badge.style.background = isChecked ? 'rgba(0, 245, 155, 0.3)' : 'rgba(0, 245, 155, 0.15)';
+        badge.style.background = isChecked ? '#dcfce7' : '#f1f5f9';
+        badge.style.color = isChecked ? '#15803d' : '#475569';
+        badge.style.border = isChecked ? '1px solid #86efac' : '1px solid #cbd5e1';
     }
     updateBulkPreview();
 }
@@ -5285,6 +5287,10 @@ function updateBulkPreview() {
     const intervalInput = document.getElementById('bulkMatchInterval');
     const timeInput = document.getElementById('matchTime');
     if (!preview || !countInput || !intervalInput) return;
+
+    preview.style.color = '#065f46';
+    preview.style.background = '#ecfdf5';
+    preview.style.border = '1px solid #a7f3d0';
 
     const count = Math.max(1, Math.min(parseInt(countInput.value, 10) || 1, 50));
     const interval = Math.max(5, Math.min(parseInt(intervalInput.value, 10) || 30, 1440));
@@ -5366,7 +5372,9 @@ async function handleCreateMatchSubmit(e) {
             const badge = document.getElementById('bulkBadge');
             if (badge) {
                 badge.textContent = 'ঐচ্ছিক';
-                badge.style.background = 'rgba(0, 245, 155, 0.15)';
+                badge.style.background = '#f1f5f9';
+                badge.style.color = '#475569';
+                badge.style.border = '1px solid #cbd5e1';
             }
             showToast(data.message || (isBulk ? `${match_count}টি ম্যাচ সফলভাবে শিডিউল হয়েছে!` : 'New tournament match created successfully!'), 'success');
             loadMatches();

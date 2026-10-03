@@ -857,6 +857,23 @@ def init_db():
         except Exception:
             pass
 
+        # Video Promotions & Earn System Table Schema (Initialized before MongoDB Cloud restore)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS video_promotions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                platform TEXT NOT NULL,
+                video_url TEXT NOT NULL,
+                notes TEXT DEFAULT '',
+                status TEXT DEFAULT 'pending',
+                reward_amount INTEGER DEFAULT 0,
+                admin_note TEXT DEFAULT '',
+                reviewed_by_name TEXT DEFAULT '',
+                reviewed_at TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users (id)
+            )
+        """)
 
     conn.close()
 

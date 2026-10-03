@@ -1390,6 +1390,7 @@ def get_public_info():
         "admin_bkash": settings.get("admin_bkash", "01988279285 (Personal)"),
         "admin_withdraw_number": settings.get("admin_withdraw_number", settings.get("admin_bkash", "01988279285 (Personal)")),
         "notice": settings.get("notice", ""),
+        "notice_en": settings.get("notice_en", ""),
         "app_version": current_ver,
         "app_update_notes": settings.get("app_update_notes", "GOMON HUB TOURNAMENT নতুন ইন্টারফেস ও সিকিউরিটি আপডেট।"),
         "vapid_public_key": VAPID_KEYS["public_key"]
@@ -5312,6 +5313,8 @@ async def admin_update_settings(data: dict, admin: dict = Depends(verify_admin))
     }
     if "notice" in data:
         broadcast_data["notice"] = data["notice"]
+    if "notice_en" in data:
+        broadcast_data["notice_en"] = data["notice_en"]
     if "site_title" in data:
         broadcast_data["site_title"] = data["site_title"]
     if "admin_bkash" in data:

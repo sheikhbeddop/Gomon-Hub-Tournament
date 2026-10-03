@@ -2871,6 +2871,14 @@ async def join_match(data: Optional[JoinMatchRequest] = None, match_id: Optional
 
     num_slots = 1 + len(valid_teammates)
 
+    # 1. Anti-Loop: Ensure no duplicate Free Fire UIDs within this submission
+    submitted_uids = [str(player_uid).strip()] + [str(t["player_uid"]).strip() for t in valid_teammates]
+    if len(submitted_uids) != len(set(submitted_uids)):
+        raise HTTPException(
+            status_code=400,
+            detail="একই Free Fire UID একাধিক প্লেয়ারের জন্য ব্যবহার করা যাবে না! প্রতিটি স্লটে ভিন্ন ভিন্ন UID দিন।"
+        )
+
     conn = get_db()
     try:
         with conn:
@@ -2907,6 +2915,18 @@ async def join_match(data: Optional[JoinMatchRequest] = None, match_id: Optional
             already = conn.execute("SELECT id FROM participations WHERE match_id = ? AND user_id = ?", (match_id, user_id)).fetchone()
             if already:
                 raise HTTPException(status_code=400, detail="You have already joined this match!")
+
+            # 2. Anti-Loop: Check if any of these Free Fire UIDs are already booked in this match
+            placeholders = ",".join("?" for _ in submitted_uids)
+            dup_uid_row = conn.execute(
+                f"SELECT slot_number, player_uid, player_ign FROM participations WHERE match_id = ? AND player_uid IN ({placeholders}) LIMIT 1",
+                [match_id] + submitted_uids
+            ).fetchone()
+            if dup_uid_row:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Free Fire UID ({dup_uid_row['player_uid']}) ইতিমধ্যে এই ম্যাচের স্লট #{dup_uid_row['slot_number']}-এ যুক্ত রয়েছে! একই UID দিয়ে একই ম্যাচে একাধিকবার জয়েন করা যাবে না।"
+                )
 
             # Atomic slot availability check
             taken_rows = conn.execute("SELECT slot_number FROM participations WHERE match_id = ?", (match_id,)).fetchall()
@@ -3838,6 +3858,17 @@ async def request_withdraw(data: WithdrawRequest, user: dict = Depends(get_curre
     new_bal = 0
     try:
         with conn:
+            # Anti-Spam / Anti-Loop: Only 1 pending withdrawal request allowed at a time per user
+            pending = conn.execute(
+                "SELECT id, amount, created_at FROM withdrawals WHERE user_id = ? AND status = 'pending' LIMIT 1",
+                (user["id"],)
+            ).fetchone()
+            if pending:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"আপনার একটি ৳{pending['amount']} টাকার উইথড্র রিকোয়েস্ট ইতিমধ্যে পেন্ডিং রয়েছে! সেটি সম্পন্ন হওয়া পর্যন্ত অনুগ্রহ করে অপেক্ষা করুন।"
+                )
+
             # Atomic balance deduction: checks and deducts balance in a single atomic SQL statement
             cur = conn.execute(
                 "UPDATE users SET digits_balance = digits_balance - ? WHERE id = ? AND digits_balance >= ?",
@@ -5155,6 +5186,17 @@ async def admin_replace_match_participant(match_id: int, slot_number: int, data:
         part = conn.execute("SELECT * FROM participations WHERE match_id = ? AND slot_number = ?", (match_id, slot_number)).fetchone()
         if not part:
             raise HTTPException(status_code=404, detail=f"স্লট #{slot_number}-এ কোনো প্লেয়ার পাওয়া যায়নি")
+
+        # Anti-Loop: Ensure new Free Fire UID is not already present in another slot of this match
+        dup_part = conn.execute(
+            "SELECT slot_number, player_ign FROM participations WHERE match_id = ? AND player_uid = ? AND slot_number != ?",
+            (match_id, new_uid, slot_number)
+        ).fetchone()
+        if dup_part:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Free Fire UID ({new_uid}) ইতিমধ্যে এই ম্যাচের স্লট #{dup_part['slot_number']}-এ যুক্ত রয়েছে!"
+            )
 
         old_user_id = part["user_id"]
         old_ign = part["player_ign"] or "Player"

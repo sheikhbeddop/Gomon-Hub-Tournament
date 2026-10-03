@@ -473,10 +473,27 @@ async function fetchWithAuth(url, options = {}) {
         if (!token) token = activeToken;
         options.headers['Authorization'] = `Bearer ${activeToken}`;
     }
+    if (typeof getOrCreateDeviceId === 'function') {
+        options.headers['X-Device-Id'] = getOrCreateDeviceId();
+    }
     if (options.body && typeof options.body === 'string' && !options.headers['Content-Type']) {
         options.headers['Content-Type'] = 'application/json';
     }
-    return fetch(url, options);
+    const response = await fetch(url, options);
+    if (response.status === 401) {
+        try {
+            const clone = response.clone();
+            const data = await clone.json();
+            if (data && data.detail && (typeof data.detail === 'string') && data.detail.startsWith('SESSION_REVOKED:')) {
+                const msg = data.detail.replace('SESSION_REVOKED:', '').trim();
+                showToast(msg || 'আপনার অ্যাকাউন্টটি অন্য ডিভাইসে লগইন করায় এই ডিভাইস থেকে লগআউট করা হয়েছে।', 'error');
+                if (typeof logout === 'function') {
+                    logout(false);
+                }
+            }
+        } catch (e) {}
+    }
+    return response;
 }
 
 function renderLoggedInNav() {
@@ -578,6 +595,13 @@ function renderLoggedOutNav() {
     }
 }
 function logout(manual = true) {
+    if (ws) {
+        try {
+            ws.onclose = null;
+            ws.close();
+        } catch (e) {}
+        ws = null;
+    }
     sessionStorage.removeItem('welcome_notice_dismissed');
     sessionStorage.removeItem('current_active_tab');
     sessionStorage.removeItem('current_admin_section');
@@ -1626,7 +1650,8 @@ async function handleRegisterSubmit(e) {
                 password,
                 ff_ign: ffIgn || username,
                 ff_uid: ffUid,
-                promo_code: promoCode
+                promo_code: promoCode,
+                device_id: typeof getOrCreateDeviceId === 'function' ? getOrCreateDeviceId() : ''
             })
         });
     } catch (networkErr) {
@@ -5969,6 +5994,23 @@ function initWebSocket() {
 }
 
 function handleWsMessage(data) {
+    if (data.type === 'FORCE_LOGOUT') {
+        const myDev = (typeof getOrCreateDeviceId === 'function') ? getOrCreateDeviceId() : '';
+        // If message targets a specific new device, do not logout if this client is that new device
+        if (data.device_id && data.device_id === myDev) {
+            return;
+        }
+        const kickMsg = data.message || 'আপনার অ্যাকাউন্টটি অন্য ডিভাইসে লগইন করায় এই ডিভাইস থেকে লগআউট করা হয়েছে।';
+        showToast(kickMsg, 'error');
+        playSound('alert');
+        setTimeout(() => {
+            if (typeof logout === 'function') {
+                logout(false);
+            }
+        }, 800);
+        return;
+    }
+
     if (data.type === 'BALANCE_UPDATED') {
         if (currentUser) {
             currentUser.digits_balance = data.digits_balance;

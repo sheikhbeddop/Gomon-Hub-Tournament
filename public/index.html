@@ -1815,7 +1815,7 @@
     </div>
 
     <!-- MODAL: VIDEO PROMOTION & EARN (Promote on YouTube/TikTok/Facebook/Instagram) -->
-    <div class="modal-overlay" id="promotionModal">
+    <div class="modal-overlay" id="promotionModal" style="z-index: 999999;" onclick="if(event.target === this) closeModal('promotionModal')">
         <div class="modal-box" style="max-width: 520px; max-height: 90vh; display: flex; flex-direction: column;">
             <div class="modal-header" style="background: linear-gradient(135deg, #1e293b, #0f172a); border-bottom: 1px solid rgba(239,68,68,0.25);">
                 <div style="display: flex; align-items: center; gap: 10px;">
@@ -1882,6 +1882,37 @@
             </div>
         </div>
     </div>
+
+    <!-- Inline openPromotionModal: guarantees instant execution on mobile & cached browsers -->
+    <script>
+        function openPromotionModal() {
+            try {
+                var token = localStorage.getItem('token') || localStorage.getItem('ff_token');
+                if (!token && (!window.currentUser || !window.currentUser.id)) {
+                    if (typeof showToast === 'function') showToast('ভিডিও প্রমোশন সাবমিট করতে প্রথমে লগইন করুন', 'info');
+                    if (typeof openModal === 'function') openModal('authModal');
+                    return;
+                }
+                var urlInp = document.getElementById('promoVideoUrl');
+                if (urlInp) urlInp.value = '';
+                var notesInp = document.getElementById('promoNotes');
+                if (notesInp) notesInp.value = '';
+                if (typeof handlePromoUrlInput === 'function') handlePromoUrlInput('');
+
+                var modal = document.getElementById('promotionModal');
+                if (modal) {
+                    modal.classList.add('show');
+                    modal.style.removeProperty('display');
+                }
+                if (typeof loadMyPromotions === 'function') {
+                    loadMyPromotions();
+                }
+            } catch (e) {
+                console.error('openPromotionModal error:', e);
+            }
+        }
+        window.openPromotionModal = openPromotionModal;
+    </script>
 
     <!-- MODAL: MY PROFILE DETAILS (Opened from Profile Menu) -->
     <div class="modal-overlay" id="myProfileDetailsModal">
@@ -3524,7 +3555,7 @@
     <!-- Toast Notification Container -->
     <div class="toast-container" id="toastContainer"></div>
 
-    <script src="/static/js/app.js?v=5.5.3"></script>
+    <script src="/static/js/app.js?v=5.5.5"></script>
 
 </body>
 </html>

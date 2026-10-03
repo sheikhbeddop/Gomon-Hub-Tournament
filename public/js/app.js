@@ -6247,7 +6247,7 @@ function switchAdminSection(sectionId) {
 
     // Dynamic data loading for the opened section
     if (sectionId === 'dashboard') {
-        if (currentUser && currentUser.role === 'admin') loadAdminOverview();
+        if (currentUser && currentUser.role === 'admin') { loadAdminOverview(); loadAdminPromotions(); }
     } else if (sectionId === 'payments') {
         if (currentUser && currentUser.role === 'admin') loadAdminOverview();
     } else if (sectionId === 'withdrawals') {
@@ -6262,6 +6262,8 @@ function switchAdminSection(sectionId) {
         loadAdminMatchHistory();
     } else if (sectionId === 'settings') {
         initSmsGatewayCard();
+    } else if (sectionId === 'promotions') {
+        loadAdminPromotions();
     }
 }
 
@@ -7904,4 +7906,325 @@ document.addEventListener('contextmenu', function(e) {
         showToast('⚠️ Copying or selecting player Free Fire UIDs is strictly prohibited!', 'warning');
     }
 });
+
+// -------------------------------------------------------------
+// Video Promotion & Earn System
+// -------------------------------------------------------------
+function openPromotionModal() {
+    if (!currentUser) {
+        showToast('ভিডিও প্রমোশন সাবমিট করতে প্রথমে লগইন করুন', 'info');
+        openModal('authModal');
+        return;
+    }
+    const urlInp = document.getElementById('promoVideoUrl');
+    if (urlInp) urlInp.value = '';
+    const notesInp = document.getElementById('promoNotes');
+    if (notesInp) notesInp.value = '';
+    handlePromoUrlInput('');
+
+    openModal('promotionModal');
+    loadMyPromotions();
+}
+
+function handlePromoUrlInput(val) {
+    const badge = document.getElementById('promoPlatformBadge');
+    if (!badge) return;
+    const u = (val || '').toLowerCase().trim();
+    if (!u) {
+        badge.innerHTML = '🌐 লিংক পেস্ট করুন';
+        badge.style.background = 'rgba(148, 163, 184, 0.2)';
+        badge.style.color = '#94a3b8';
+    } else if (u.includes('youtube.com') || u.includes('youtu.be')) {
+        badge.innerHTML = '🔴 YouTube Video';
+        badge.style.background = 'rgba(239, 68, 68, 0.25)';
+        badge.style.color = '#f87171';
+    } else if (u.includes('tiktok.com')) {
+        badge.innerHTML = '⬛ TikTok Video';
+        badge.style.background = 'rgba(0, 245, 155, 0.2)';
+        badge.style.color = '#00f59b';
+    } else if (u.includes('facebook.com') || u.includes('fb.watch') || u.includes('fb.com')) {
+        badge.innerHTML = '🔵 Facebook Reel/Video';
+        badge.style.background = 'rgba(59, 130, 246, 0.25)';
+        badge.style.color = '#60a5fa';
+    } else if (u.includes('instagram.com')) {
+        badge.innerHTML = '🟣 Instagram Reel';
+        badge.style.background = 'rgba(168, 85, 247, 0.25)';
+        badge.style.color = '#c084fc';
+    } else {
+        badge.innerHTML = '🌐 Other Video Link';
+        badge.style.background = 'rgba(234, 179, 8, 0.25)';
+        badge.style.color = '#facc15';
+    }
+}
+
+async function handlePromotionSubmit(e) {
+    if (e) e.preventDefault();
+    if (!currentUser) {
+        openModal('authModal');
+        return;
+    }
+
+    const urlInp = document.getElementById('promoVideoUrl');
+    const notesInp = document.getElementById('promoNotes');
+    const btn = document.getElementById('promoSubmitBtn');
+
+    const video_url = urlInp ? urlInp.value.trim() : '';
+    const notes = notesInp ? notesInp.value.trim() : '';
+
+    if (!video_url || video_url.length < 10) {
+        showToast('সঠিক ভিডিও লিংক প্রদান করুন', 'warning');
+        return;
+    }
+
+    if (btn) {
+        btn.disabled = true;
+        btn.innerText = 'সাবমিট হচ্ছে... ⏳';
+    }
+
+    try {
+        const res = await fetchWithAuth('/api/promotions/submit', {
+            method: 'POST',
+            body: JSON.stringify({ video_url, notes })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+            throw new Error(data.detail || 'সাবমিট ব্যর্থ হয়েছে');
+        }
+        showToast(data.message || 'ভিডিও লিংক জমা হয়েছে!', 'success');
+        if (urlInp) urlInp.value = '';
+        if (notesInp) notesInp.value = '';
+        handlePromoUrlInput('');
+        loadMyPromotions();
+    } catch (err) {
+        showToast(err.message || 'সার্ভারে সমস্যা হয়েছে', 'error');
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerText = '🚀 সাবমিট করুন (Submit for Review)';
+        }
+    }
+}
+
+async function loadMyPromotions() {
+    const listEl = document.getElementById('promoMySubmissionsList');
+    if (!listEl) return;
+    if (!currentUser) {
+        listEl.innerHTML = '<div style="text-align: center; color: #94a3b8; padding: 12px; font-size: 0.8rem;">লগইন করলে আপনার ভিডিও লিস্ট দেখতে পাবেন</div>';
+        return;
+    }
+
+    try {
+        const res = await fetchWithAuth('/api/promotions/my');
+        if (!res.ok) throw new Error('Failed to load promotions');
+        const items = await res.json();
+
+        if (!items || items.length === 0) {
+            listEl.innerHTML = '<div style="text-align: center; color: #94a3b8; padding: 16px; font-size: 0.8rem; background: rgba(255,255,255,0.02); border-radius: 8px;">আপনি এখনো কোনো ভিডিও লিংক জমা দেননি। ভিডিও বানিয়ে লিংক দিন ও রিওয়ার্ড জিতুন! 🎁</div>';
+            return;
+        }
+
+        let html = '<div style="display: flex; flex-direction: column; gap: 10px;">';
+        items.forEach(item => {
+            let statusBadge = '';
+            if (item.status === 'approved') {
+                statusBadge = `<span style="background: rgba(16, 185, 129, 0.2); color: #10b981; font-weight: 800; font-size: 0.72rem; padding: 3px 8px; border-radius: 6px; border: 1px solid rgba(16, 185, 129, 0.4);">🟢 Approved (+৳${item.reward_amount})</span>`;
+            } else if (item.status === 'rejected') {
+                statusBadge = `<span style="background: rgba(239, 68, 68, 0.2); color: #f87171; font-weight: 800; font-size: 0.72rem; padding: 3px 8px; border-radius: 6px; border: 1px solid rgba(239, 68, 68, 0.4);">🔴 Rejected</span>`;
+            } else {
+                statusBadge = `<span style="background: rgba(234, 179, 8, 0.2); color: #facc15; font-weight: 800; font-size: 0.72rem; padding: 3px 8px; border-radius: 6px; border: 1px solid rgba(234, 179, 8, 0.4);">🟡 Pending Review</span>`;
+            }
+
+            let platformIcon = '🌐';
+            let plat = (item.platform || '').toLowerCase();
+            if (plat === 'youtube') platformIcon = '🔴 YouTube';
+            else if (plat === 'tiktok') platformIcon = '⬛ TikTok';
+            else if (plat === 'facebook') platformIcon = '🔵 Facebook';
+            else if (plat === 'instagram') platformIcon = '🟣 Instagram';
+            else platformIcon = '🌐 ' + (item.platform || 'Link');
+
+            html += `
+                <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 12px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; flex-wrap: wrap; gap: 6px;">
+                        <span style="font-size: 0.75rem; font-weight: 800; color: #94a3b8;">${platformIcon}</span>
+                        ${statusBadge}
+                    </div>
+                    <div style="margin-bottom: 6px;">
+                        <a href="${item.video_url}" target="_blank" rel="noopener noreferrer" style="color: #38bdf8; font-size: 0.78rem; text-decoration: underline; word-break: break-all; display: inline-block;">
+                            🔗 ${item.video_url}
+                        </a>
+                    </div>
+                    ${item.notes ? `<div style="font-size: 0.74rem; color: #cbd5e1; margin-bottom: 4px;">📝 <i>${item.notes}</i></div>` : ''}
+                    ${item.admin_note ? `<div style="font-size: 0.74rem; color: ${item.status === 'approved' ? '#86efac' : '#fca5a5'}; margin-top: 4px; padding: 4px 8px; background: rgba(0,0,0,0.2); border-radius: 4px;"><b>অ্যাডমিন মন্তব্য:</b> ${item.admin_note}</div>` : ''}
+                    <div style="font-size: 0.68rem; color: #64748b; margin-top: 6px;">তারিখ: ${item.created_at || ''}</div>
+                </div>
+            `;
+        });
+        html += '</div>';
+        listEl.innerHTML = html;
+    } catch (e) {
+        listEl.innerHTML = '<div style="text-align: center; color: #ef4444; padding: 12px; font-size: 0.8rem;">ভিডিও হিস্ট্রি লোড করতে ব্যর্থ হয়েছে</div>';
+    }
+}
+
+async function loadAdminPromotions() {
+    const tbody = document.getElementById('adminPromotionsBody');
+    const badge = document.getElementById('adminPendingPromotionsBadge');
+    if (!tbody) return;
+
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 24px;">লোড হচ্ছে...</td></tr>';
+
+    try {
+        const res = await fetchWithAuth('/api/admin/promotions');
+        if (!res.ok) throw new Error('Failed to fetch admin promotions');
+        const items = await res.json();
+
+        let pendingCount = 0;
+        if (Array.isArray(items)) {
+            items.forEach(it => { if (it.status === 'pending') pendingCount++; });
+        }
+
+        if (badge) {
+            badge.innerText = pendingCount;
+            badge.style.display = pendingCount > 0 ? 'inline-block' : 'none';
+        }
+
+        if (!items || items.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 24px;">কোনো ভিডিও প্রমোশন রিকোয়েস্ট পাওয়া যায়নি 🎉</td></tr>';
+            return;
+        }
+
+        let html = '';
+        items.forEach(it => {
+            let statusHtml = '';
+            if (it.status === 'approved') {
+                statusHtml = `<span class="badge-status approved" style="font-size: 0.72rem;">🟢 Approved (+৳${it.reward_amount})</span>`;
+            } else if (it.status === 'rejected') {
+                statusHtml = `<span class="badge-status rejected" style="font-size: 0.72rem;">🔴 Rejected</span>`;
+            } else {
+                statusHtml = `<span class="badge-status pending" style="font-size: 0.72rem; animation: pulse 1.5s infinite;">🟡 Pending</span>`;
+            }
+
+            let platBadge = (it.platform || 'other').toUpperCase();
+            let platColor = '#94a3b8';
+            if (platBadge === 'YOUTUBE') platColor = '#ef4444';
+            else if (platBadge === 'TIKTOK') platColor = '#00f59b';
+            else if (platBadge === 'FACEBOOK') platColor = '#3b82f6';
+            else if (platBadge === 'INSTAGRAM') platColor = '#a855f7';
+
+            let actionsHtml = '';
+            if (it.status === 'pending') {
+                actionsHtml = `
+                    <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                        <button type="button" class="btn btn-sm" style="background: #10b981; color: #fff; font-weight: 700; padding: 4px 10px; font-size: 0.75rem; border-radius: 6px; cursor: pointer;" onclick="adminActionPromotion(${it.id}, 'approve')">
+                            ✅ Approve
+                        </button>
+                        <button type="button" class="btn btn-sm" style="background: #ef4444; color: #fff; font-weight: 700; padding: 4px 10px; font-size: 0.75rem; border-radius: 6px; cursor: pointer;" onclick="adminActionPromotion(${it.id}, 'reject')">
+                            ❌ Reject
+                        </button>
+                    </div>
+                `;
+            } else if (it.status === 'approved') {
+                actionsHtml = `
+                    <div style="font-size: 0.75rem; color: #10b981; font-weight: 800;">
+                        ৳${it.reward_amount} রিওয়ার্ড
+                    </div>
+                    <small style="color: #64748b; font-size: 0.7rem;">বাই: ${it.reviewed_by_name || 'Admin'}</small>
+                `;
+            } else {
+                actionsHtml = `
+                    <div style="font-size: 0.75rem; color: #ef4444; font-weight: 700;">
+                        বাতিল
+                    </div>
+                    <small style="color: #64748b; font-size: 0.7rem;">${it.admin_note || ''}</small>
+                `;
+            }
+
+            html += `
+                <tr>
+                    <td>
+                        <div style="font-weight: 800; color: #f1f5f9;">${it.username || 'User #' + it.user_id}</div>
+                        <div style="font-size: 0.75rem; color: #94a3b8;">${it.phone || 'No phone'}</div>
+                        <div style="font-size: 0.75rem; color: #00f59b; font-weight: 700;">Wallet: ৳${it.digits_balance || 0}</div>
+                    </td>
+                    <td>
+                        <span style="font-weight: 800; font-size: 0.75rem; color: ${platColor}; background: rgba(255,255,255,0.05); padding: 3px 8px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1);">
+                            ${platBadge}
+                        </span>
+                    </td>
+                    <td>
+                        <a href="${it.video_url}" target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-sm" style="display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; font-size: 0.75rem; color: #38bdf8; border-color: rgba(56, 189, 248, 0.4);">
+                            ▶️ Open Video ↗️
+                        </a>
+                        <div style="font-size: 0.7rem; color: #64748b; margin-top: 4px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                            ${it.video_url}
+                        </div>
+                    </td>
+                    <td style="max-width: 160px; font-size: 0.78rem; color: #cbd5e1;">
+                        ${it.notes || '<span style="color:#64748b;">—</span>'}
+                    </td>
+                    <td>${statusHtml}</td>
+                    <td style="font-size: 0.75rem; color: #94a3b8; white-space: nowrap;">
+                        ${it.created_at ? it.created_at.replace('T', ' ').substring(0, 16) : ''}
+                    </td>
+                    <td>${actionsHtml}</td>
+                </tr>
+            `;
+        });
+        tbody.innerHTML = html;
+    } catch (e) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #ef4444; padding: 24px;">ডাটা লোড করতে সমস্যা হয়েছে</td></tr>';
+    }
+}
+
+async function adminActionPromotion(promoId, action) {
+    if (action === 'approve') {
+        const rewardStr = prompt('প্লেয়ারের ওয়ালেটে কত টাকা রিওয়ার্ড দিতে চান? (টাকা/Digits):', '50');
+        if (rewardStr === null) return;
+        const reward = parseInt(rewardStr, 10);
+        if (isNaN(reward) || reward <= 0) {
+            showToast('সঠিক টাকার অঙ্ক লিখুন (যেমন: ৫০ বা ১০০)', 'warning');
+            return;
+        }
+        const admin_note = prompt('অ্যাডমিন মন্তব্য / নোট (ঐচ্ছিক):', 'চমৎকার ভিডিও! চালিয়ে যান।');
+
+        try {
+            const res = await fetchWithAuth(`/api/admin/promotions/${promoId}/action`, {
+                method: 'POST',
+                body: JSON.stringify({ action: 'approve', reward_amount: reward, admin_note: admin_note || '' })
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || 'Action failed');
+            showToast(data.message || 'অনুমোদিত ও রিওয়ার্ড প্রদান সম্পন্ন!', 'success');
+            loadAdminPromotions();
+            if (typeof loadAdminOverview === 'function') loadAdminOverview();
+        } catch (err) {
+            showToast(err.message || 'অপারেশন ব্যর্থ হয়েছে', 'error');
+        }
+    } else if (action === 'reject') {
+        const note = prompt('ভিডিও বাতিল করার কারণ লিখুন:', 'ভিডিওতে সাইটের নাম/লিংক পাওয়া যায়নি');
+        if (note === null) return;
+
+        try {
+            const res = await fetchWithAuth(`/api/admin/promotions/${promoId}/action`, {
+                method: 'POST',
+                body: JSON.stringify({ action: 'reject', admin_note: note })
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || 'Action failed');
+            showToast(data.message || 'প্রমোশন বাতিল করা হয়েছে', 'info');
+            loadAdminPromotions();
+            if (typeof loadAdminOverview === 'function') loadAdminOverview();
+        } catch (err) {
+            showToast(err.message || 'অপারেশন ব্যর্থ হয়েছে', 'error');
+        }
+    }
+}
+
+window.openPromotionModal = openPromotionModal;
+window.handlePromoUrlInput = handlePromoUrlInput;
+window.handlePromotionSubmit = handlePromotionSubmit;
+window.loadMyPromotions = loadMyPromotions;
+window.loadAdminPromotions = loadAdminPromotions;
+window.adminActionPromotion = adminActionPromotion;
+
 

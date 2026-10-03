@@ -1032,12 +1032,34 @@
                                         <label class="form-label" style="font-weight: 700;">Platform Title</label>
                                         <input type="text" class="form-input" id="settingSiteTitle" required>
                                     </div>
-                                    <div class="form-group">
-                                        <label class="form-label" style="font-weight: 700;">Live Banner Announcement / Marquee</label>
-                                        <input type="text" class="form-input" id="settingNotice">
-                                    </div>
                                 </div>
-                                <div style="margin-top: 14px;">
+
+                                <!-- Live Banner Announcement / Moving Marquee Customizer -->
+                                <div style="margin-top: 18px; padding: 16px; background: rgba(254, 240, 138, 0.06); border: 1px solid rgba(250, 204, 21, 0.35); border-radius: 12px;">
+                                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+                                        <label class="form-label" style="font-weight: 800; color: #facc15; margin: 0; display: flex; align-items: center; gap: 6px; font-size: 0.95rem;">
+                                            <span>📢 Live Banner Announcement / Moving Marquee (স্ক্রলিং নোটিশ)</span>
+                                        </label>
+                                        <button type="button" class="btn btn-sm" onclick="quickUpdateNotice()" style="background: rgba(250, 204, 21, 0.2); color: #facc15; font-weight: 800; border: 1px solid #facc15; padding: 6px 16px; border-radius: 8px; cursor: pointer;">
+                                            ⚡ নোটিশ তাৎক্ষণিক আপডেট
+                                        </button>
+                                    </div>
+                                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px;">
+                                        <div class="form-group" style="margin: 0;">
+                                            <label class="form-label" style="font-size: 0.82rem; font-weight: 700; color: #e2e8f0; margin-bottom: 4px;">ব্যানার নোটিশ / সম্পূর্ণ লেখা (বাংলা বা যেকোনো কাস্টম লেখা):</label>
+                                            <input type="text" class="form-input" id="settingNotice" placeholder="যেমন: GOMON HUB এ টুর্নামেন্ট খেলতে ডিপোজিট করে ম্যাচ এ জয়েন করুন।">
+                                        </div>
+                                        <div class="form-group" style="margin: 0;">
+                                            <label class="form-label" style="font-size: 0.82rem; font-weight: 700; color: #94a3b8; margin-bottom: 4px;">ইংরেজি লাইন (ঐচ্ছিক - খালি রাখলে কোনো ইংরেজি দেখাবে না):</label>
+                                            <input type="text" class="form-input" id="settingNoticeEn" placeholder="যেমন: Welcome! Join tournament matches from the schedule!">
+                                        </div>
+                                    </div>
+                                    <small style="display: block; margin-top: 10px; color: #94a3b8; font-size: 0.76rem; line-height: 1.4;">
+                                        💡 <b>টিপস:</b> এখানে আপনি যা লিখবেন ঠিক হুবহু সেটাই ব্যানারে স্ক্রল করবে। কোনো ফিক্সড বা জোরপূর্বক ইংরেজি লেখা আর আসবে না। শুধু উপরে লিখে <b>'⚡ নোটিশ তাৎক্ষণিক আপডেট'</b> বাটনে চাপ দিন।
+                                    </small>
+                                </div>
+
+                                <div style="margin-top: 18px;">
                                     <button type="submit" class="btn btn-neon btn-sm" style="font-weight: 800; padding: 8px 18px;">
                                         💾 Save All Settings (সব সেটিংস সেভ করুন)
                                     </button>

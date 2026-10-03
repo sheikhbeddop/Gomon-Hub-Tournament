@@ -5257,6 +5257,52 @@ async function handleSetRoomSubmit(e) {
     }
 }
 
+function toggleBulkScheduleMode() {
+    const toggle = document.getElementById('bulkScheduleToggle');
+    if (!toggle) return;
+    toggle.checked = !toggle.checked;
+    handleBulkScheduleToggleChange(toggle.checked);
+}
+window.toggleBulkScheduleMode = toggleBulkScheduleMode;
+
+function handleBulkScheduleToggleChange(isChecked) {
+    const fields = document.getElementById('bulkScheduleFields');
+    const badge = document.getElementById('bulkBadge');
+    if (fields) {
+        fields.style.display = isChecked ? 'block' : 'none';
+    }
+    if (badge) {
+        badge.textContent = isChecked ? 'সক্রিয়' : 'ঐচ্ছিক';
+        badge.style.background = isChecked ? 'rgba(0, 245, 155, 0.3)' : 'rgba(0, 245, 155, 0.15)';
+    }
+    updateBulkPreview();
+}
+window.handleBulkScheduleToggleChange = handleBulkScheduleToggleChange;
+
+function updateBulkPreview() {
+    const preview = document.getElementById('bulkSchedulePreview');
+    const countInput = document.getElementById('bulkMatchCount');
+    const intervalInput = document.getElementById('bulkMatchInterval');
+    const timeInput = document.getElementById('matchTime');
+    if (!preview || !countInput || !intervalInput) return;
+
+    const count = Math.max(1, Math.min(parseInt(countInput.value, 10) || 1, 50));
+    const interval = Math.max(5, Math.min(parseInt(intervalInput.value, 10) || 30, 1440));
+    const rawTime = timeInput ? timeInput.value : '';
+
+    if (rawTime) {
+        const startDt = new Date(rawTime);
+        if (!isNaN(startDt.getTime())) {
+            const endDt = new Date(startDt.getTime() + (count - 1) * interval * 60000);
+            const formatTime = (d) => d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            preview.innerHTML = `💡 ১ম ম্যাচ: <b>${formatTime(startDt)}</b> | শেষ ম্যাচ (#${count}): <b>${formatTime(endDt)}</b> (প্রতি ${interval} মিনিট ব্যবধানে, মোট ${count}টি ম্যাচ)`;
+            return;
+        }
+    }
+    preview.innerHTML = `💡 প্রথম ম্যাচ নির্ধারিত সময়ে শুরু হবে, পরবর্তী ম্যাচগুলো প্রতি ${interval} মিনিট পর পর শিডিউল হবে (মোট ${count}টি ম্যাচ)।`;
+}
+window.updateBulkPreview = updateBulkPreview;
+
 async function handleCreateMatchSubmit(e) {
     e.preventDefault();
     const title = document.getElementById('matchTitle').value.trim();
@@ -5271,6 +5317,20 @@ async function handleCreateMatchSubmit(e) {
     const winner_prize = parseInt(document.getElementById('matchPrizeWinner')?.value, 10) || 0;
     const second_prize = parseInt(document.getElementById('matchPrizeSecond')?.value, 10) || 0;
     const third_prize = parseInt(document.getElementById('matchPrizeThird')?.value, 10) || 0;
+
+    const isBulk = document.getElementById('bulkScheduleToggle')?.checked || false;
+    let match_count = 1;
+    let interval_minutes = 30;
+    if (isBulk) {
+        match_count = Math.max(1, Math.min(parseInt(document.getElementById('bulkMatchCount')?.value, 10) || 1, 50));
+        interval_minutes = Math.max(5, Math.min(parseInt(document.getElementById('bulkMatchInterval')?.value, 10) || 30, 1440));
+    }
+
+    const submitBtn = document.getElementById('publishMatchSubmitBtn');
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = isBulk ? `Scheduling ${match_count} Matches...` : 'Publishing Match...';
+    }
 
     try {
         const res = await fetch('/api/admin/matches', {
@@ -5290,18 +5350,38 @@ async function handleCreateMatchSubmit(e) {
                 per_kill,
                 winner_prize,
                 second_prize,
-                third_prize
+                third_prize,
+                match_count,
+                interval_minutes
             })
         });
         if (res.ok) {
+            const data = await res.json();
             closeModal('createMatchModal');
             document.getElementById('createMatchForm').reset();
-            showToast('New tournament match created successfully!', 'success');
+            const bulkFields = document.getElementById('bulkScheduleFields');
+            if (bulkFields) bulkFields.style.display = 'none';
+            const toggle = document.getElementById('bulkScheduleToggle');
+            if (toggle) toggle.checked = false;
+            const badge = document.getElementById('bulkBadge');
+            if (badge) {
+                badge.textContent = 'ঐচ্ছিক';
+                badge.style.background = 'rgba(0, 245, 155, 0.15)';
+            }
+            showToast(data.message || (isBulk ? `${match_count}টি ম্যাচ সফলভাবে শিডিউল হয়েছে!` : 'New tournament match created successfully!'), 'success');
             loadMatches();
             loadAdminOverview();
+        } else {
+            const err = await res.json();
+            showToast(err.detail || 'Match creation failed', 'error');
         }
     } catch (e) {
         showToast('Operation failed', 'error');
+    } finally {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Publish Match';
+        }
     }
 }
 

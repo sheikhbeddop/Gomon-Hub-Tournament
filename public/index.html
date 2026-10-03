@@ -267,6 +267,21 @@
                         <div class="ref-menu-arrow">&#8250;</div>
                     </button>
 
+                    <!-- 2B. Video Promotion & Earn -->
+                    <button type="button" class="ref-menu-item" onclick="openPromotionModal()">
+                        <div class="ref-menu-icon" style="background: rgba(239, 68, 68, 0.1);">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polygon points="23 7 16 12 23 17 23 7"></polygon>
+                                <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+                            </svg>
+                        </div>
+                        <div class="ref-menu-label" style="display: flex; align-items: center; gap: 8px;">
+                            <span style="font-weight: 700; color: #0f172a;">Video Promotion & Earn</span>
+                            <span style="background: linear-gradient(135deg, #ef4444, #f59e0b); color: #fff; font-size: 0.65rem; font-weight: 800; padding: 2px 7px; border-radius: 99px; text-transform: uppercase;">🎁 Bonus</span>
+                        </div>
+                        <div class="ref-menu-arrow">&#8250;</div>
+                    </button>
+
                     <!-- 3. My Profile -->
                     <button type="button" class="ref-menu-item" onclick="openMyProfileModal()">
                         <div class="ref-menu-icon">
@@ -646,6 +661,12 @@
                         <span class="admin-nav-text">Withdraw Requests</span>
                     </button>
 
+                    <button type="button" class="admin-nav-item" id="adminNav-promotions" onclick="switchAdminSection('promotions')">
+                        <span class="admin-nav-icon">🎬</span>
+                        <span class="admin-nav-text">Video Promotions</span>
+                        <span class="badge" id="adminPendingPromotionsBadge" style="display: none; background: #ef4444; color: #fff; font-size: 0.7rem; font-weight: 800; padding: 2px 7px; border-radius: 10px; margin-left: auto;">0</span>
+                    </button>
+
                     <button type="button" class="admin-nav-item" id="adminNav-players" onclick="switchAdminSection('players')">
                         <span class="admin-nav-icon">👥</span>
                         <span class="admin-nav-text">Player Management</span>
@@ -804,6 +825,39 @@
                                     </thead>
                                     <tbody id="adminPendingWithdrawalsBody">
                                         <tr><td colspan="6" style="text-align: center; color: var(--text-muted);">No pending withdrawal requests 🎉</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- CATEGORY 2B: VIDEO PROMOTIONS -->
+                    <div class="admin-section" id="adminSection-promotions" style="display: none;">
+                        <div class="admin-panel-card">
+                            <div class="admin-card-header" style="flex-wrap: wrap; gap: 10px;">
+                                <div class="admin-card-title">
+                                    <span>🎬 Video Promotions Review & Reward System</span>
+                                </div>
+                                <button class="btn btn-outline btn-sm" onclick="loadAdminPromotions()">🔄 Refresh</button>
+                            </div>
+                            <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 16px;">
+                                প্লেয়ারদের সাবমিট করা প্রমোশনাল ভিডিও লিংক চেক করুন এবং কোয়ালিটি অনুযায়ী ওয়ালেটে রিওয়ার্ড প্রদান করুন।
+                            </p>
+                            <div class="table-wrapper">
+                                <table class="custom-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Player Info</th>
+                                            <th>Platform</th>
+                                            <th>Video Link</th>
+                                            <th>Note</th>
+                                            <th>Status</th>
+                                            <th>Submitted At</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="adminPromotionsBody">
+                                        <tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 24px;">লোড হচ্ছে...</td></tr>
                                     </tbody>
                                 </table>
                             </div>
@@ -1354,6 +1408,8 @@
                                 if (typeof window.loadMatches === 'function') window.loadMatches();
                             } else if (sectionId === 'moderators') {
                                 if (typeof window.loadModeratorScoreboard === 'function') window.loadModeratorScoreboard();
+                            } else if (sectionId === 'promotions') {
+                                if (typeof window.loadAdminPromotions === 'function') window.loadAdminPromotions();
                             }
                         }
                     } catch (err) {
@@ -1752,6 +1808,75 @@
                                 <tr><td colspan="4" style="text-align: center; color: #94a3b8; padding: 12px; font-size: 0.75rem;">No withdrawal records found</td></tr>
                             </tbody>
                         </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: VIDEO PROMOTION & EARN (Promote on YouTube/TikTok/Facebook/Instagram) -->
+    <div class="modal-overlay" id="promotionModal">
+        <div class="modal-box" style="max-width: 520px; max-height: 90vh; display: flex; flex-direction: column;">
+            <div class="modal-header" style="background: linear-gradient(135deg, #1e293b, #0f172a); border-bottom: 1px solid rgba(239,68,68,0.25);">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <div style="width: 38px; height: 38px; border-radius: 10px; background: rgba(239, 68, 68, 0.15); display: flex; align-items: center; justify-content: center; font-size: 1.3rem;">
+                        🎬
+                    </div>
+                    <div>
+                        <h3 style="font-family: 'Rajdhani', sans-serif; font-size: 1.25rem; font-weight: 800; color: #f87171; margin: 0;">
+                            Video Promotion & Earn
+                        </h3>
+                        <p style="font-size: 0.76rem; color: #94a3b8; margin: 2px 0 0 0;">ভিডিও শেয়ার করে রিওয়ার্ড ও বোনাস আয় করুন</p>
+                    </div>
+                </div>
+                <button type="button" class="btn-close" onclick="closeModal('promotionModal')">&times;</button>
+            </div>
+            
+            <div class="modal-body" style="padding: 20px; overflow-y: auto; flex: 1;">
+                <!-- Guidelines Banner -->
+                <div style="background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.25); border-radius: 12px; padding: 14px; margin-bottom: 18px;">
+                    <div style="font-weight: 800; font-size: 0.88rem; color: #f87171; display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+                        <span>📢 রিওয়ার্ড পাওয়ার নিয়মাবলী:</span>
+                    </div>
+                    <ul style="margin: 0; padding-left: 20px; color: #cbd5e1; font-size: 0.78rem; line-height: 1.5;">
+                        <li>YouTube, TikTok, Facebook Reel অথবা Instagram-এ GOMON HUB নিয়ে ভিডিও তৈরি করুন।</li>
+                        <li>ডেসক্রিপশন বা কমেন্টে আমাদের ওয়েবসাইটের নাম/লিংক উল্লেখ করুন।</li>
+                        <li>ভিডিওর লিঙ্কটি নিচে পেস্ট করে সাবমিট করুন। অ্যাডমিন ভিডিওটি দেখে আপনার ওয়ালেটে <b>৳২০ থেকে ৳৫০০</b> পর্যন্ত রিওয়ার্ড দেবে!</li>
+                    </ul>
+                </div>
+
+                <!-- Submission Form -->
+                <form id="promoSubmitForm" onsubmit="handlePromotionSubmit(event)">
+                    <div class="form-group" style="margin-bottom: 14px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                            <label class="form-label" style="font-weight: 700; font-size: 0.82rem; margin: 0; color: #e2e8f0;">ভিডিও লিঙ্ক (Video Link):</label>
+                            <span id="promoPlatformBadge" style="font-size: 0.72rem; font-weight: 800; padding: 2px 8px; border-radius: 6px; background: rgba(148, 163, 184, 0.2); color: #94a3b8;">
+                                🌐 লিংক পেস্ট করুন
+                            </span>
+                        </div>
+                        <input type="url" id="promoVideoUrl" class="form-input" placeholder="https://youtube.com/watch?v=... বা TikTok/FB link" required oninput="handlePromoUrlInput(this.value)">
+                    </div>
+
+                    <div class="form-group" style="margin-bottom: 16px;">
+                        <label class="form-label" style="font-weight: 700; font-size: 0.82rem; margin-bottom: 6px; color: #e2e8f0;">শর্ট নোট (ঐচ্ছিক):</label>
+                        <input type="text" id="promoNotes" class="form-input" placeholder="যেমন: ১কে ভিউ হয়েছে, চ্যানেল লিংক ইত্যাদি">
+                    </div>
+
+                    <button type="submit" id="promoSubmitBtn" class="btn btn-neon" style="width: 100%; padding: 12px; font-weight: 800; font-size: 0.95rem; background: linear-gradient(135deg, #ef4444, #dc2626); border-color: #f87171;">
+                        🚀 সাবমিট করুন (Submit for Review)
+                    </button>
+                </form>
+
+                <!-- My Submissions History -->
+                <div style="margin-top: 24px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 16px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                        <h4 style="font-family: 'Rajdhani', sans-serif; font-size: 1.05rem; font-weight: 800; color: #f1f5f9; margin: 0;">
+                            📋 আমার পাঠানো ভিডিও তালিকা (My Submissions)
+                        </h4>
+                        <button type="button" class="btn btn-outline btn-sm" onclick="loadMyPromotions()" style="padding: 3px 8px; font-size: 0.72rem;">🔄 রিফ্রেশ</button>
+                    </div>
+                    <div id="promoMySubmissionsList">
+                        <div style="text-align: center; color: #94a3b8; padding: 16px; font-size: 0.8rem;">লোড হচ্ছে...</div>
                     </div>
                 </div>
             </div>

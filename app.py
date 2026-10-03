@@ -4613,6 +4613,10 @@ async def admin_create_match(data: AdminMatchCreate, admin: dict = Depends(verif
                   data.entry_fee, data.prize_pool, data.per_kill, data.total_slots))
             match_id = cursor.lastrowid
 
+            # PREVENT ORPHAN DATA COLLISION: Guarantee newly created match has 0 old ghost participants
+            conn.execute("DELETE FROM participations WHERE match_id = ?", (match_id,))
+            conn.execute("DELETE FROM match_results WHERE match_id = ?", (match_id,))
+
             if data.winner_prize is not None:
                 breakdown = {
                     "winner": max(0, data.winner_prize),

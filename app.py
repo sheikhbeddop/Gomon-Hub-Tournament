@@ -1301,6 +1301,8 @@ class AdminMatchCreate(BaseModel):
     winner_prize: Optional[int] = None
     second_prize: Optional[int] = None
     third_prize: Optional[int] = None
+    match_count: int = 1
+    interval_minutes: int = 30
 
 class AdminMatchUpdate(BaseModel):
     title: Optional[str] = None
@@ -4581,45 +4583,86 @@ def admin_get_all_matches(admin: dict = Depends(verify_moderator_or_admin)):
 async def admin_create_match(data: AdminMatchCreate, admin: dict = Depends(verify_admin)):
     conn = get_db()
     with conn:
-        match_code = get_next_match_code(conn, data.match_type)
-        cursor = conn.execute("""
-        INSERT INTO matches (title, match_type, match_code, map_name, match_time, entry_fee, prize_pool, per_kill, total_slots, status)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'upcoming')
-        """, (data.title.strip(), data.match_type, match_code, data.map_name, data.match_time,
-              data.entry_fee, data.prize_pool, data.per_kill, data.total_slots))
-        match_id = cursor.lastrowid
+        count = max(1, min(int(getattr(data, "match_count", 1) or 1), 50))
+        interval = max(5, min(int(getattr(data, "interval_minutes", 30) or 30), 1440))
 
-        if data.winner_prize is not None:
-            breakdown = {
-                "winner": max(0, data.winner_prize),
-                "second": max(0, data.second_prize or 0),
-                "third": max(0, data.third_prize or 0)
-            }
-            conn.execute(
-                "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-                (f"prize_breakdown_{match_id}", json.dumps(breakdown))
-            )
+        # Parse base match time safely
+        raw_time = str(data.match_time).replace('T', ' ').strip()
+        base_dt = None
+        for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d %I:%M %p", "%Y-%m-%d"):
+            try:
+                base_dt = datetime.strptime(raw_time, fmt)
+                break
+            except Exception:
+                pass
+        if not base_dt:
+            try:
+                base_dt = datetime.fromisoformat(raw_time.replace(' ', 'T'))
+            except Exception:
+                base_dt = datetime.now()
 
-        conn.execute("""
-        INSERT INTO audit_logs (admin_id, target_user_id, action, amount, reason)
-        VALUES (?, NULL, 'MATCH_CREATED', 0, ?)
-        """, (admin["id"], f"Created Match #{match_code} ({data.title.strip()})"))
+        created_matches = []
+        for i in range(count):
+            curr_dt = base_dt + timedelta(minutes=i * interval)
+            curr_time_str = curr_dt.strftime("%Y-%m-%d %H:%M")
+            match_code = get_next_match_code(conn, data.match_type)
+            cursor = conn.execute("""
+            INSERT INTO matches (title, match_type, match_code, map_name, match_time, entry_fee, prize_pool, per_kill, total_slots, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'upcoming')
+            """, (data.title.strip(), data.match_type, match_code, data.map_name, curr_time_str,
+                  data.entry_fee, data.prize_pool, data.per_kill, data.total_slots))
+            match_id = cursor.lastrowid
+
+            if data.winner_prize is not None:
+                breakdown = {
+                    "winner": max(0, data.winner_prize),
+                    "second": max(0, data.second_prize or 0),
+                    "third": max(0, data.third_prize or 0)
+                }
+                conn.execute(
+                    "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                    (f"prize_breakdown_{match_id}", json.dumps(breakdown))
+                )
+
+            conn.execute("""
+            INSERT INTO audit_logs (admin_id, target_user_id, action, amount, reason)
+            VALUES (?, NULL, 'MATCH_CREATED', 0, ?)
+            """, (admin["id"], f"Created Match #{match_code} ({data.title.strip()})"))
+
+            created_matches.append((match_id, match_code, curr_time_str))
+
     conn.close()
     sync_db_async()
 
-    await manager.broadcast({
-        "type": "NEW_MATCH_CREATED",
-        "match_id": match_id,
-        "match_code": match_code,
-        "title": data.title
-    })
+    for m_id, m_code, _ in created_matches:
+        try:
+            await manager.broadcast({
+                "type": "NEW_MATCH_CREATED",
+                "match_id": m_id,
+                "match_code": m_code,
+                "title": data.title
+            })
+        except Exception:
+            pass
 
-    return {
-        "success": True, 
-        "match_id": match_id, 
-        "match_code": match_code, 
-        "message": f"ম্যাচ #{match_code} সফলভাবে তৈরি হয়েছে!"
-    }
+    if count == 1:
+        first_m = created_matches[0]
+        return {
+            "success": True, 
+            "match_id": first_m[0], 
+            "match_code": first_m[1], 
+            "message": f"ম্যাচ #{first_m[1]} সফলভাবে তৈরি হয়েছে!"
+        }
+    else:
+        first_code = created_matches[0][1]
+        last_code = created_matches[-1][1]
+        return {
+            "success": True, 
+            "count": count,
+            "match_id": created_matches[0][0], 
+            "match_code": first_code, 
+            "message": f"মোট {count}টি ম্যাচ (#{first_code} থেকে #{last_code}) সফলভাবে প্রতি {interval} মিনিট ব্যবধানে শিডিউল করা হয়েছে!"
+        }
 
 @app.put("/api/admin/matches/{match_id}")
 async def admin_update_match(match_id: int, data: AdminMatchUpdate, current_user: dict = Depends(verify_moderator_or_admin)):

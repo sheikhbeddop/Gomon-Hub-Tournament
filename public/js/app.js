@@ -266,18 +266,22 @@ if (document.readyState === 'loading') {
 // -------------------------------------------------------------
 // Public Site Settings
 // -------------------------------------------------------------
-function updateNoticeTicker(noticeText) {
+function updateNoticeTicker(noticeText, noticeEnText) {
     if (!noticeText) return;
     document.querySelectorAll('#announcementText, .notice-text-bn').forEach(el => {
         el.innerText = noticeText;
     });
-    // Ensure English version also matches or maintains English translation
-    let enText = noticeText;
-    if (noticeText.includes("স্বাগতম") || noticeText.includes("ডিপোজিট")) {
-        enText = "Welcome! Join tournament matches from the schedule after depositing via bKash!";
-    } else if (noticeText.includes("মেইনটেনেন্সে") || noticeText.includes("সাপোর্টে")) {
-        enText = "⚠️ The app is currently under maintenance.. Please contact support immediately for any issues... Otherwise GOMON HUB authorities will not be held responsible ⚠️";
+
+    let enText = (noticeEnText !== undefined && noticeEnText !== null && String(noticeEnText).trim() !== '')
+        ? String(noticeEnText).trim()
+        : '';
+
+    // If admin provided a specific English / secondary notice, use it.
+    // If not provided, repeat the custom notice text so the marquee flows seamlessly with user's exact text!
+    if (!enText) {
+        enText = noticeText;
     }
+
     document.querySelectorAll('.notice-text-en').forEach(el => {
         el.innerText = enText;
     });
@@ -305,7 +309,7 @@ async function loadPublicInfo() {
         if (elTitle && data.site_title) elTitle.innerText = data.site_title;
 
         if (data.notice) {
-            updateNoticeTicker(data.notice);
+            updateNoticeTicker(data.notice, data.notice_en);
         }
 
         const setBk = document.getElementById('settingAdminBkash');
@@ -318,6 +322,8 @@ async function loadPublicInfo() {
         if (setTi) setTi.value = data.site_title || '';
         const setNo = document.getElementById('settingNotice');
         if (setNo) setNo.value = data.notice || '';
+        const setNoEn = document.getElementById('settingNoticeEn');
+        if (setNoEn) setNoEn.value = data.notice_en || '';
 
         // App Version Tracking
         if (data.app_version) {
@@ -5571,6 +5577,7 @@ async function handleSettingsSubmit(e) {
     const admin_withdraw_number = (document.getElementById('settingAdminWithdraw') ? document.getElementById('settingAdminWithdraw').value : '').trim();
     const site_title = (document.getElementById('settingSiteTitle') ? document.getElementById('settingSiteTitle').value : '').trim();
     const notice = (document.getElementById('settingNotice') ? document.getElementById('settingNotice').value : '').trim();
+    const notice_en = (document.getElementById('settingNoticeEn') ? document.getElementById('settingNoticeEn').value : '').trim();
 
     try {
         const res = await fetch('/api/admin/settings', {
@@ -5579,7 +5586,7 @@ async function handleSettingsSubmit(e) {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${token}`
             },
-            body: JSON.stringify({ admin_bkash, admin_withdraw_number, site_title, notice })
+            body: JSON.stringify({ admin_bkash, admin_withdraw_number, site_title, notice, notice_en })
         });
         if (res.ok) {
             showToast('সব সেটিংস সফলভাবে সেভ হয়েছে!', 'success');
@@ -5640,6 +5647,35 @@ async function quickUpdateWithdrawNumber() {
             loadPublicInfo();
         } else {
             showToast('উইথড্র নাম্বার আপডেট ব্যর্থ হয়েছে', 'error');
+        }
+    } catch (e) {
+        showToast('সার্ভারে সমস্যা হয়েছে', 'error');
+    }
+}
+
+async function quickUpdateNotice() {
+    const elNotice = document.getElementById('settingNotice');
+    const elNoticeEn = document.getElementById('settingNoticeEn');
+    const notice = elNotice ? elNotice.value.trim() : '';
+    const notice_en = elNoticeEn ? elNoticeEn.value.trim() : '';
+    if (!notice) {
+        showToast('ব্যানার নোটিশ টেক্সট লিখুন', 'warning');
+        return;
+    }
+    try {
+        const res = await fetch('/api/admin/settings', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ notice, notice_en })
+        });
+        if (res.ok) {
+            showToast('ব্যানার নোটিশ সফলভাবে আপডেট হয়েছে! 🎉', 'success');
+            loadPublicInfo();
+        } else {
+            showToast('নোটিশ আপডেট ব্যর্থ হয়েছে', 'error');
         }
     } catch (e) {
         showToast('সার্ভারে সমস্যা হয়েছে', 'error');
@@ -5976,8 +6012,8 @@ function handleWsMessage(data) {
             el.innerText = `${data.title}: ${data.message}`;
         });
     } else if (data.type === 'SETTINGS_UPDATED') {
-        if (data.notice !== undefined) {
-            updateNoticeTicker(data.notice);
+        if (data.notice !== undefined || data.notice_en !== undefined) {
+            updateNoticeTicker(data.notice, data.notice_en);
             showToast('📢 Live notice updated!', 'info');
         }
         if (data.site_title) {

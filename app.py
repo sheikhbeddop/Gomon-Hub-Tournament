@@ -951,28 +951,25 @@ async def on_startup():
     def periodic_maintenance_daemon():
         cycle_count = 0
         while True:
-            # Heartbeat check every 15 minutes (900s) instead of 15s to protect Render monthly bandwidth
+            # Heartbeat check every 24 hours (86400s) to protect Render monthly bandwidth
             # Real writes (deposits, match joins, results) already trigger instant sync via sync_db_async()
-            time.sleep(900)
-            cycle_count += 1
+            time.sleep(86400)
             try:
                 if is_mongo_connected():
                     push_sqlite_to_mongo()
             except Exception as se:
                 pass
 
-            # Full 15-day purge runs every 2 cycles (2 * 900s = 1800s / 30 minutes)
-            if cycle_count >= 2:
-                cycle_count = 0
-                try:
-                    purge_records_older_than_15_days()
-                except Exception as pe:
-                    print(f"[Maintenance Purge Notice] {pe}")
+            # Full 15-day purge runs once daily alongside the 24-hour cycle
+            try:
+                purge_records_older_than_15_days()
+            except Exception as pe:
+                print(f"[Maintenance Purge Notice] {pe}")
 
     t = threading.Thread(target=periodic_maintenance_daemon, daemon=True)
     t.start()
     if is_mongo_connected():
-        print("[MongoDB] Cloud persistence active! Daemon running (intelligent hash-sync & 30-min purge cycle).")
+        print("[MongoDB] Cloud persistence active! Daemon running (intelligent hash-sync & 24-hour maintenance cycle).")
     else:
         print("[*] Running in local SQLite mode. Configure MONGO_URI in mongo_config.json to activate MongoDB Atlas Cloud Persistence.")
 
@@ -5538,7 +5535,7 @@ def serve_app_icon(request: Request):
             disk_path,
             media_type=m_type,
             headers={
-                "Cache-Control": "public, max-age=86400, stale-while-revalidate=3600"
+                "Cache-Control": "public, max-age=2592000, immutable"
             }
         )
     raw = base64.b64decode(EMBEDDED_MASCOT_B64)
@@ -5546,7 +5543,7 @@ def serve_app_icon(request: Request):
         content=raw,
         media_type="image/png",
         headers={
-            "Cache-Control": "public, max-age=86400, stale-while-revalidate=3600"
+            "Cache-Control": "public, max-age=2592000, immutable"
         }
     )
 
@@ -5585,7 +5582,14 @@ def admin_reset_all_players(admin: dict = Depends(verify_admin)):
         "message": f"সফলভাবে {u_deleted} জন ইউজারের পূর্বের রেকর্ড ও হিস্ট্রি মুছে ফেলা হয়েছে। এখন সবাই নতুন করে তাদের ফোন নম্বর দিয়ে অ্যাকাউন্ট খুলতে পারবে।"
     }
 
-app.mount("/static", StaticFiles(directory=public_dir), name="static")
+class CachedStaticFiles(StaticFiles):
+    async def get_response(self, path: str, scope):
+        response = await super().get_response(path, scope)
+        if response.status_code == 200:
+            response.headers["Cache-Control"] = "public, max-age=2592000, immutable"
+        return response
+
+app.mount("/static", CachedStaticFiles(directory=public_dir), name="static")
 
 @app.api_route("/ping", methods=["GET", "HEAD"])
 def ping_keepalive():

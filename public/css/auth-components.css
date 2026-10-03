@@ -769,3 +769,131 @@
     }
 }
 
+/* =============================================================
+   Complete Dark Mode Support for Auth Modal & Cards
+   ============================================================= */
+[data-theme="dark"] #authModal.modal-overlay,
+[data-theme="dark"] .auth-modal-overlay {
+    background: rgba(4, 7, 13, 0.88) !important;
+}
+
+[data-theme="dark"] #authModal .auth-card,
+[data-theme="dark"] .auth-card {
+    background: #111827 !important;
+    color: #f8fafc !important;
+    border: 1px solid #1f293d !important;
+    box-shadow: 0 25px 65px rgba(0, 0, 0, 0.75) !important;
+}
+
+[data-theme="dark"] #authModal .auth-avatar-circle {
+    background: #0b0f19 !important;
+    border-color: #1f293d !important;
+}
+
+[data-theme="dark"] #authModal .auth-title {
+    color: #f8fafc !important;
+}
+
+[data-theme="dark"] #authModal .auth-subtitle {
+    color: #94a3b8 !important;
+}
+
+[data-theme="dark"] #authModal .auth-input-icon {
+    color: #94a3b8 !important;
+}
+
+[data-theme="dark"] #authModal .auth-input {
+    background: #1e293b !important;
+    color: #f8fafc !important;
+    border: 1.5px solid #334155 !important;
+}
+
+[data-theme="dark"] #authModal .auth-input::placeholder {
+    color: #64748b !important;
+}
+
+[data-theme="dark"] #authModal .auth-input:focus {
+    border-color: #00f59b !important;
+    background: #1e293b !important;
+    box-shadow: 0 0 0 3px rgba(0, 245, 155, 0.22) !important;
+}
+
+[data-theme="dark"] #authModal .auth-eye-icon {
+    color: #94a3b8 !important;
+}
+
+[data-theme="dark"] #authModal .auth-eye-icon:hover {
+    color: #f8fafc !important;
+}
+
+[data-theme="dark"] #authModal .auth-close-btn {
+    background: #1e293b !important;
+    color: #94a3b8 !important;
+}
+
+[data-theme="dark"] #authModal .auth-close-btn:hover {
+    background: #334155 !important;
+    color: #f8fafc !important;
+}
+
+[data-theme="dark"] #authModal .auth-submit-btn {
+    background: linear-gradient(135deg, #00f59b 0%, #00d2ff 100%) !important;
+    color: #080b11 !important;
+    box-shadow: 0 8px 24px rgba(0, 245, 155, 0.3) !important;
+}
+
+[data-theme="dark"] #authModal .auth-forgot-link {
+    color: #94a3b8 !important;
+}
+
+[data-theme="dark"] #authModal .auth-forgot-link:hover {
+    color: #00f59b !important;
+}
+
+[data-theme="dark"] #authModal .auth-toggle-prompt {
+    color: #94a3b8 !important;
+}
+
+[data-theme="dark"] #authModal .auth-toggle-link {
+    color: #00f59b !important;
+}
+
+/* Dark Mode for Welcome Notice Modal */
+[data-theme="dark"] .welcome-notice-card,
+[data-theme="dark"] #welcomeNoticeModal .welcome-notice-card {
+    background: #111827 !important;
+    color: #f8fafc !important;
+    border: 1px solid #1f293d !important;
+    box-shadow: 0 25px 65px rgba(0, 0, 0, 0.8) !important;
+}
+
+[data-theme="dark"] .welcome-notice-header {
+    background: #151d2f !important;
+    border-bottom: 1px solid #1f293d !important;
+}
+
+[data-theme="dark"] .welcome-notice-title {
+    color: #f8fafc !important;
+}
+
+[data-theme="dark"] .welcome-notice-body {
+    color: #cbd5e1 !important;
+}
+
+[data-theme="dark"] .notice-highlight-text {
+    color: #fbbf24 !important;
+}
+
+[data-theme="dark"] .notice-text-p {
+    color: #cbd5e1 !important;
+}
+
+[data-theme="dark"] .notice-item-content {
+    color: #cbd5e1 !important;
+}
+
+[data-theme="dark"] .welcome-notice-footer {
+    background: #151d2f !important;
+    border-top: 1px solid #1f293d !important;
+}
+

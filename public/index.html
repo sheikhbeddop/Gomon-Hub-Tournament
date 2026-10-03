@@ -2674,7 +2674,7 @@
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
                         <div class="form-group">
                             <label class="form-label">Match Start Date & Time</label>
-                            <input type="datetime-local" class="form-input" id="matchTime" required>
+                            <input type="datetime-local" class="form-input" id="matchTime" required oninput="updateBulkPreview()">
                         </div>
                         <div class="form-group">
                             <label class="form-label">Total Slots</label>
@@ -2733,7 +2733,35 @@
                             <input type="number" class="form-input" id="matchPrizePool" value="160" required style="background: #ffffff; font-weight: 800; color: #b45309; padding: 8px 10px;">
                         </div>
                     </div>
-                    <button type="submit" class="btn btn-neon" style="width: 100%; padding: 12px; margin-top: 10px;">
+
+                    <!-- Smart Bulk Match Scheduler Section -->
+                    <div style="background: rgba(0, 245, 155, 0.05); border: 1.5px solid rgba(0, 245, 155, 0.3); border-radius: 10px; padding: 12px; margin-top: 12px; margin-bottom: 8px;">
+                        <div style="display: flex; align-items: center; justify-content: space-between;">
+                            <label style="display: flex; align-items: center; gap: 8px; font-size: 0.85rem; font-weight: 800; color: #00f59b; cursor: pointer; margin-bottom: 0;">
+                                <input type="checkbox" id="bulkScheduleToggle" style="accent-color: #00f59b; width: 18px; height: 18px; cursor: pointer;" onchange="handleBulkScheduleToggleChange(this.checked)">
+                                <span>🔄 Auto Bulk Schedule (একাধিক ম্যাচ শিডিউল)</span>
+                            </label>
+                            <span id="bulkBadge" style="font-size: 0.7rem; font-weight: 700; background: rgba(0, 245, 155, 0.15); color: #00f59b; padding: 2px 8px; border-radius: 12px; border: 1px solid rgba(0, 245, 155, 0.3);">ঐচ্ছিক</span>
+                        </div>
+                        
+                        <div id="bulkScheduleFields" style="display: none; margin-top: 10px; padding-top: 10px; border-top: 1px dashed rgba(0, 245, 155, 0.2);">
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                                <div class="form-group" style="margin-bottom: 0;">
+                                    <label class="form-label" style="font-size: 0.74rem; color: var(--text-secondary); font-weight: 700;">🔢 কয়টি ম্যাচ তৈরি করবেন?</label>
+                                    <input type="number" class="form-input" id="bulkMatchCount" min="1" max="50" value="10" placeholder="10" oninput="updateBulkPreview()" style="font-weight: 800; text-align: center; border-color: rgba(0, 245, 155, 0.4);">
+                                </div>
+                                <div class="form-group" style="margin-bottom: 0;">
+                                    <label class="form-label" style="font-size: 0.74rem; color: var(--text-secondary); font-weight: 700;">⏱️ প্রতি কত মিনিট পর পর?</label>
+                                    <input type="number" class="form-input" id="bulkMatchInterval" min="5" max="180" step="5" value="30" placeholder="30" oninput="updateBulkPreview()" style="font-weight: 800; text-align: center; border-color: rgba(0, 245, 155, 0.4);">
+                                </div>
+                            </div>
+                            <div id="bulkSchedulePreview" style="margin-top: 8px; font-size: 0.74rem; color: #a7f3d0; background: rgba(0, 245, 155, 0.08); padding: 6px 10px; border-radius: 6px; font-weight: 600;">
+                                💡 প্রথম ম্যাচ নির্ধারিত সময়ে শুরু হবে, পরবর্তী ম্যাচগুলো প্রতি ৩০ মিনিট পর পর শিডিউল হবে (মোট ১০টি ম্যাচ)।
+                            </div>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-neon" id="publishMatchSubmitBtn" style="width: 100%; padding: 12px; margin-top: 10px;">
                         Publish Match
                     </button>
                 </form>
@@ -3349,7 +3377,7 @@
     <!-- Toast Notification Container -->
     <div class="toast-container" id="toastContainer"></div>
 
-    <script src="/static/js/app.js?v=5.5.1"></script>
+    <script src="/static/js/app.js?v=5.5.2"></script>
 
 </body>
 </html>

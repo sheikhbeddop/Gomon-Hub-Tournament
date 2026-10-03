@@ -3574,6 +3574,198 @@ async def admin_update_sms_gateway_secret(data: dict, admin: dict = Depends(veri
     sync_db_async()
     return {"success": True, "secret": new_sec}
 
+
+# -------------------------------------------------------------
+# Video Promotion & Earn System
+# -------------------------------------------------------------
+def init_video_promotions_table():
+    try:
+        conn = get_db()
+        with conn:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS video_promotions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    platform TEXT NOT NULL,
+                    video_url TEXT NOT NULL,
+                    notes TEXT DEFAULT '',
+                    status TEXT DEFAULT 'pending',
+                    reward_amount INTEGER DEFAULT 0,
+                    admin_note TEXT DEFAULT '',
+                    reviewed_by_name TEXT DEFAULT '',
+                    reviewed_at TIMESTAMP,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users (id)
+                )
+            """)
+        conn.close()
+    except Exception as e:
+        print(f"[Promotions Table Error]: {e}")
+
+init_video_promotions_table()
+
+def detect_video_platform(url: str) -> str:
+    u = url.lower()
+    if "youtube.com" in u or "youtu.be" in u:
+        return "youtube"
+    elif "tiktok.com" in u:
+        return "tiktok"
+    elif "facebook.com" in u or "fb.watch" in u or "fb.com" in u:
+        return "facebook"
+    elif "instagram.com" in u:
+        return "instagram"
+    return "other"
+
+class PromotionSubmitRequest(BaseModel):
+    video_url: str
+    notes: Optional[str] = ""
+    platform: Optional[str] = ""
+
+@app.post("/api/promotions/submit")
+async def submit_video_promotion(data: PromotionSubmitRequest, user: dict = Depends(get_current_user)):
+    url = (data.video_url or "").strip()
+    if not url or len(url) < 10 or not (url.startswith("http://") or url.startswith("https://")):
+        raise HTTPException(status_code=400, detail="সঠিক ও বৈধ ভিডিও লিংক প্রদান করুন (যেমন: https://...)")
+    
+    platform = (data.platform or "").strip().lower()
+    detected = detect_video_platform(url)
+    final_platform = detected if detected != "other" else (platform or "other")
+
+    notes = (data.notes or "").strip()[:500]
+
+    conn = get_db()
+    # Anti-spam: max 2 pending requests per user
+    pending_row = conn.execute("SELECT COUNT(*) as c FROM video_promotions WHERE user_id = ? AND status = 'pending'", (user["id"],)).fetchone()
+    pending_count = pending_row["c"] if pending_row else 0
+    if pending_count >= 2:
+        conn.close()
+        raise HTTPException(status_code=400, detail="আপনার আগের ২টি প্রমোশন রিকোয়েস্ট এখনো পর্যালোচনায় রয়েছে! সেগুলো সম্পন্ন হওয়া পর্যন্ত অপেক্ষা করুন।")
+
+    # Anti-duplicate: check if this exact URL is already submitted and pending or approved
+    existing = conn.execute("SELECT id, status FROM video_promotions WHERE video_url = ?", (url,)).fetchone()
+    if existing and existing["status"] in ("pending", "approved"):
+        conn.close()
+        raise HTTPException(status_code=400, detail="এই ভিডিও লিংকটি ইতিমধ্যে একবার জমা দেওয়া হয়েছে!")
+
+    with conn:
+        conn.execute("""
+            INSERT INTO video_promotions (user_id, platform, video_url, notes, status)
+            VALUES (?, ?, ?, ?, 'pending')
+        """, (user["id"], final_platform, url, notes))
+    conn.close()
+
+    try:
+        sync_db_async()
+    except Exception:
+        pass
+
+    return {
+        "success": True,
+        "message": "ভিডিও লিংক সফলভাবে জমা হয়েছে! অ্যাডমিন পর্যালোচনা করে আপনার একাউন্টে রিওয়ার্ড যোগ করে দেবেন।"
+    }
+
+@app.get("/api/promotions/my")
+def get_my_video_promotions(user: dict = Depends(get_current_user)):
+    conn = get_db()
+    rows = conn.execute("""
+        SELECT * FROM video_promotions 
+        WHERE user_id = ? 
+        ORDER BY id DESC LIMIT 25
+    """, (user["id"],)).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+@app.get("/api/admin/promotions")
+def admin_get_video_promotions(admin: dict = Depends(verify_moderator_or_admin)):
+    conn = get_db()
+    rows = conn.execute("""
+        SELECT p.*, u.username, u.phone, u.digits_balance
+        FROM video_promotions p
+        JOIN users u ON p.user_id = u.id
+        ORDER BY CASE WHEN p.status = 'pending' THEN 0 ELSE 1 END, p.id DESC
+        LIMIT 100
+    """).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+class PromotionActionRequest(BaseModel):
+    action: str  # "approve" or "reject"
+    reward_amount: Optional[int] = 0
+    admin_note: Optional[str] = ""
+
+@app.post("/api/admin/promotions/{promo_id}/action")
+async def admin_action_video_promotion(promo_id: int, data: PromotionActionRequest, admin: dict = Depends(verify_moderator_or_admin)):
+    action = (data.action or "").strip().lower()
+    reward = int(data.reward_amount or 0)
+    note = (data.admin_note or "").strip()
+
+    conn = get_db()
+    promo = conn.execute("SELECT * FROM video_promotions WHERE id = ?", (promo_id,)).fetchone()
+    if not promo:
+        conn.close()
+        raise HTTPException(status_code=404, detail="প্রমোশন রিকোয়েস্ট পাওয়া যায়নি")
+
+    if promo["status"] != "pending":
+        conn.close()
+        raise HTTPException(status_code=400, detail=f"এই রিকোয়েস্টটি ইতিমধ্যে '{promo['status']}' অবস্থায় রয়েছে")
+
+    admin_name = admin.get("username", "Admin")
+
+    if action == "approve":
+        if reward <= 0:
+            conn.close()
+            raise HTTPException(status_code=400, detail="অনুমোদনের জন্য রিওয়ার্ডের পরিমাণ ১ টাকার বেশি হতে হবে")
+
+        with conn:
+            conn.execute("""
+                UPDATE video_promotions 
+                SET status = 'approved', reward_amount = ?, admin_note = ?, reviewed_by_name = ?, reviewed_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            """, (reward, note, admin_name, promo_id))
+            conn.execute("UPDATE users SET digits_balance = digits_balance + ? WHERE id = ?", (reward, promo["user_id"]))
+            conn.execute("""
+                INSERT INTO audit_logs (admin_id, target_user_id, action, amount, reason)
+                VALUES (?, ?, 'PROMOTION_REWARD', ?, ?)
+            """, (admin.get("id", 0), promo["user_id"], reward, f"Video Promotion Approved ({promo['platform'].upper()}): {promo['video_url']}. Note: {note or 'Good video!'}"))
+        conn.close()
+
+        try:
+            sync_db_async()
+        except Exception:
+            pass
+
+        return {
+            "success": True,
+            "message": f"প্রমোশন অনুমোদিত এবং ৳{reward} প্লেয়ারের একাউন্টে যুক্ত হয়েছে!"
+        }
+
+    elif action == "reject":
+        with conn:
+            conn.execute("""
+                UPDATE video_promotions 
+                SET status = 'rejected', reward_amount = 0, admin_note = ?, reviewed_by_name = ?, reviewed_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            """, (note or "যোগ্য বিবেচিত হয়নি", admin_name, promo_id))
+            conn.execute("""
+                INSERT INTO audit_logs (admin_id, target_user_id, action, amount, reason)
+                VALUES (?, ?, 'PROMOTION_REJECTED', 0, ?)
+            """, (admin.get("id", 0), promo["user_id"], f"Video Promotion Rejected ({promo['platform'].upper()}): {promo['video_url']}. Reason: {note or 'Not approved'}"))
+        conn.close()
+
+        try:
+            sync_db_async()
+        except Exception:
+            pass
+
+        return {
+            "success": True,
+            "message": "প্রমোশন রিকোয়েস্ট বাতিল করা হয়েছে।"
+        }
+    else:
+        conn.close()
+        raise HTTPException(status_code=400, detail="অবৈধ অ্যাকশন (Invalid action)")
+
+
 @app.get("/api/wallet/history")
 def get_wallet_history(user: dict = Depends(get_current_user)):
     conn = get_db()

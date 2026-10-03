@@ -3604,6 +3604,26 @@ def init_video_promotions_table():
 
 init_video_promotions_table()
 
+def cleanup_old_video_promotions():
+    """Auto-deletes approved and rejected video promotions older than 5 days to keep database storage lightweight. Pending items are NEVER touched."""
+    try:
+        conn = get_db()
+        with conn:
+            conn.execute("""
+                DELETE FROM video_promotions 
+                WHERE status IN ('approved', 'rejected') 
+                  AND (
+                    (reviewed_at IS NOT NULL AND reviewed_at <= datetime('now', '-5 days'))
+                    OR 
+                    (reviewed_at IS NULL AND created_at <= datetime('now', '-5 days'))
+                  )
+            """)
+        conn.close()
+    except Exception as e:
+        print(f"[Promo Cleanup Error]: {e}")
+
+cleanup_old_video_promotions()
+
 def detect_video_platform(url: str) -> str:
     u = url.lower()
     if "youtube.com" in u or "youtu.be" in u:
@@ -3623,6 +3643,7 @@ class PromotionSubmitRequest(BaseModel):
 
 @app.post("/api/promotions/submit")
 async def submit_video_promotion(data: PromotionSubmitRequest, user: dict = Depends(get_current_user)):
+    cleanup_old_video_promotions()
     url = (data.video_url or "").strip()
     if not url or len(url) < 10 or not (url.startswith("http://") or url.startswith("https://")):
         raise HTTPException(status_code=400, detail="সঠিক ও বৈধ ভিডিও লিংক প্রদান করুন (যেমন: https://...)")
@@ -3666,6 +3687,7 @@ async def submit_video_promotion(data: PromotionSubmitRequest, user: dict = Depe
 
 @app.get("/api/promotions/my")
 def get_my_video_promotions(user: dict = Depends(get_current_user)):
+    cleanup_old_video_promotions()
     conn = get_db()
     rows = conn.execute("""
         SELECT * FROM video_promotions 
@@ -3677,6 +3699,7 @@ def get_my_video_promotions(user: dict = Depends(get_current_user)):
 
 @app.get("/api/admin/promotions")
 def admin_get_video_promotions(admin: dict = Depends(verify_moderator_or_admin)):
+    cleanup_old_video_promotions()
     conn = get_db()
     rows = conn.execute("""
         SELECT p.*, u.username, u.phone, u.digits_balance

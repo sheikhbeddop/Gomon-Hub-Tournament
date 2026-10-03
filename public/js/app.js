@@ -7322,7 +7322,7 @@ function openModal(id) {
         modal.classList.add('show');
         modal.style.removeProperty('display');
     }
-    const persistableModals = ['walletModal', 'withdrawModal', 'myProfileDetailsModal', 'allRulesModal', 'topPlayersModal', 'devProfileModal', 'supportModal', 'adminAuditLogsModal'];
+    const persistableModals = ['walletModal', 'withdrawModal', 'promotionModal', 'myProfileDetailsModal', 'allRulesModal', 'topPlayersModal', 'devProfileModal', 'supportModal', 'adminAuditLogsModal'];
     if (persistableModals.includes(id)) {
         sessionStorage.setItem('current_active_modal', id);
     }

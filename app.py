@@ -2275,11 +2275,14 @@ async def login(data: LoginRequest):
     # Kick out any previous active sessions on other devices in real-time
     if user["role"] != "admin":
         try:
-            await manager.send_to_user(user["id"], {
+            kickout_payload = {
                 "type": "FORCE_LOGOUT",
+                "target_user_id": user["id"],
                 "device_id": provided_device_id,
                 "message": "আপনার অ্যাকাউন্টে নতুন সেশন শুরু হওয়ায় পূর্বের সেশনটি বন্ধ করা হলো।"
-            })
+            }
+            await manager.send_to_user(user["id"], kickout_payload)
+            await manager.broadcast(kickout_payload)
         except Exception:
             pass
 
@@ -2382,11 +2385,14 @@ async def verify_otp_endpoint(data: VerifyOtpRequest):
 
     # Force kickout old sessions on other devices in real-time
     try:
-        await manager.send_to_user(entry["user_id"], {
+        kickout_payload = {
             "type": "FORCE_LOGOUT",
+            "target_user_id": entry["user_id"],
             "device_id": target_device,
             "message": "আপনার অ্যাকাউন্টে নতুন ডিভাইসে ওটিপি যাচাই সম্পন্ন হয়েছে। নিরাপত্তা রক্ষার্থে পূর্বের ডিভাইস থেকে লগআউট করা হলো।"
-        })
+        }
+        await manager.send_to_user(entry["user_id"], kickout_payload)
+        await manager.broadcast(kickout_payload)
     except Exception as e:
         print("[ForceLogout Error]", e)
 
@@ -5881,6 +5887,39 @@ async def websocket_endpoint(websocket: WebSocket, token: Optional[str] = None):
             data = await websocket.receive_text()
             if data == "ping":
                 await websocket.send_text("pong")
+            elif data.startswith("{"):
+                try:
+                    msg = json.loads(data)
+                    m_type = msg.get("type")
+                    if m_type == "AUTH" and msg.get("token"):
+                        p = verify_token(msg["token"])
+                        if p and p.get("user_id"):
+                            new_uid = p["user_id"]
+                            if new_uid != user_id:
+                                if user_id and user_id in manager.user_sockets:
+                                    manager.user_sockets[user_id].discard(websocket)
+                                user_id = new_uid
+                                if user_id not in manager.user_sockets:
+                                    manager.user_sockets[user_id] = set()
+                                manager.user_sockets[user_id].add(websocket)
+                    elif m_type == "ping":
+                        await websocket.send_text("pong")
+                        # Device heartbeat validation check
+                        req_dev = (msg.get("device_id") or "").strip()
+                        tok = msg.get("token") or token
+                        if tok and req_dev:
+                            p = verify_token(tok)
+                            if p and p.get("user_id") and p.get("role") != "admin":
+                                reg_dev = get_user_registered_device(p["user_id"])
+                                if reg_dev and req_dev != reg_dev:
+                                    await websocket.send_text(json.dumps({
+                                        "type": "FORCE_LOGOUT",
+                                        "target_user_id": p["user_id"],
+                                        "device_id": reg_dev,
+                                        "message": "আপনার অ্যাকাউন্টে নতুন ডিভাইসে লগইন করা হয়েছে। নিরাপত্তা রক্ষার্থে এই ডিভাইসটি লগআউট করা হলো।"
+                                    }))
+                except Exception:
+                    pass
     except WebSocketDisconnect:
         manager.disconnect(websocket, user_id)
     except Exception:

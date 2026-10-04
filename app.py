@@ -6148,6 +6148,7 @@ def create_custom_challenge(req: CreateChallengeRequest, user: dict = Depends(ge
 
     conn = get_db()
     try:
+        purge_old_custom_challenges(conn)
         with conn:
             u_row = conn.execute("SELECT digits_balance FROM users WHERE id = ?", (user["id"],)).fetchone()
             curr_bal = int(u_row["digits_balance"] or 0) if u_row else 0
@@ -6182,10 +6183,24 @@ def create_custom_challenge(req: CreateChallengeRequest, user: dict = Depends(ge
         "message": "Challenge created successfully!"
     }
 
+def purge_old_custom_challenges(conn):
+    """Purges completed or cancelled challenges older than 24 hours to keep database clean."""
+    try:
+        with conn:
+            conn.execute("""
+                DELETE FROM custom_challenges 
+                WHERE (status = 'completed' OR status = 'cancelled')
+                  AND completed_at IS NOT NULL 
+                  AND completed_at <= datetime('now', '-24 hours')
+            """)
+    except Exception:
+        pass
+
 @app.get("/api/challenges/my")
 def get_my_challenges(user: dict = Depends(get_current_user)):
     conn = get_db()
     try:
+        purge_old_custom_challenges(conn)
         rows = conn.execute("""
             SELECT c.*, 
                    u1.username as creator_name, u1.ff_ign as creator_ign,
@@ -6207,6 +6222,7 @@ def get_my_challenges(user: dict = Depends(get_current_user)):
 def get_open_challenges(user: dict = Depends(get_current_user)):
     conn = get_db()
     try:
+        purge_old_custom_challenges(conn)
         rows = conn.execute("""
             SELECT c.id, c.challenge_code, c.mode, c.entry_fee, c.prize_amount,
                    c.gun_attributes, c.limited_ammo, c.room_creator_role, c.created_at,
@@ -6403,7 +6419,7 @@ def cancel_custom_challenge(code: str, user: dict = Depends(get_current_user)):
             
             # Refund creator
             conn.execute("UPDATE users SET digits_balance = digits_balance + ? WHERE id = ?", (ch["entry_fee"], user["id"]))
-            conn.execute("UPDATE custom_challenges SET status = 'cancelled' WHERE challenge_code = ?", (code,))
+            conn.execute("UPDATE custom_challenges SET status = 'cancelled', completed_at = CURRENT_TIMESTAMP WHERE challenge_code = ?", (code,))
     finally:
         conn.close()
 
@@ -6414,6 +6430,7 @@ def cancel_custom_challenge(code: str, user: dict = Depends(get_current_user)):
 def admin_get_challenges(admin: dict = Depends(verify_moderator_or_admin)):
     conn = get_db()
     try:
+        purge_old_custom_challenges(conn)
         rows = conn.execute("""
             SELECT c.*, 
                    u1.username as creator_name, u1.ff_ign as creator_ign,
@@ -6465,7 +6482,7 @@ def admin_resolve_challenge(code: str, req: ResolveChallengeRequest, admin: dict
                 conn.execute("UPDATE users SET digits_balance = digits_balance + ? WHERE id = ?", (ch["entry_fee"], ch["creator_id"]))
                 if ch["rival_id"]:
                     conn.execute("UPDATE users SET digits_balance = digits_balance + ? WHERE id = ?", (ch["entry_fee"], ch["rival_id"]))
-                conn.execute("UPDATE custom_challenges SET status = 'cancelled' WHERE challenge_code = ?", (code,))
+                conn.execute("UPDATE custom_challenges SET status = 'cancelled', completed_at = CURRENT_TIMESTAMP WHERE challenge_code = ?", (code,))
                 msg = "Resolved: Both players refunded."
             else:
                 raise HTTPException(400, "Invalid winner_role: must be 'creator', 'rival', or 'refund'")

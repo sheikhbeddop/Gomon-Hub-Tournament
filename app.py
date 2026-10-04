@@ -4216,6 +4216,7 @@ def admin_overview(admin: dict = Depends(verify_moderator_or_admin)):
     """).fetchone()[0]
     total_digits_circulating = conn.execute("SELECT COALESCE(SUM(digits_balance), 0) FROM users WHERE role != 'admin'").fetchone()[0] or 0
     total_moderators = conn.execute("SELECT COUNT(*) FROM users WHERE role = 'moderator'").fetchone()[0]
+    pending_challenges = conn.execute("SELECT COUNT(*) FROM custom_challenges WHERE (room_creator_role = 'admin' AND status = 'in_progress' AND (room_id IS NULL OR room_id = '')) OR status = 'disputed'").fetchone()[0]
     
     recent_deposits = conn.execute("""
     SELECT d.*, u.username, u.player_id, u.phone as user_phone
@@ -4241,6 +4242,7 @@ def admin_overview(admin: dict = Depends(verify_moderator_or_admin)):
         "pending_withdrawals": pending_withdrawals,
         "total_digits_circulating": total_digits_circulating,
         "total_moderators": total_moderators,
+        "pending_challenges": pending_challenges,
         "pending_deposits_list": [dict(r) for r in recent_deposits],
         "pending_withdrawals_list": [dict(r) for r in recent_withdrawals]
     }
@@ -6192,7 +6194,7 @@ def get_open_challenges(user: dict = Depends(get_current_user)):
         conn.close()
 
 @app.post("/api/challenges/{code}/accept")
-def accept_custom_challenge(code: str, user: dict = Depends(get_current_user)):
+async def accept_custom_challenge(code: str, user: dict = Depends(get_current_user)):
     conn = get_db()
     try:
         with conn:
@@ -6222,6 +6224,16 @@ def accept_custom_challenge(code: str, user: dict = Depends(get_current_user)):
     notify_db_change()
     sync_db_async()
 
+    try:
+        await manager.broadcast({
+            "type": "ADMIN_CHALLENGE_NOTICE",
+            "code": code,
+            "status": "in_progress",
+            "room_creator_role": ch["room_creator_role"]
+        })
+    except Exception:
+        pass
+
     return {"success": True, "message": "Challenge accepted! Match is now active."}
 
 class SetRoomRequest(BaseModel):
@@ -6229,15 +6241,16 @@ class SetRoomRequest(BaseModel):
     room_password: str
 
 @app.post("/api/challenges/{code}/set-room")
-def set_challenge_room(code: str, req: SetRoomRequest, user: dict = Depends(get_current_user)):
+async def set_challenge_room(code: str, req: SetRoomRequest, user: dict = Depends(get_current_user)):
     conn = get_db()
     try:
         with conn:
             ch = conn.execute("SELECT * FROM custom_challenges WHERE challenge_code = ?", (code,)).fetchone()
             if not ch:
                 raise HTTPException(404, "Challenge not found")
-            if user["id"] not in [ch["creator_id"], ch["rival_id"]]:
-                raise HTTPException(403, "You are not a participant in this challenge")
+            is_staff = user.get("role") in ["admin", "moderator"]
+            if not is_staff and user["id"] not in [ch["creator_id"], ch["rival_id"]]:
+                raise HTTPException(403, "You are not authorized to update room details for this challenge")
             
             conn.execute("""
                 UPDATE custom_challenges 
@@ -6249,6 +6262,16 @@ def set_challenge_room(code: str, req: SetRoomRequest, user: dict = Depends(get_
 
     notify_db_change()
     sync_db_async()
+    try:
+        await manager.broadcast({
+            "type": "CHALLENGE_ROOM_UPDATED",
+            "code": code,
+            "room_id": req.room_id.strip(),
+            "room_password": req.room_password.strip()
+        })
+    except Exception:
+        pass
+
     return {"success": True, "message": "Room details updated!"}
 
 class SubmitProofRequest(BaseModel):
@@ -6355,6 +6378,70 @@ def cancel_custom_challenge(code: str, user: dict = Depends(get_current_user)):
     notify_db_change()
     sync_db_async()
     return {"success": True, "message": f"Challenge cancelled. BDT {ch['entry_fee']} refunded to your wallet."}
+
+@app.get("/api/admin/challenges")
+def admin_get_challenges(admin: dict = Depends(verify_moderator_or_admin)):
+    conn = get_db()
+    try:
+        rows = conn.execute("""
+            SELECT c.*, 
+                   u1.username as creator_name, u1.ff_ign as creator_ign,
+                   u2.username as rival_name, u2.ff_ign as rival_ign
+            FROM custom_challenges c
+            JOIN users u1 ON c.creator_id = u1.id
+            LEFT JOIN users u2 ON c.rival_id = u2.id
+            ORDER BY 
+                CASE 
+                    WHEN c.status = 'disputed' THEN 1
+                    WHEN c.room_creator_role = 'admin' AND c.status = 'in_progress' AND (c.room_id IS NULL OR c.room_id = '') THEN 2
+                    WHEN c.status = 'in_progress' THEN 3
+                    WHEN c.status = 'open' THEN 4
+                    ELSE 5
+                END,
+                c.id DESC
+            LIMIT 50
+        """).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+class ResolveChallengeRequest(BaseModel):
+    winner_role: str
+
+@app.post("/api/admin/challenges/{code}/resolve")
+def admin_resolve_challenge(code: str, req: ResolveChallengeRequest, admin: dict = Depends(verify_moderator_or_admin)):
+    conn = get_db()
+    try:
+        with conn:
+            ch = conn.execute("SELECT * FROM custom_challenges WHERE challenge_code = ?", (code,)).fetchone()
+            if not ch:
+                raise HTTPException(404, "Challenge not found")
+            if ch["status"] not in ["disputed", "in_progress"]:
+                raise HTTPException(400, f"Challenge is already '{ch['status']}'")
+
+            role = req.winner_role.lower().strip()
+            if role == "creator":
+                conn.execute("UPDATE users SET digits_balance = digits_balance + ? WHERE id = ?", (ch["prize_amount"], ch["creator_id"]))
+                conn.execute("UPDATE custom_challenges SET status = 'completed', winner_id = ?, completed_at = CURRENT_TIMESTAMP WHERE challenge_code = ?", (ch["creator_id"], code))
+                msg = f"Resolved: Creator awarded prize BDT {ch['prize_amount']}."
+            elif role == "rival":
+                conn.execute("UPDATE users SET digits_balance = digits_balance + ? WHERE id = ?", (ch["prize_amount"], ch["rival_id"]))
+                conn.execute("UPDATE custom_challenges SET status = 'completed', winner_id = ?, completed_at = CURRENT_TIMESTAMP WHERE challenge_code = ?", (ch["rival_id"], code))
+                msg = f"Resolved: Rival awarded prize BDT {ch['prize_amount']}."
+            elif role == "refund":
+                conn.execute("UPDATE users SET digits_balance = digits_balance + ? WHERE id = ?", (ch["entry_fee"], ch["creator_id"]))
+                if ch["rival_id"]:
+                    conn.execute("UPDATE users SET digits_balance = digits_balance + ? WHERE id = ?", (ch["entry_fee"], ch["rival_id"]))
+                conn.execute("UPDATE custom_challenges SET status = 'cancelled' WHERE challenge_code = ?", (code,))
+                msg = "Resolved: Both players refunded."
+            else:
+                raise HTTPException(400, "Invalid winner_role: must be 'creator', 'rival', or 'refund'")
+    finally:
+        conn.close()
+
+    notify_db_change()
+    sync_db_async()
+    return {"success": True, "message": msg}
 
 class CachedStaticFiles(StaticFiles):
     async def get_response(self, path: str, scope):

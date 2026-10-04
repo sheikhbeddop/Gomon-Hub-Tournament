@@ -8446,6 +8446,9 @@ async function parseResponseSafe(res) {
         try {
             return JSON.parse(text);
         } catch (_) {
+            if (res.status === 500 || (text && text.includes('Internal Server Error'))) {
+                return { detail: 'সার্ভার রেসপন্স করতে সমস্যা হচ্ছে। কিছুক্ষণ পর আবার চেষ্টা করুন।' };
+            }
             return { detail: (text && text.length < 150) ? text : `Server error (${res.status})` };
         }
     } catch (e) {

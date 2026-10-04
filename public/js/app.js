@@ -340,8 +340,11 @@ async function loadPublicInfo() {
             }
 
             // Check if installed app needs an update
-            if (currentInstalledVersion && data.app_version !== currentInstalledVersion) {
-                promptAppUpdate(data.app_version, data.app_update_notes || 'Install the latest update');
+            const installedVer = localStorage.getItem('installed_app_version') || currentInstalledVersion || 'v1.0.0';
+            if (data.app_version && installedVer !== data.app_version) {
+                setTimeout(() => {
+                    promptAppUpdate(data.app_version, data.app_update_notes || 'Install the latest update');
+                }, 800);
             }
         }
     } catch (e) {
@@ -7649,11 +7652,13 @@ window.addEventListener('appinstalled', () => {
 // Live In-App OTA Auto-Update System
 // -------------------------------------------------------------
 function promptAppUpdate(newVersion, notes) {
+    if (!newVersion) return;
     pendingUpdateVersion = newVersion;
     pendingUpdateNotes = notes;
 
+    const installedVer = localStorage.getItem('installed_app_version') || currentInstalledVersion || 'v1.0.0';
     const curVerEl = document.getElementById('updateCurrentVer');
-    if (curVerEl) curVerEl.innerText = currentInstalledVersion;
+    if (curVerEl) curVerEl.innerText = installedVer;
 
     const newVerEl = document.getElementById('updateNewVer');
     if (newVerEl) newVerEl.innerText = newVersion;
@@ -7715,6 +7720,10 @@ async function confirmAndInstallUpdate() {
         }
     }, 180);
 }
+
+window.addEventListener('online', () => {
+    try { loadPublicInfo(); } catch (_) {}
+});
 
 async function handlePushUpdateSubmit(e) {
     e.preventDefault();

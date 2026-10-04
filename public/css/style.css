@@ -4168,4 +4168,75 @@ body:has(#tab-admin.active) .main-container,
     padding: 7px 10px !important;
     font-size: 0.76rem !important;
 }
+
+/* Master Admin Security Vault (Ultra-Compact Pro Suite) */
+.pro-vault-card {
+    background: #0d1424 !important;
+    border: 1px solid rgba(225, 29, 72, 0.25) !important;
+    border-radius: 10px !important;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35) !important;
+    overflow: hidden;
+}
+
+.pro-vault-header {
+    padding: 10px 16px !important;
+    background: linear-gradient(90deg, rgba(225, 29, 72, 0.12), rgba(15, 23, 42, 0.95)) !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.pro-vault-input {
+    height: 32px !important;
+    font-size: 0.76rem !important;
+    padding: 4px 8px !important;
+    background: rgba(15, 23, 42, 0.75) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    color: #f1f5f9 !important;
+    border-radius: 6px !important;
+    transition: all 0.15s ease;
+}
+
+.pro-vault-input:focus {
+    border-color: #38bdf8 !important;
+    box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2) !important;
+    background: rgba(15, 23, 42, 0.95) !important;
+}
+
+.pro-pin-box {
+    background: rgba(245, 158, 11, 0.04);
+    border: 1px solid rgba(245, 158, 11, 0.25);
+    border-radius: 8px;
+    padding: 8px 12px;
+    margin-top: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.pro-pin-input {
+    width: 150px !important;
+    height: 32px !important;
+    font-family: 'JetBrains Mono', monospace !important;
+    font-size: 0.88rem !important;
+    font-weight: 700 !important;
+    letter-spacing: 3px !important;
+    text-align: center !important;
+    background: rgba(0, 0, 0, 0.5) !important;
+    border: 1px solid rgba(245, 158, 11, 0.4) !important;
+    color: #fbbf24 !important;
+    border-radius: 6px !important;
+    padding: 2px 8px !important;
+}
+
+.pro-pin-input:focus {
+    border-color: #f59e0b !important;
+    box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.25) !important;
+}
+
 

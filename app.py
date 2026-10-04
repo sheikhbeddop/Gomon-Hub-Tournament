@@ -981,6 +981,25 @@ def ensure_challenges_table():
             """)
             conn.execute("CREATE INDEX IF NOT EXISTS idx_challenges_code ON custom_challenges(challenge_code);")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_challenges_status ON custom_challenges(status);")
+
+            for col_def in [
+                "room_creator_role TEXT DEFAULT 'creator'",
+                "gun_attributes INTEGER DEFAULT 0",
+                "limited_ammo INTEGER DEFAULT 1",
+                "room_id TEXT DEFAULT ''",
+                "room_password TEXT DEFAULT ''",
+                "creator_claim TEXT DEFAULT NULL",
+                "rival_claim TEXT DEFAULT NULL",
+                "creator_screenshot TEXT DEFAULT ''",
+                "rival_screenshot TEXT DEFAULT ''",
+                "winner_id INTEGER DEFAULT NULL",
+                "accepted_at DATETIME DEFAULT NULL",
+                "completed_at DATETIME DEFAULT NULL"
+            ]:
+                try:
+                    conn.execute(f"ALTER TABLE custom_challenges ADD COLUMN {col_def}")
+                except Exception:
+                    pass
         conn.close()
     except Exception as e:
         print(f"[Challenges Init Notice] {e}")
@@ -4216,7 +4235,10 @@ def admin_overview(admin: dict = Depends(verify_moderator_or_admin)):
     """).fetchone()[0]
     total_digits_circulating = conn.execute("SELECT COALESCE(SUM(digits_balance), 0) FROM users WHERE role != 'admin'").fetchone()[0] or 0
     total_moderators = conn.execute("SELECT COUNT(*) FROM users WHERE role = 'moderator'").fetchone()[0]
-    pending_challenges = conn.execute("SELECT COUNT(*) FROM custom_challenges WHERE (room_creator_role = 'admin' AND status = 'in_progress' AND (room_id IS NULL OR room_id = '')) OR status = 'disputed'").fetchone()[0]
+    try:
+        pending_challenges = conn.execute("SELECT COUNT(*) FROM custom_challenges WHERE (room_creator_role = 'admin' AND status = 'in_progress' AND (room_id IS NULL OR room_id = '')) OR status = 'disputed'").fetchone()[0]
+    except Exception:
+        pending_challenges = 0
     
     recent_deposits = conn.execute("""
     SELECT d.*, u.username, u.player_id, u.phone as user_phone
@@ -6128,8 +6150,9 @@ def create_custom_challenge(req: CreateChallengeRequest, user: dict = Depends(ge
     try:
         with conn:
             u_row = conn.execute("SELECT digits_balance FROM users WHERE id = ?", (user["id"],)).fetchone()
-            if not u_row or u_row["digits_balance"] < fee:
-                raise HTTPException(400, "Insufficient balance! Please deposit to create challenge.")
+            curr_bal = int(u_row["digits_balance"] or 0) if u_row else 0
+            if curr_bal < fee:
+                raise HTTPException(400, "আপনার ওয়ালেটে পর্যাপ্ত ব্যালেন্স নেই! চ্যালেঞ্জ তৈরি করতে অনুগ্রহ করে ডিপোজিট করুন।")
             
             # Deduct entry fee atomically
             conn.execute("UPDATE users SET digits_balance = digits_balance - ? WHERE id = ? AND digits_balance >= ?", (fee, user["id"], fee))
@@ -6140,6 +6163,10 @@ def create_custom_challenge(req: CreateChallengeRequest, user: dict = Depends(ge
                     gun_attributes, limited_ammo, room_creator_role, status
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'open')
             """, (code, user["id"], req.mode, fee, prize_amount, platform_fee, req.gun_attributes, req.limited_ammo, req.room_creator_role))
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(400, f"Error creating challenge: {str(e)}")
     finally:
         conn.close()
 
@@ -6172,6 +6199,8 @@ def get_my_challenges(user: dict = Depends(get_current_user)):
             LIMIT 50
         """, (user["id"], user["id"])).fetchall()
         return [dict(r) for r in rows]
+    except Exception:
+        return []
     finally:
         conn.close()
 
@@ -6190,6 +6219,8 @@ def get_open_challenges(user: dict = Depends(get_current_user)):
             LIMIT 30
         """, (user["id"],)).fetchall()
         return [dict(r) for r in rows]
+    except Exception:
+        return []
     finally:
         conn.close()
 
@@ -6208,8 +6239,9 @@ async def accept_custom_challenge(code: str, user: dict = Depends(get_current_us
             
             fee = ch["entry_fee"]
             u_row = conn.execute("SELECT digits_balance FROM users WHERE id = ?", (user["id"],)).fetchone()
-            if not u_row or u_row["digits_balance"] < fee:
-                raise HTTPException(400, f"Insufficient balance! You need BDT {fee} to accept this challenge.")
+            curr_bal = int(u_row["digits_balance"] or 0) if u_row else 0
+            if curr_bal < fee:
+                raise HTTPException(400, f"আপনার ওয়ালেটে পর্যাপ্ত ব্যালেন্স নেই! এই চ্যালেঞ্জে যোগ দিতে BDT {fee} প্রয়োজন।")
             
             # Deduct rival's stake atomically
             conn.execute("UPDATE users SET digits_balance = digits_balance - ? WHERE id = ? AND digits_balance >= ?", (fee, user["id"], fee))
@@ -6218,6 +6250,10 @@ async def accept_custom_challenge(code: str, user: dict = Depends(get_current_us
                 SET rival_id = ?, status = 'in_progress', accepted_at = CURRENT_TIMESTAMP
                 WHERE challenge_code = ? AND status = 'open'
             """, (user["id"], code))
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(400, f"Error accepting challenge: {str(e)}")
     finally:
         conn.close()
 
@@ -6402,6 +6438,8 @@ def admin_get_challenges(admin: dict = Depends(verify_moderator_or_admin)):
             LIMIT 50
         """).fetchall()
         return [dict(r) for r in rows]
+    except Exception:
+        return []
     finally:
         conn.close()
 

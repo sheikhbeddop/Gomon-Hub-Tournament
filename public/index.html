@@ -86,7 +86,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet"
         href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Rajdhani:wght@600;700;800&display=swap">
-    <link rel="stylesheet" href="/static/css/style.css?v=5.5.1">
+    <link rel="stylesheet" href="/static/css/style.css?v=5.5.2">
     <link rel="stylesheet" href="/static/css/auth-components.css?v=5.4.3">
 
     <script>
@@ -1724,6 +1724,29 @@
                                         </div>
                                     </div>
 
+                                    <!-- SECTION 3: GOOGLE AUTHENTICATOR (TOTP 2FA) -->
+                                    <div class="pro-pin-box" style="margin-top: 10px; background: rgba(56, 189, 248, 0.04); border-color: rgba(56, 189, 248, 0.25);">
+                                        <div style="display: flex; align-items: center; gap: 8px;">
+                                            <span style="font-size: 1rem;">📱</span>
+                                            <div>
+                                                <div style="font-family: 'Rajdhani', sans-serif; font-size: 0.74rem; font-weight: 800; color: #38bdf8; letter-spacing: 0.4px; display: flex; align-items: center; gap: 6px;">
+                                                    <span>STEP 3: GOOGLE AUTHENTICATOR (মোবাইল ওটিপি)</span>
+                                                    <span id="adminTotpStatusBadge" class="pro-chip" style="font-size: 0.60rem; padding: 1px 5px; background: rgba(148, 163, 184, 0.15); color: #94a3b8;">Checking...</span>
+                                                </div>
+                                                <div style="font-size: 0.66rem; color: #94a3b8;">
+                                                    প্রতি ৩০ সেকেন্ডে স্বয়ংক্রিয় ডায়নামিক কোড • ফোন ছাড়া লগইন অসম্ভব (মাস্টার পিন ব্যাকআপ সচল থাকবে)
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div style="display: flex; align-items: center; gap: 6px;">
+                                            <button type="button" class="btn btn-neon btn-sm" id="btnAdminTotpAction" onclick="openAdminTotpModal()"
+                                                style="font-size: 0.70rem; height: 28px; padding: 0 10px; font-weight: 700; border-radius: 4px;">
+                                                ⚡ সেটআপ করুন
+                                            </button>
+                                        </div>
+                                    </div>
+
                                     <!-- Footer Action Bar -->
                                     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; padding-top: 10px; margin-top: 10px; border-top: 1px solid rgba(255, 255, 255, 0.06);">
                                         <span style="font-size: 0.68rem; color: #64748b; display: inline-flex; align-items: center; gap: 4px;">
@@ -1911,6 +1934,47 @@
 
     </div> <!-- /#mainAppWrapper -->
 
+
+    <!-- GOOGLE AUTHENTICATOR (TOTP 2FA) SETUP MODAL -->
+    <div class="modal-overlay" id="adminTotpModal" style="display: none; z-index: 100000;">
+        <div class="modal-box" style="max-width: 380px; width: 92%; background: #0d1424; border: 1px solid rgba(56, 189, 248, 0.35); border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.6); padding: 0; overflow: hidden;">
+            <div style="padding: 12px 16px; background: linear-gradient(90deg, rgba(56, 189, 248, 0.15), rgba(15, 23, 42, 0.95)); border-bottom: 1px solid rgba(255,255,255,0.08); display: flex; justify-content: space-between; align-items: center;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 1.1rem;">📱</span>
+                    <span style="font-family: 'Rajdhani', sans-serif; font-size: 0.9rem; font-weight: 800; color: #f8fafc; letter-spacing: 0.4px;">GOOGLE AUTHENTICATOR 2FA</span>
+                </div>
+                <button type="button" class="btn-close" onclick="closeAdminTotpModal()" style="color: #94a3b8;">&times;</button>
+            </div>
+            <div style="padding: 16px 18px; text-align: center;">
+                <p style="font-size: 0.74rem; color: #cbd5e1; margin: 0 0 12px 0; line-height: 1.5;">
+                    ১. মোবাইলে <b>Google Authenticator</b> অ্যাপ খুলুন。<br>
+                    ২. নিচের কিউআর কোডটি স্ক্যান করুন অথবা কোডটি কপি করে অ্যাপে দিন।
+                </p>
+
+                <div style="margin: 0 auto 12px auto; width: 140px; height: 140px; background: #ffffff; border-radius: 8px; padding: 6px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.4);">
+                    <img id="totpQrImage" src="" alt="Scan QR Code" style="width: 100%; height: 100%; display: block;" />
+                </div>
+
+                <div style="background: rgba(0,0,0,0.35); border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; padding: 6px 10px; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-size: 0.68rem; color: #64748b;">Key:</span>
+                    <code id="totpSecretText" style="font-family: monospace; font-size: 0.78rem; color: #38bdf8; font-weight: 700; letter-spacing: 1.5px;"></code>
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="copyTotpSecretText()" style="padding: 2px 6px; font-size: 0.65rem; height: 22px;">📋 কপি</button>
+                </div>
+
+                <div style="border-top: 1px dashed rgba(255,255,255,0.1); padding-top: 12px; margin-top: 4px;">
+                    <label style="font-size: 0.72rem; font-weight: 700; color: #fbbf24; margin-bottom: 6px; display: block;">
+                        ৩. অ্যাপে দেখানো ৬ ডিজিট ওটিপি দিয়ে কনফার্ম করুন:
+                    </label>
+                    <input type="text" id="totpVerifyInput" maxlength="6" placeholder="000000"
+                        style="width: 130px; height: 34px; font-family: monospace; font-size: 1rem; font-weight: 800; letter-spacing: 4px; text-align: center; background: rgba(0,0,0,0.5); border: 1px solid #38bdf8; color: #38bdf8; border-radius: 6px; margin: 0 auto 12px auto; display: block;" />
+                    <div style="display: flex; gap: 8px; justify-content: center;">
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="closeAdminTotpModal()" style="font-size: 0.72rem; height: 32px; padding: 0 12px;">বাতিল</button>
+                        <button type="button" class="btn btn-neon btn-sm" onclick="verifyAndActivateAdminTotp()" style="font-size: 0.72rem; height: 32px; padding: 0 16px; font-weight: 700;">✅ অ্যাক্টিভ করুন</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- MODAL: PUBLISH MATCH RESULT & DISTRIBUTE PRIZE (Admin Only) -->
     <div class="modal-overlay" id="publishResultModal">
@@ -3076,8 +3140,11 @@
                         </svg>
                     </span>
                     <input type="password" class="auth-input" id="loginAdminPin" maxlength="6"
-                        placeholder="Admin Secret PIN (৬ ডিজিট)" autocomplete="one-time-code"
+                        placeholder="Authenticator কোড বা মাস্টার পিন (৬ ডিজিট)" autocomplete="one-time-code"
                         style="font-family: monospace; letter-spacing: 2px;">
+                </div>
+                <div id="loginAdminPinHint" style="display: none; font-size: 0.70rem; color: #fbbf24; margin-top: -8px; margin-bottom: 8px; text-align: left;">
+                    💡 Google Authenticator কোড অথবা ৬ ডিজিটের মাস্টার সিক্রেট পিন দিন
                 </div>
 
                 <div class="auth-forgot-row">
@@ -4783,7 +4850,7 @@
     <!-- Toast Notification Container -->
     <div class="toast-container" id="toastContainer"></div>
 
-    <script src="/static/js/app.js?v=5.6.2"></script>
+    <script src="/static/js/app.js?v=5.6.3"></script>
 
 </body>
 

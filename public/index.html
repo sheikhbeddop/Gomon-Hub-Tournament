@@ -86,7 +86,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet"
         href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Rajdhani:wght@600;700;800&display=swap">
-    <link rel="stylesheet" href="/static/css/style.css?v=5.4.6">
+    <link rel="stylesheet" href="/static/css/style.css?v=5.5.0">
     <link rel="stylesheet" href="/static/css/auth-components.css?v=5.4.3">
 
     <script>
@@ -1479,152 +1479,154 @@
                                 </form>
                             </div>
 
-                            <!-- CATEGORY 6B: AUTO-DEPOSIT SMS GATEWAY (WEBHOOK SETUP) -->
-                            <div class="admin-panel-card admin-only-card"
-                                style="margin-top: 24px; border-color: rgba(0, 210, 255, 0.4); background: rgba(13, 20, 36, 0.75);">
-                                <div class="admin-card-header">
-                                    <div class="admin-card-title">
-                                        <span style="color: var(--neon-cyan);">⚡ Auto-Deposit SMS Gateway (স্বয়ংক্রিয়
-                                            bKash / Nagad গেটওয়ে)</span>
+                            <!-- CATEGORY 6B: AUTO-DEPOSIT SMS GATEWAY (WEBHOOK SETUP) - HIGH DENSITY PRO SUITE -->
+                            <div class="admin-panel-card admin-only-card pro-dashboard-card"
+                                style="margin-top: 24px; padding: 0;">
+                                <div class="admin-card-header pro-card-header" style="margin-bottom: 0;">
+                                    <div class="admin-card-title pro-card-title">
+                                        <span style="color: var(--neon-cyan);">⚡ Auto-Deposit SMS Gateway</span>
+                                        <span style="font-size: 0.72rem; color: #94a3b8; font-weight: 500;">(স্বয়ংক্রিয় bKash / Nagad গেটওয়ে)</span>
                                     </div>
-                                    <span class="badge-status approved"
-                                        style="font-size: 0.75rem; display: inline-flex; align-items: center; gap: 4px;">
-                                        🟢 Active & Listening
+                                    <span class="pro-chip pro-chip-claimed" style="padding: 3px 8px; font-size: 0.65rem;">
+                                        <span class="pro-chip-dot"></span>
+                                        Active & Listening
                                     </span>
                                 </div>
-                                <p
-                                    style="font-size: 0.82rem; color: var(--text-muted); margin-top: 4px; margin-bottom: 16px; line-height: 1.5;">
-                                    ১০০% ফ্রি ও আনলিমিটেড স্বয়ংক্রিয় ডিপোজিট সিস্টেম। আপনার বিকাশ/নগদ সিমে এসএমএস আসা
-                                    মাত্রই ফোন থেকে সার্ভারে স্বয়ংক্রিয় নোটিফিকেশন পাঠাবে এবং ইউজারের ডিপোজিট
-                                    ইনস্ট্যান্ট এপ্রুভ হয়ে যাবে। কোনো কারণে এসএমএস না আসলে বা দেরি হলে সাধারণ নিয়মে
-                                    ম্যানুয়ালি পেন্ডিং থেকে এপ্রুভ করতে পারবেন।
-                                </p>
+                                <div style="padding: 16px 18px;">
+                                    <p
+                                        style="font-size: 0.76rem; color: #94a3b8; margin-top: 0; margin-bottom: 14px; line-height: 1.5;">
+                                        ১০০% ফ্রি ও ইনস্ট্যান্ট ডিপোজিট সিস্টেম। ফোনে এসএমএস আসা মাত্রই স্বয়ংক্রিয় নোটিফিকেশনের মাধ্যমে ইউজারের ব্যালেন্স যোগ হবে। কোনো কারণে এসএমএস মিস হলে সাধারণ নিয়মে পেন্ডিং থেকে ম্যানুয়ালি এপ্রুভ করতে পারবেন।
+                                    </p>
 
-                                <!-- Webhook URL & Secret Configuration -->
-                                <div
-                                    style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px;">
-                                    <div class="form-group">
-                                        <label class="form-label" style="font-weight: 700; color: var(--neon-cyan);">
-                                            📡 Webhook URL (আপনার ফোনের অ্যাপে এই লিঙ্কটি বসান)
-                                        </label>
-                                        <div style="display: flex; gap: 8px;">
-                                            <input type="text" class="form-input" id="smsWebhookUrlInput" readonly
-                                                style="font-family: monospace; font-size: 0.82rem; background: rgba(0,0,0,0.3); color: #38bdf8;">
-                                            <button type="button" class="btn btn-neon btn-sm"
-                                                onclick="copySmsWebhookUrl()"
-                                                style="white-space: nowrap; font-weight: 700;">
-                                                📋 কপি
-                                            </button>
-                                        </div>
-                                    </div>
-                                    <div class="form-group">
-                                        <label class="form-label" style="font-weight: 700; color: var(--neon-amber);">
-                                            🔑 Secret Key (সিক্রেট নিরাপত্তা কি)
-                                        </label>
-                                        <div style="display: flex; gap: 8px;">
-                                            <input type="text" class="form-input" id="smsWebhookSecretInput"
-                                                placeholder="gomon_auto_secret_2026"
-                                                style="font-family: monospace; font-size: 0.85rem;">
-                                            <button type="button" class="btn btn-neon btn-sm"
-                                                onclick="saveSmsWebhookSecret()"
-                                                style="white-space: nowrap; font-weight: 700;">
-                                                💾 সেভ
-                                            </button>
-                                            <button type="button" class="btn btn-secondary btn-sm"
-                                                onclick="copySmsWebhookSecret()" style="white-space: nowrap;">
-                                                📋 কপি
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- Interactive Live SMS Tester -->
-                                <div
-                                    style="margin-top: 18px; padding: 14px; border-radius: 8px; background: rgba(0, 0, 0, 0.25); border: 1px dashed rgba(255, 255, 255, 0.15);">
+                                    <!-- Compact Webhook URL & Secret Configuration -->
                                     <div
-                                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                                        <span style="font-size: 0.85rem; font-weight: 700; color: #f59e0b;">🧪 Test
-                                            Webhook (বিকাশ এসএমএস টেস্ট করুন)</span>
-                                        <span style="font-size: 0.72rem; color: var(--text-muted);">ফোন ছাড়াই সরাসরি
-                                            টেস্ট করতে পারেন</span>
+                                        style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px;">
+                                        <div class="form-group" style="margin-bottom: 0;">
+                                            <label class="form-label" style="font-weight: 700; font-size: 0.74rem; color: var(--neon-cyan); margin-bottom: 4px;">
+                                                📡 Webhook URL (আপনার ফোনের MacroDroid অ্যাপে এই লিঙ্কটি দিন)
+                                            </label>
+                                            <div style="display: flex; gap: 6px;">
+                                                <input type="text" class="form-input" id="smsWebhookUrlInput" readonly
+                                                    style="font-family: monospace; font-size: 0.75rem; height: 32px; padding: 4px 8px; background: rgba(0,0,0,0.35); color: #38bdf8;">
+                                                <button type="button" class="btn btn-neon btn-sm"
+                                                    onclick="copySmsWebhookUrl()"
+                                                    style="white-space: nowrap; font-weight: 700; height: 32px; padding: 0 10px; font-size: 0.72rem;">
+                                                    📋 কপি
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div class="form-group" style="margin-bottom: 0;">
+                                            <label class="form-label" style="font-weight: 700; font-size: 0.74rem; color: var(--neon-amber); margin-bottom: 4px;">
+                                                🔑 Secret Key (সিক্রেট নিরাপত্তা কি)
+                                            </label>
+                                            <div style="display: flex; gap: 6px;">
+                                                <input type="text" class="form-input" id="smsWebhookSecretInput"
+                                                    placeholder="gomon_auto_secret_2026"
+                                                    style="font-family: monospace; font-size: 0.75rem; height: 32px; padding: 4px 8px; background: rgba(0,0,0,0.35);">
+                                                <button type="button" class="btn btn-neon btn-sm"
+                                                    onclick="saveSmsWebhookSecret()"
+                                                    style="white-space: nowrap; font-weight: 700; height: 32px; padding: 0 10px; font-size: 0.72rem;">
+                                                    💾 সেভ
+                                                </button>
+                                                <button type="button" class="btn btn-secondary btn-sm"
+                                                    onclick="copySmsWebhookSecret()"
+                                                    style="white-space: nowrap; height: 32px; padding: 0 10px; font-size: 0.72rem;">
+                                                    📋 কপি
+                                                </button>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                                        <input type="text" class="form-input" id="testSmsTextInput"
-                                            placeholder="উদাহরণ: You have received Tk 100.00 from 01712345678. Fee Tk 0.00. Balance Tk 150.00. TrxID BLA491J3KP at 14/09/2026"
-                                            style="flex: 1; min-width: 260px; font-size: 0.8rem;">
-                                        <button type="button" class="btn btn-crimson btn-sm" onclick="runAdminSmsTest()"
-                                            style="font-weight: 700; white-space: nowrap;">
-                                            ⚡ সিমুলেট টেস্ট
-                                        </button>
-                                    </div>
-                                    <div id="testSmsResultBox"
-                                        style="margin-top: 8px; font-size: 0.78rem; display: none;"></div>
-                                </div>
 
-                                <!-- Step-by-Step 2-Minute Mobile Setup Guide -->
-                                <div
-                                    style="margin-top: 20px; padding: 16px; border-radius: 8px; background: rgba(0, 210, 255, 0.04); border: 1px solid rgba(0, 210, 255, 0.18);">
-                                    <h4
-                                        style="color: var(--neon-cyan); margin-bottom: 10px; font-size: 0.9rem; display: flex; align-items: center; gap: 6px;">
-                                        <span>📱 ২ মিনিটে মোবাইলে MacroDroid সেটআপ করার নিয়ম:</span>
-                                    </h4>
-                                    <ol
-                                        style="font-size: 0.8rem; color: #cbd5e1; line-height: 1.6; margin-left: 18px; margin-bottom: 0;">
-                                        <li>আপনার বিকাশ/নগদ সিমটি যে অ্যান্ড্রয়েড ফোনে আছে, সেটিতে গুগল প্লে-স্টোর থেকে
-                                            <b>MacroDroid - Device Automation</b> ফ্রি অ্যাপটি ইনস্টল করুন।</li>
-                                        <li>অ্যাপ ওপেন করে <b>Add Macro</b> চাপুন &gt; <b>Triggers (+)</b> চাপুন &gt;
-                                            <b>Device Events</b> &gt; <b>SMS Received</b> সিলেক্ট করে Sender:
-                                            <code>Select Any Number</code> অথবা <code>bKash</code> দিন।</li>
-                                        <li>এরপর <b>Actions (+)</b> চাপুন &gt; <b>Connectivity</b> &gt; <b>HTTP
-                                                Request</b> সিলেক্ট করুন:
-                                            <ul style="margin-top: 4px; margin-left: 16px; color: #94a3b8;">
-                                                <li>HTTP Method: <code>POST</code></li>
-                                                <li>URL: উপরের Webhook URL টি পেস্ট করুন।</li>
-                                                <li>Content Type: <code>application/json</code></li>
-                                                <li>Content Body:
-                                                    <code>{"sms_content": "{sms_message}", "sender": "{sms_number}", "secret": "gomon_auto_secret_2026"}</code>
+                                    <!-- Interactive Live SMS Tester (Compact) -->
+                                    <div
+                                        style="margin-top: 12px; padding: 10px 12px; border-radius: 8px; background: rgba(0, 0, 0, 0.35); border: 1px dashed rgba(245, 158, 11, 0.3);">
+                                        <div
+                                            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                                            <span style="font-size: 0.75rem; font-weight: 700; color: #f59e0b;">🧪 Webhook Tester (সরাসরি বিকাশ এসএমএস টেস্ট করুন)</span>
+                                            <span style="font-size: 0.68rem; color: #94a3b8;">ফোন ছাড়াই সরাসরি টেস্ট করতে পারেন</span>
+                                        </div>
+                                        <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                                            <input type="text" class="form-input" id="testSmsTextInput"
+                                                placeholder="উদাহরণ: You have received Tk 100.00 from 01712345678. Fee Tk 0.00. Balance Tk 150.00. TrxID BLA491J3KP at 14/09/2026"
+                                                style="flex: 1; min-width: 240px; font-size: 0.74rem; height: 32px; padding: 4px 8px;">
+                                            <button type="button" class="btn btn-crimson btn-sm" onclick="runAdminSmsTest()"
+                                                style="font-weight: 700; white-space: nowrap; height: 32px; padding: 0 12px; font-size: 0.72rem;">
+                                                ⚡ টেস্ট
+                                            </button>
+                                        </div>
+                                        <div id="testSmsResultBox"
+                                            style="margin-top: 6px; font-size: 0.72rem; display: none;"></div>
+                                    </div>
+
+                                    <!-- Step-by-Step 2-Minute Mobile Setup Guide (Collapsible Details) -->
+                                    <details class="pro-guide-accordion"
+                                        style="margin-top: 12px; border: 1px solid rgba(0, 210, 255, 0.18); border-radius: 8px; background: rgba(0, 210, 255, 0.03); overflow: hidden;">
+                                        <summary
+                                            style="padding: 8px 12px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; font-weight: 700; color: var(--neon-cyan); user-select: none;">
+                                            <span>📱 ২ মিনিটে মোবাইলে MacroDroid সেটআপ করার নিয়ম (ক্লিক করে গাইড দেখুন)</span>
+                                            <span style="font-size: 0.70rem; color: #38bdf8;">টগল ▾</span>
+                                        </summary>
+                                        <div style="padding: 10px 14px; border-top: 1px solid rgba(0, 210, 255, 0.1);">
+                                            <ol
+                                                style="font-size: 0.74rem; color: #cbd5e1; line-height: 1.5; margin-left: 16px; margin-bottom: 0;">
+                                                <li>আপনার বিকাশ/নগদ সিমটি যে অ্যান্ড্রয়েড ফোনে আছে, সেটিতে গুগল প্লে-স্টোর থেকে
+                                                    <b>MacroDroid - Device Automation</b> ফ্রি অ্যাপটি ইনস্টল করুন।</li>
+                                                <li>অ্যাপ ওপেন করে <b>Add Macro</b> চাপুন &gt; <b>Triggers (+)</b> চাপুন &gt;
+                                                    <b>Device Events</b> &gt; <b>SMS Received</b> সিলেক্ট করে Sender:
+                                                    <code>Select Any Number</code> অথবা <code>bKash</code> দিন।</li>
+                                                <li>এরপর <b>Actions (+)</b> চাপুন &gt; <b>Connectivity</b> &gt; <b>HTTP Request</b> সিলেক্ট করুন:
+                                                    <ul style="margin-top: 4px; margin-left: 16px; color: #94a3b8; font-size: 0.72rem;">
+                                                        <li>HTTP Method: <code>POST</code></li>
+                                                        <li>URL: উপরের Webhook URL টি পেস্ট করুন।</li>
+                                                        <li>Content Type: <code>application/json</code></li>
+                                                        <li>Content Body:
+                                                            <code>{"sms_content": "{sms_message}", "sender": "{sms_number}", "secret": "gomon_auto_secret_2026"}</code>
+                                                        </li>
+                                                    </ul>
                                                 </li>
-                                            </ul>
-                                        </li>
-                                        <li>ম্যাক্রোটির নাম দিয়ে সেভ করুন। ব্যস, সেটআপ শেষ! এখন বিকাশ বা নগদে টাকা আসা
-                                            মাত্রই সার্ভারে নোটিফিকেশন যাবে এবং ইউজারের ব্যালেন্স স্বয়ংক্রিয়ভাবে যোগ
-                                            হবে।</li>
-                                    </ol>
-                                </div>
+                                                <li>ম্যাক্রোটির নাম দিয়ে সেভ করুন। ব্যস, সেটআপ শেষ! এখন বিকাশ বা নগদে টাকা আসা মাত্রই সার্ভারে নোটিফিকেশন যাবে এবং ইউজারের ব্যালেন্স স্বয়ংক্রিয়ভাবে যোগ হবে।</li>
+                                            </ol>
+                                        </div>
+                                    </details>
 
-                                <!-- Recent Incoming SMS Table -->
-                                <div style="margin-top: 22px;">
-                                    <div
-                                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                                        <span style="font-size: 0.88rem; font-weight: 700; color: #fff;">📩 সম্প্রতি
-                                            প্রাপ্ত এসএমএস লগ (Recent Incoming SMS Feed)</span>
-                                        <button type="button" class="btn btn-secondary btn-sm"
-                                            onclick="loadAdminIncomingPayments()"
-                                            style="font-size: 0.75rem; padding: 4px 10px;">
-                                            🔄 রিফ্রেশ
-                                        </button>
-                                    </div>
-                                    <div class="table-responsive" style="max-height: 280px; overflow-y: auto;">
-                                        <table class="table table-sm">
-                                            <thead>
-                                                <tr>
-                                                    <th>সময়</th>
-                                                    <th>গেটওয়ে</th>
-                                                    <th>প্রেরক ফোন</th>
-                                                    <th>টাকা</th>
-                                                    <th>TrxID</th>
-                                                    <th>স্ট্যাটাস</th>
-                                                    <th>ইউজার</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody id="adminIncomingPaymentsBody">
-                                                <tr>
-                                                    <td colspan="7"
-                                                        style="text-align: center; color: var(--text-muted);">লোড
-                                                        হচ্ছে...</td>
-                                                </tr>
-                                            </tbody>
-                                        </table>
+                                    <!-- Professional High-Density Recent Incoming SMS Table -->
+                                    <div class="pro-table-wrapper" style="margin-top: 14px;">
+                                        <div class="pro-table-toolbar">
+                                            <div style="display: flex; align-items: center; gap: 8px;">
+                                                <span class="pro-live-dot"></span>
+                                                <span style="font-size: 0.76rem; font-weight: 800; color: #f8fafc; letter-spacing: 0.5px;">RECENT INCOMING SMS FEED</span>
+                                                <span style="font-size: 0.68rem; color: #94a3b8;">(সম্প্রতি প্রাপ্ত এসএমএস লগ)</span>
+                                            </div>
+                                            <div style="display: flex; align-items: center; gap: 8px;">
+                                                <span id="smsFeedCounter" style="font-size: 0.68rem; color: #38bdf8; background: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.2); padding: 1px 6px; border-radius: 4px;">LIVE FEED</span>
+                                                <button type="button" class="btn btn-secondary btn-sm"
+                                                    onclick="loadAdminIncomingPayments()"
+                                                    style="font-size: 0.70rem; padding: 2px 8px; height: 24px; display: inline-flex; align-items: center; gap: 4px; border-radius: 4px;">
+                                                    🔄 রিফ্রেশ
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div class="pro-table-scroll">
+                                            <table class="pro-table" id="adminIncomingPaymentsTable">
+                                                <thead>
+                                                    <tr>
+                                                        <th>সময়</th>
+                                                        <th>গেটওয়ে</th>
+                                                        <th>প্রেরক ফোন</th>
+                                                        <th>টাকা</th>
+                                                        <th>TrxID</th>
+                                                        <th>স্ট্যাটাস</th>
+                                                        <th>ইউজার</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody id="adminIncomingPaymentsBody">
+                                                    <tr>
+                                                        <td colspan="7"
+                                                            style="text-align: center; color: var(--text-muted); padding: 12px; font-size: 0.72rem;">লোড হচ্ছে...</td>
+                                                    </tr>
+                                                </tbody>
+                                            </table>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -4806,7 +4808,7 @@
     <!-- Toast Notification Container -->
     <div class="toast-container" id="toastContainer"></div>
 
-    <script src="/static/js/app.js?v=5.6.1"></script>
+    <script src="/static/js/app.js?v=5.6.2"></script>
 
 </body>
 

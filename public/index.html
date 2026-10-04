@@ -967,6 +967,23 @@
                                     <span style="font-size: 0.8rem; color: #00d2ff; font-weight: 700;">➔</span>
                                 </div>
 
+                                <!-- 5. Custom Challenges (Admin Room / Dispute Alerts) -->
+                                <div class="admin-stat-card" style="cursor: pointer; transition: all 0.2s ease;"
+                                    onclick="switchAdminSection('matches')"
+                                    onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 12px rgba(0,0,0,0.08)';"
+                                    onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='var(--shadow-card)';">
+                                    <div class="admin-stat-icon"
+                                        style="background: rgba(99, 102, 241, 0.15); color: #6366f1;">⚔️</div>
+                                    <div style="flex: 1;">
+                                        <div
+                                            style="font-size: 0.74rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 700;">
+                                            Pending Challenges</div>
+                                        <div style="font-size: 1.5rem; font-weight: 800; font-family: 'Rajdhani';"
+                                            id="adminStatPendingChallenges">0</div>
+                                    </div>
+                                    <span style="font-size: 0.8rem; color: #6366f1; font-weight: 700;">➔</span>
+                                </div>
+
                                 <!-- 5. Circulating Balance -->
                                 <div class="admin-stat-card">
                                     <div class="admin-stat-icon"
@@ -1192,6 +1209,38 @@
                                         </thead>
                                         <tbody id="adminMatchesTableBody">
                                             <!-- Populated dynamically -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <!-- Custom Challenges Arena (1v1 & 4v4 Escrow Matches & Admin Room Control) -->
+                            <div class="admin-panel-card" style="margin-top: 20px;">
+                                <div class="admin-card-header">
+                                    <div class="admin-card-title">
+                                        <span>⚔️ Custom Challenges & 1v1 / 4v4 Arena (Admin Room Control)</span>
+                                    </div>
+                                    <div style="display: flex; gap: 8px;">
+                                        <button type="button" class="btn btn-outline btn-sm" onclick="loadAdminChallenges()">🔄 Refresh Challenges</button>
+                                    </div>
+                                </div>
+                                <div class="table-wrapper">
+                                    <table class="custom-table" style="font-size: 0.82rem;">
+                                        <thead>
+                                            <tr>
+                                                <th>Code & Mode</th>
+                                                <th>Players</th>
+                                                <th>Fee / Prize</th>
+                                                <th>Host</th>
+                                                <th>Status</th>
+                                                <th>Room ID & Pass</th>
+                                                <th style="text-align: center;">Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="adminChallengesTableBody">
+                                            <tr>
+                                                <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 20px;">Loading challenges...</td>
+                                            </tr>
                                         </tbody>
                                     </table>
                                 </div>
@@ -2923,8 +2972,8 @@
                             <div style="display: flex; justify-content: space-between; align-items: center;">
                                 <span style="font-size: 0.8rem; font-weight: 600; color: #475569;">Custom Room Host</span>
                                 <select id="chRoomHost" style="font-size: 0.78rem; font-weight: 700; padding: 5px 8px; border-radius: 6px; border: 1px solid #cbd5e1; background: white; color: #0f172a;">
-                                    <option value="creator">I will create room</option>
-                                    <option value="rival">Rival will create room</option>
+                                    <option value="creator">I will create room (Creator)</option>
+                                    <option value="admin">Admin will create room</option>
                                 </select>
                             </div>
                         </div>
@@ -4757,7 +4806,7 @@
     <!-- Toast Notification Container -->
     <div class="toast-container" id="toastContainer"></div>
 
-    <script src="/static/js/app.js?v=5.5.9"></script>
+    <script src="/static/js/app.js?v=5.6.0"></script>
 
 </body>
 

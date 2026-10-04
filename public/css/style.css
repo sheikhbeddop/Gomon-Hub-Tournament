@@ -4239,4 +4239,148 @@ body:has(#tab-admin.active) .main-container,
     box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.25) !important;
 }
 
+/* =============================================================
+   PRO SETTINGS ACCORDION SYSTEM (COLLAPSIBLE CATEGORIES)
+   ============================================================= */
+.pro-settings-accordion {
+    background: #0d1424 !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    border-radius: 10px !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25) !important;
+    margin-bottom: 14px !important;
+    overflow: hidden !important;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease !important;
+}
+
+.pro-settings-accordion[open] {
+    border-color: rgba(56, 189, 248, 0.3) !important;
+    box-shadow: 0 8px 26px rgba(0, 0, 0, 0.45) !important;
+}
+
+.pro-settings-accordion.accordion-vault[open] {
+    border-color: rgba(225, 29, 72, 0.35) !important;
+}
+
+.pro-settings-accordion.accordion-gateway[open] {
+    border-color: rgba(0, 210, 255, 0.35) !important;
+}
+
+.pro-accordion-summary {
+    list-style: none !important;
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    padding: 12px 18px !important;
+    background: linear-gradient(90deg, rgba(15, 23, 42, 0.98), rgba(30, 41, 59, 0.9)) !important;
+    cursor: pointer !important;
+    user-select: none !important;
+    gap: 12px !important;
+    transition: background 0.18s ease !important;
+}
+
+.pro-accordion-summary::-webkit-details-marker {
+    display: none !important;
+}
+
+.pro-accordion-summary:hover {
+    background: linear-gradient(90deg, rgba(30, 41, 59, 0.98), rgba(51, 65, 85, 0.9)) !important;
+}
+
+.pro-settings-accordion[open] > .pro-accordion-summary {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+.pro-accordion-title-wrap {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.pro-accordion-icon {
+    font-size: 1.15rem;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.pro-accordion-title {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 0.88rem;
+    font-weight: 800;
+    color: #f8fafc;
+    letter-spacing: 0.4px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.pro-accordion-desc {
+    font-size: 0.67rem;
+    color: #94a3b8;
+    margin-top: 2px;
+}
+
+.pro-accordion-tag {
+    font-size: 0.60rem;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: rgba(56, 189, 248, 0.1);
+    color: #38bdf8;
+    border: 1px solid rgba(56, 189, 248, 0.25);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+
+.pro-accordion-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.pro-accordion-arrow {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 5px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #94a3b8;
+    font-size: 0.72rem;
+    line-height: 1;
+    transition: transform 0.22s ease, background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+.pro-settings-accordion:hover .pro-accordion-arrow {
+    background: rgba(255, 255, 255, 0.1);
+    color: #f8fafc;
+}
+
+.pro-settings-accordion[open] .pro-accordion-arrow {
+    transform: rotate(180deg);
+    background: rgba(56, 189, 248, 0.15);
+    border-color: rgba(56, 189, 248, 0.35);
+    color: #38bdf8;
+}
+
+.pro-settings-accordion.accordion-vault[open] .pro-accordion-arrow {
+    background: rgba(225, 29, 72, 0.15);
+    border-color: rgba(225, 29, 72, 0.35);
+    color: #f43f5e;
+}
+
+.pro-accordion-body {
+    animation: proAccordionFadeIn 0.2s ease;
+}
+
+@keyframes proAccordionFadeIn {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+
 

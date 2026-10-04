@@ -25,5 +25,7 @@ services:
         sync: false
       - key: RESET_PASS_SCRIPT_URL
         sync: false
+      - key: CHALLENGE_UPLOAD_SCRIPT_URL
+        sync: false
 
 

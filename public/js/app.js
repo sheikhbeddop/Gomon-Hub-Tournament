@@ -1436,8 +1436,10 @@ async function handleLoginSubmit(e) {
             let errMsg = data.detail || 'Invalid username or password. Please try again.';
             if (errMsg.startsWith("ADMIN_PIN_REQUIRED:")) {
                 const pinGrp = document.getElementById('loginAdminPinGroup');
+                const pinHint = document.getElementById('loginAdminPinHint');
                 if (pinGrp) {
                     pinGrp.style.display = 'flex';
+                    if (pinHint) pinHint.style.display = 'block';
                     if (pinInput) pinInput.focus();
                 }
                 errMsg = errMsg.replace("ADMIN_PIN_REQUIRED:", "");
@@ -4122,6 +4124,7 @@ async function loadAdminOverview() {
             renderPendingWithdrawals(data.pending_withdrawals_list);
             loadAdminUsers();
             loadAdminIncomingPayments();
+            try { loadAdminTotpStatus(); } catch(e) {}
         }
     } catch (e) {
         console.error(e);
@@ -5775,9 +5778,119 @@ async function handleAdminChangePassword(e) {
 }
 
 // -------------------------------------------------------------
+// Google Authenticator (TOTP 2FA) Engine
+// -------------------------------------------------------------
+let currentPendingTotpSecret = '';
+
+async function loadAdminTotpStatus() {
+    if (!token || !currentUser || currentUser.role !== 'admin') return;
+    try {
+        const res = await apiRequest('/api/admin/totp/status', 'GET');
+        const badge = document.getElementById('adminTotpStatusBadge');
+        const btn = document.getElementById('btnAdminTotpAction');
+        if (!badge || !btn) return;
+
+        if (res && res.enabled) {
+            badge.className = 'pro-chip pro-chip-claimed';
+            badge.innerHTML = '<span class="pro-chip-dot"></span>ACTIVE';
+            badge.style.background = 'rgba(16, 185, 129, 0.12)';
+            badge.style.color = '#34d399';
+            btn.className = 'btn btn-secondary btn-sm';
+            btn.innerText = '❌ নিষ্ক্রিয় করুন';
+            btn.onclick = promptDisableAdminTotp;
+        } else {
+            badge.className = 'pro-chip';
+            badge.innerText = 'NOT SET';
+            badge.style.background = 'rgba(148, 163, 184, 0.15)';
+            badge.style.color = '#94a3b8';
+            btn.className = 'btn btn-neon btn-sm';
+            btn.innerText = '⚡ সেটআপ করুন';
+            btn.onclick = openAdminTotpModal;
+        }
+    } catch (e) {
+        console.error('Error checking TOTP status', e);
+    }
+}
+
+async function openAdminTotpModal() {
+    try {
+        const res = await apiRequest('/api/admin/totp/generate', 'POST');
+        if (res && res.success) {
+            currentPendingTotpSecret = res.secret;
+            const secretEl = document.getElementById('totpSecretText');
+            if (secretEl) secretEl.innerText = res.secret;
+
+            const qrImg = document.getElementById('totpQrImage');
+            if (qrImg) {
+                qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(res.otpauth_url)}`;
+            }
+            const modal = document.getElementById('adminTotpModal');
+            if (modal) modal.style.display = 'flex';
+            const inp = document.getElementById('totpVerifyInput');
+            if (inp) {
+                inp.value = '';
+                inp.focus();
+            }
+        }
+    } catch (e) {
+        showToast('Google Authenticator জেনারেট করা যায়নি।', 'error');
+    }
+}
+
+function closeAdminTotpModal() {
+    const modal = document.getElementById('adminTotpModal');
+    if (modal) modal.style.display = 'none';
+}
+
+function copyTotpSecretText() {
+    const txt = document.getElementById('totpSecretText') ? document.getElementById('totpSecretText').innerText : '';
+    if (txt) {
+        navigator.clipboard.writeText(txt);
+        showToast('সিক্রেট কি ক্লিপবোর্ডে কপি করা হয়েছে!', 'info');
+    }
+}
+
+async function verifyAndActivateAdminTotp() {
+    const code = (document.getElementById('totpVerifyInput') ? document.getElementById('totpVerifyInput').value : '').trim();
+    if (!code || code.length !== 6) {
+        showToast('Google Authenticator অ্যাপের ৬ ডিজিটের কোড দিন!', 'warning');
+        return;
+    }
+    try {
+        const res = await apiRequest('/api/admin/totp/verify-activate', 'POST', { code });
+        if (res && res.success) {
+            showToast(res.message || 'Google Authenticator সফলভাবে অ্যাক্টিভ হয়েছে!', 'success');
+            closeAdminTotpModal();
+            loadAdminTotpStatus();
+        } else {
+            showToast(res.detail || 'ভুল কোড! সঠিক কোড দিন।', 'error');
+        }
+    } catch (e) {
+        showToast(e.message || 'ভেরিফাই করতে ব্যর্থ হয়েছে।', 'error');
+    }
+}
+
+async function promptDisableAdminTotp() {
+    const pin = prompt('Google Authenticator নিষ্ক্রিয় করতে আপনার ৬ ডিজিটের মাস্টার পিন দিন:');
+    if (!pin) return;
+    try {
+        const res = await apiRequest('/api/admin/totp/disable', 'POST', { master_pin: pin.trim() });
+        if (res && res.success) {
+            showToast(res.message || 'Google Authenticator নিষ্ক্রিয় করা হয়েছে।', 'info');
+            loadAdminTotpStatus();
+        } else {
+            showToast(res.detail || 'ভুল মাস্টার পিন!', 'error');
+        }
+    } catch (e) {
+        showToast(e.message || 'নিষ্ক্রিয় করা যায়নি।', 'error');
+    }
+}
+
+// -------------------------------------------------------------
 // Auto-Deposit SMS Gateway Frontend Handlers
 // -------------------------------------------------------------
 async function initSmsGatewayCard() {
+    try { loadAdminTotpStatus(); } catch(e) {}
     const urlInput = document.getElementById('smsWebhookUrlInput');
     if (urlInput) {
         urlInput.value = `${window.location.origin}/api/webhooks/incoming-sms`;

@@ -8288,4 +8288,310 @@ window.loadMyPromotions = loadMyPromotions;
 window.loadAdminPromotions = loadAdminPromotions;
 window.adminActionPromotion = adminActionPromotion;
 
+// =============================================================
+// Custom Challenge Arena (1v1 & 4v4 Escrow Battles)
+// =============================================================
+
+function openChallengeModal() {
+    if (!localStorage.getItem('ff_token')) {
+        showToast('Please sign in or register to enter Challenge Arena', 'error');
+        openModal('authModal');
+        return;
+    }
+    openModal('challengeModal');
+    calculateChallengePool();
+}
+
+function switchChallengeTab(tabName) {
+    const tabs = ['create', 'my', 'lobby'];
+    tabs.forEach(t => {
+        const btn = document.getElementById(`chTabBtn-${t}`);
+        const content = document.getElementById(`chContent-${t}`);
+        if (btn && content) {
+            if (t === tabName) {
+                btn.style.background = '#10b981';
+                btn.style.color = '#ffffff';
+                content.style.display = 'block';
+            } else {
+                btn.style.background = 'transparent';
+                btn.style.color = '#64748b';
+                content.style.display = 'none';
+            }
+        }
+    });
+
+    if (tabName === 'my') {
+        loadMyChallenges();
+    } else if (tabName === 'lobby') {
+        loadOpenLobbies();
+    }
+}
+
+function selectChallengeMode(mode) {
+    const btn1 = document.getElementById('chModeBtn-1v1');
+    const btn4 = document.getElementById('chModeBtn-4v4');
+    const input = document.getElementById('chSelectedMode');
+    if (input) input.value = mode;
+
+    if (mode === '1v1') {
+        if (btn1) {
+            btn1.style.border = '2px solid #10b981';
+            btn1.style.background = '#ecfdf5';
+            btn1.style.color = '#065f46';
+            btn1.style.fontWeight = '800';
+        }
+        if (btn4) {
+            btn4.style.border = '1px solid #cbd5e1';
+            btn4.style.background = '#ffffff';
+            btn4.style.color = '#475569';
+            btn4.style.fontWeight = '700';
+        }
+    } else {
+        if (btn4) {
+            btn4.style.border = '2px solid #10b981';
+            btn4.style.background = '#ecfdf5';
+            btn4.style.color = '#065f46';
+            btn4.style.fontWeight = '800';
+        }
+        if (btn1) {
+            btn1.style.border = '1px solid #cbd5e1';
+            btn1.style.background = '#ffffff';
+            btn1.style.color = '#475569';
+            btn1.style.fontWeight = '700';
+        }
+    }
+}
+
+function setChallengeFee(val) {
+    const feeInput = document.getElementById('chFeeInput');
+    if (feeInput) feeInput.value = val;
+
+    document.querySelectorAll('.ch-fee-preset').forEach(btn => {
+        if (parseInt(btn.innerText.trim()) === val) {
+            btn.style.border = '2px solid #10b981';
+            btn.style.background = '#ecfdf5';
+            btn.style.color = '#065f46';
+            btn.style.fontWeight = '800';
+        } else {
+            btn.style.border = '1px solid #cbd5e1';
+            btn.style.background = '#ffffff';
+            btn.style.color = '#334155';
+            btn.style.fontWeight = '700';
+        }
+    });
+
+    calculateChallengePool();
+}
+
+function calculateChallengePool() {
+    const feeInput = document.getElementById('chFeeInput');
+    const fee = parseInt(feeInput ? feeInput.value : 50) || 50;
+    const totalPool = fee * 2;
+    const winnerReward = Math.floor(totalPool * 0.90);
+    const platformFee = totalPool - winnerReward;
+
+    const totalEl = document.getElementById('chTotalPoolDisplay');
+    const winEl = document.getElementById('chWinnerRewardDisplay');
+    const platEl = document.getElementById('chPlatformFeeDisplay');
+
+    if (totalEl) totalEl.innerText = `BDT ${totalPool}`;
+    if (winEl) winEl.innerText = `BDT ${winnerReward}`;
+    if (platEl) platEl.innerText = `BDT ${platformFee}`;
+}
+
+function setGunAttr(val) {
+    const valInput = document.getElementById('chGunAttrVal');
+    if (valInput) valInput.value = val;
+    const offBtn = document.getElementById('chGunOff');
+    const onBtn = document.getElementById('chGunOn');
+    if (val === 0) {
+        if (offBtn) { offBtn.style.background = '#10b981'; offBtn.style.color = 'white'; offBtn.style.border = '1px solid #10b981'; }
+        if (onBtn) { onBtn.style.background = 'white'; onBtn.style.color = '#64748b'; onBtn.style.border = '1px solid #cbd5e1'; }
+    } else {
+        if (onBtn) { onBtn.style.background = '#10b981'; onBtn.style.color = 'white'; onBtn.style.border = '1px solid #10b981'; }
+        if (offBtn) { offBtn.style.background = 'white'; offBtn.style.color = '#64748b'; offBtn.style.border = '1px solid #cbd5e1'; }
+    }
+}
+
+function setAmmo(val) {
+    const valInput = document.getElementById('chAmmoVal');
+    if (valInput) valInput.value = val;
+    const yesBtn = document.getElementById('chAmmoYes');
+    const noBtn = document.getElementById('chAmmoNo');
+    if (val === 1) {
+        if (yesBtn) { yesBtn.style.background = '#10b981'; yesBtn.style.color = 'white'; yesBtn.style.border = '1px solid #10b981'; }
+        if (noBtn) { noBtn.style.background = 'white'; noBtn.style.color = '#64748b'; noBtn.style.border = '1px solid #cbd5e1'; }
+    } else {
+        if (noBtn) { noBtn.style.background = '#10b981'; noBtn.style.color = 'white'; noBtn.style.border = '1px solid #10b981'; }
+        if (yesBtn) { yesBtn.style.background = 'white'; yesBtn.style.color = '#64748b'; yesBtn.style.border = '1px solid #cbd5e1'; }
+    }
+}
+
+let latestCreatedChallengeCode = null;
+
+async function handleCreateChallenge(event) {
+    event.preventDefault();
+    const btn = document.getElementById('chSubmitBtn');
+    if (btn) btn.disabled = true;
+
+    try {
+        const mode = document.getElementById('chSelectedMode').value;
+        const entry_fee = parseInt(document.getElementById('chFeeInput').value) || 50;
+        const gun_attributes = parseInt(document.getElementById('chGunAttrVal').value) || 0;
+        const limited_ammo = parseInt(document.getElementById('chAmmoVal').value) || 0;
+        const room_creator_role = document.getElementById('chRoomHost').value;
+
+        const res = await fetchWithAuth('/api/challenges/create', {
+            method: 'POST',
+            body: JSON.stringify({
+                mode,
+                entry_fee,
+                gun_attributes,
+                limited_ammo,
+                room_creator_role
+            })
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Could not create challenge');
+
+        latestCreatedChallengeCode = data.challenge_code;
+        const shareCard = document.getElementById('chShareCard');
+        const shareInput = document.getElementById('chShareLinkInput');
+        const waBtn = document.getElementById('chWhatsAppShareBtn');
+
+        const shareUrl = `${window.location.origin}/#challenge=${data.challenge_code}`;
+        if (shareInput) shareInput.value = shareUrl;
+
+        if (waBtn) {
+            const msg = encodeURIComponent(`Free Fire ${mode} Custom Challenge! Entry Fee BDT ${entry_fee}. Winner takes BDT ${data.prize_amount}! Accept my challenge here: ${shareUrl}`);
+            waBtn.href = `https://wa.me/?text=${msg}`;
+        }
+
+        if (shareCard) shareCard.style.display = 'block';
+        showToast('Challenge created! Stake locked in escrow.', 'success');
+        if (typeof updateProfileDisplay === 'function') updateProfileDisplay();
+    } catch (err) {
+        showToast(err.message || 'Challenge creation failed', 'error');
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+
+function copyChallengeLink() {
+    const input = document.getElementById('chShareLinkInput');
+    if (input && input.value) {
+        navigator.clipboard.writeText(input.value);
+        showToast('Challenge link copied to clipboard!', 'success');
+    }
+}
+
+async function loadMyChallenges() {
+    const container = document.getElementById('chMyListContainer');
+    if (!container) return;
+    container.innerHTML = '<div style="text-align: center; color: #94a3b8; padding: 20px;">Loading your challenges...</div>';
+
+    try {
+        const res = await fetchWithAuth('/api/challenges/my');
+        if (!res.ok) throw new Error('Failed to load challenges');
+        const list = await res.json();
+
+        if (!list || list.length === 0) {
+            container.innerHTML = '<div style="text-align: center; color: #94a3b8; padding: 30px 10px; font-size: 0.88rem;">No active challenges found. Create one to begin.</div>';
+            return;
+        }
+
+        let html = '';
+        list.forEach(c => {
+            const statusBg = c.status === 'completed' ? '#dcfce7' : c.status === 'open' ? '#fef3c7' : '#e0f2fe';
+            const statusColor = c.status === 'completed' ? '#15803d' : c.status === 'open' ? '#b45309' : '#0369a1';
+
+            html += `
+                <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px; margin-bottom: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.04);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                        <span style="font-family: 'Rajdhani', sans-serif; font-weight: 800; font-size: 1rem; color: #0f172a;">${c.challenge_code} (${c.mode})</span>
+                        <span style="background: ${statusBg}; color: ${statusColor}; font-size: 0.72rem; font-weight: 800; padding: 2px 8px; border-radius: 6px; text-transform: uppercase;">${c.status}</span>
+                    </div>
+                    <div style="font-size: 0.8rem; color: #475569; margin-bottom: 8px;">
+                        Stake: <b>BDT ${c.entry_fee}</b> | Winner Prize: <b style="color: #10b981;">BDT ${c.prize_amount}</b>
+                    </div>
+                    <div style="font-size: 0.76rem; color: #64748b;">
+                        Opponent: ${c.rival_name ? c.rival_name : 'Waiting for rival to join...'}
+                    </div>
+                </div>
+            `;
+        });
+        container.innerHTML = html;
+    } catch (e) {
+        container.innerHTML = '<div style="text-align: center; color: #ef4444; padding: 20px;">Could not load challenges.</div>';
+    }
+}
+
+async function loadOpenLobbies() {
+    const container = document.getElementById('chLobbyListContainer');
+    if (!container) return;
+    container.innerHTML = '<div style="text-align: center; color: #94a3b8; padding: 20px;">Scanning open lobbies...</div>';
+
+    try {
+        const res = await fetchWithAuth('/api/challenges/open');
+        if (!res.ok) throw new Error('Failed to load lobbies');
+        const list = await res.json();
+
+        if (!list || list.length === 0) {
+            container.innerHTML = '<div style="text-align: center; color: #94a3b8; padding: 30px 10px; font-size: 0.88rem;">No open lobbies available right now. Check back shortly.</div>';
+            return;
+        }
+
+        let html = '';
+        list.forEach(c => {
+            html += `
+                <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <div style="font-family: 'Rajdhani', sans-serif; font-weight: 800; font-size: 1.05rem; color: #0f172a;">${c.mode} by ${c.creator_name}</div>
+                        <div style="font-size: 0.8rem; color: #475569; margin-top: 2px;">
+                            Entry: <b>BDT ${c.entry_fee}</b> | Win: <b style="color: #10b981;">BDT ${c.prize_amount}</b>
+                        </div>
+                    </div>
+                    <button type="button" class="btn btn-sm" onclick="acceptChallenge('${c.challenge_code}')"
+                        style="background: #10b981; color: white; font-weight: 800; font-size: 0.82rem; padding: 8px 14px; border-radius: 8px; border: none; cursor: pointer;">
+                        Accept
+                    </button>
+                </div>
+            `;
+        });
+        container.innerHTML = html;
+    } catch (e) {
+        container.innerHTML = '<div style="text-align: center; color: #ef4444; padding: 20px;">Could not load open lobbies.</div>';
+    }
+}
+
+async function acceptChallenge(code) {
+    if (!confirm(`Are you sure you want to accept challenge ${code}? Your entry fee will be deducted and held in escrow.`)) return;
+
+    try {
+        const res = await fetchWithAuth(`/api/challenges/${code}/accept`, { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Could not accept challenge');
+
+        showToast('Challenge accepted! Match is now active.', 'success');
+        switchChallengeTab('my');
+        if (typeof updateProfileDisplay === 'function') updateProfileDisplay();
+    } catch (err) {
+        showToast(err.message || 'Failed to accept challenge', 'error');
+    }
+}
+
+window.openChallengeModal = openChallengeModal;
+window.switchChallengeTab = switchChallengeTab;
+window.selectChallengeMode = selectChallengeMode;
+window.setChallengeFee = setChallengeFee;
+window.calculateChallengePool = calculateChallengePool;
+window.setGunAttr = setGunAttr;
+window.setAmmo = setAmmo;
+window.handleCreateChallenge = handleCreateChallenge;
+window.copyChallengeLink = copyChallengeLink;
+window.loadMyChallenges = loadMyChallenges;
+window.loadOpenLobbies = loadOpenLobbies;
+window.acceptChallenge = acceptChallenge;
+
 

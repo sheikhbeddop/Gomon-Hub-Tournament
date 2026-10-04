@@ -8503,27 +8503,180 @@ async function loadMyChallenges() {
 
         let html = '';
         list.forEach(c => {
-            const statusBg = c.status === 'completed' ? '#dcfce7' : c.status === 'open' ? '#fef3c7' : '#e0f2fe';
-            const statusColor = c.status === 'completed' ? '#15803d' : c.status === 'open' ? '#b45309' : '#0369a1';
+            const statusBg = c.status === 'completed' ? '#dcfce7' : c.status === 'open' ? '#fef3c7' : c.status === 'disputed' ? '#fee2e2' : '#e0f2fe';
+            const statusColor = c.status === 'completed' ? '#15803d' : c.status === 'open' ? '#b45309' : c.status === 'disputed' ? '#b91c1c' : '#0369a1';
+
+            let actionHtml = '';
+            if (c.status === 'open') {
+                actionHtml = `
+                    <div style="display: flex; gap: 8px; margin-top: 10px;">
+                        <button type="button" class="btn btn-sm" onclick="navigator.clipboard.writeText('${window.location.origin}/#challenge=${c.challenge_code}'); showToast('Link copied!', 'success');"
+                            style="flex: 1; background: #0f172a; color: white; padding: 6px 10px; font-size: 0.76rem; border-radius: 6px; border: none;">
+                            Copy Link
+                        </button>
+                        <button type="button" class="btn btn-sm" onclick="cancelChallenge('${c.challenge_code}')"
+                            style="background: #ef4444; color: white; padding: 6px 10px; font-size: 0.76rem; border-radius: 6px; border: none;">
+                            Cancel & Refund
+                        </button>
+                    </div>
+                `;
+            } else if (c.status === 'in_progress') {
+                actionHtml = `
+                    <!-- Room Credentials Section -->
+                    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px; margin-top: 10px;">
+                        ${c.room_id ? `
+                            <div style="font-size: 0.82rem; color: #0f172a; font-weight: 700; margin-bottom: 6px;">
+                                Room ID: <span style="font-family: monospace; color: #2563eb;">${c.room_id}</span> | Pass: <span style="font-family: monospace; color: #2563eb;">${c.room_password || 'None'}</span>
+                            </div>
+                            <button type="button" class="btn btn-sm" onclick="navigator.clipboard.writeText('${c.room_id}'); showToast('Room ID copied!', 'success');"
+                                style="background: #2563eb; color: white; padding: 4px 10px; font-size: 0.72rem; border-radius: 6px; border: none;">
+                                Copy Room ID
+                            </button>
+                        ` : `
+                            <div style="font-size: 0.78rem; font-weight: 700; color: #334155; margin-bottom: 6px;">Provide Room ID & Password</div>
+                            <div style="display: flex; gap: 6px; margin-bottom: 6px;">
+                                <input type="text" id="chRoomIdInput-${c.challenge_code}" placeholder="Room ID" style="flex: 1; padding: 6px 8px; font-size: 0.78rem; border-radius: 6px; border: 1px solid #cbd5e1;">
+                                <input type="text" id="chRoomPassInput-${c.challenge_code}" placeholder="Pass" style="width: 80px; padding: 6px 8px; font-size: 0.78rem; border-radius: 6px; border: 1px solid #cbd5e1;">
+                            </div>
+                            <button type="button" class="btn btn-sm" onclick="submitChallengeRoom('${c.challenge_code}')"
+                                style="background: #10b981; color: white; padding: 6px 12px; font-size: 0.74rem; font-weight: 700; border-radius: 6px; border: none;">
+                                Update Room
+                            </button>
+                        `}
+                    </div>
+
+                    <!-- Submit Result / Google Drive Proof -->
+                    <div style="border-top: 1px dashed #e2e8f0; padding-top: 10px; margin-top: 10px;">
+                        <div style="font-size: 0.78rem; font-weight: 700; color: #334155; margin-bottom: 6px;">Submit Match Result</div>
+                        <input type="file" id="chProofFile-${c.challenge_code}" accept="image/*" style="font-size: 0.75rem; margin-bottom: 8px; display: block; width: 100%;">
+                        <div style="display: flex; gap: 6px;">
+                            <button type="button" class="btn btn-sm" onclick="submitChallengeProof('${c.challenge_code}', 'won')"
+                                style="flex: 1; background: #10b981; color: white; padding: 7px 10px; font-size: 0.76rem; font-weight: 800; border-radius: 6px; border: none;">
+                                I Won (Upload Booyah)
+                            </button>
+                            <button type="button" class="btn btn-sm" onclick="submitChallengeProof('${c.challenge_code}', 'lost')"
+                                style="background: #64748b; color: white; padding: 7px 10px; font-size: 0.76rem; font-weight: 700; border-radius: 6px; border: none;">
+                                I Lost
+                            </button>
+                        </div>
+                    </div>
+                `;
+            } else if (c.status === 'completed') {
+                const proofUrl = c.creator_screenshot || c.rival_screenshot;
+                actionHtml = `
+                    <div style="margin-top: 8px; font-size: 0.78rem; color: #15803d; font-weight: 700;">
+                        Match Completed! ${proofUrl ? `<a href="${proofUrl}" target="_blank" style="color: #2563eb; text-decoration: underline; margin-left: 6px;">View Google Drive Proof</a>` : ''}
+                    </div>
+                `;
+            } else if (c.status === 'disputed') {
+                actionHtml = `
+                    <div style="margin-top: 8px; font-size: 0.78rem; color: #b91c1c; font-weight: 700;">
+                        Both claimed win. Admin reviewing Google Drive proofs.
+                    </div>
+                `;
+            }
 
             html += `
-                <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px; margin-bottom: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.04);">
+                <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 14px; margin-bottom: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.04);">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                        <span style="font-family: 'Rajdhani', sans-serif; font-weight: 800; font-size: 1rem; color: #0f172a;">${c.challenge_code} (${c.mode})</span>
+                        <span style="font-family: 'Rajdhani', sans-serif; font-weight: 800; font-size: 1.05rem; color: #0f172a;">${c.challenge_code} (${c.mode})</span>
                         <span style="background: ${statusBg}; color: ${statusColor}; font-size: 0.72rem; font-weight: 800; padding: 2px 8px; border-radius: 6px; text-transform: uppercase;">${c.status}</span>
                     </div>
-                    <div style="font-size: 0.8rem; color: #475569; margin-bottom: 8px;">
-                        Stake: <b>BDT ${c.entry_fee}</b> | Winner Prize: <b style="color: #10b981;">BDT ${c.prize_amount}</b>
+                    <div style="font-size: 0.8rem; color: #475569; margin-bottom: 6px;">
+                        Stake: <b>BDT ${c.entry_fee}</b> | Winner: <b style="color: #10b981;">BDT ${c.prize_amount}</b>
                     </div>
                     <div style="font-size: 0.76rem; color: #64748b;">
-                        Opponent: ${c.rival_name ? c.rival_name : 'Waiting for rival to join...'}
+                        Opponent: ${c.rival_name ? c.rival_name : 'Waiting for rival...'}
                     </div>
+                    ${actionHtml}
                 </div>
             `;
         });
         container.innerHTML = html;
     } catch (e) {
         container.innerHTML = '<div style="text-align: center; color: #ef4444; padding: 20px;">Could not load challenges.</div>';
+    }
+}
+
+async function submitChallengeRoom(code) {
+    const rId = (document.getElementById(`chRoomIdInput-${code}`)?.value || '').trim();
+    const rPass = (document.getElementById(`chRoomPassInput-${code}`)?.value || '').trim();
+    if (!rId) {
+        showToast('Please enter Room ID', 'error');
+        return;
+    }
+
+    try {
+        const res = await fetchWithAuth(`/api/challenges/${code}/set-room`, {
+            method: 'POST',
+            body: JSON.stringify({ room_id: rId, room_password: rPass })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed');
+        showToast('Room details updated!', 'success');
+        loadMyChallenges();
+    } catch (e) {
+        showToast(e.message, 'error');
+    }
+}
+
+async function submitChallengeProof(code, claim) {
+    if (claim === 'lost') {
+        if (!confirm('Are you sure you want to concede defeat? Your opponent will be awarded the prize.')) return;
+        try {
+            const res = await fetchWithAuth(`/api/challenges/${code}/submit-proof`, {
+                method: 'POST',
+                body: JSON.stringify({ claim: 'lost', image: '' })
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || 'Failed to submit');
+            showToast('Result submitted.', 'info');
+            loadMyChallenges();
+        } catch (e) {
+            showToast(e.message, 'error');
+        }
+        return;
+    }
+
+    const fileInput = document.getElementById(`chProofFile-${code}`);
+    if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
+        showToast('Please select your Booyah victory screenshot first!', 'error');
+        return;
+    }
+
+    const file = fileInput.files[0];
+    const reader = new FileReader();
+    reader.onload = async function(e) {
+        const base64 = e.target.result;
+        showToast('Uploading proof to Google Drive...', 'info');
+        try {
+            const res = await fetchWithAuth(`/api/challenges/${code}/submit-proof`, {
+                method: 'POST',
+                body: JSON.stringify({ claim: 'won', image: base64 })
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || 'Upload failed');
+            showToast('Proof uploaded to Google Drive & result submitted!', 'success');
+            loadMyChallenges();
+            if (typeof updateProfileDisplay === 'function') updateProfileDisplay();
+        } catch (err) {
+            showToast(err.message || 'Submission failed', 'error');
+        }
+    };
+    reader.readAsDataURL(file);
+}
+
+async function cancelChallenge(code) {
+    if (!confirm('Are you sure you want to cancel this challenge and get refunded?')) return;
+    try {
+        const res = await fetchWithAuth(`/api/challenges/${code}/cancel`, { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Cancel failed');
+        showToast(data.message || 'Challenge cancelled and refunded.', 'success');
+        loadMyChallenges();
+        if (typeof updateProfileDisplay === 'function') updateProfileDisplay();
+    } catch (e) {
+        showToast(e.message, 'error');
     }
 }
 
@@ -8593,5 +8746,8 @@ window.copyChallengeLink = copyChallengeLink;
 window.loadMyChallenges = loadMyChallenges;
 window.loadOpenLobbies = loadOpenLobbies;
 window.acceptChallenge = acceptChallenge;
+window.submitChallengeRoom = submitChallengeRoom;
+window.submitChallengeProof = submitChallengeProof;
+window.cancelChallenge = cancelChallenge;
 
 

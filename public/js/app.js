@@ -8701,23 +8701,34 @@ async function loadMyChallenges() {
             const statusBg = c.status === 'completed' ? '#dcfce7' : c.status === 'open' ? '#fef3c7' : c.status === 'disputed' ? '#fee2e2' : '#e0f2fe';
             const statusColor = c.status === 'completed' ? '#15803d' : c.status === 'open' ? '#b45309' : c.status === 'disputed' ? '#b91c1c' : '#0369a1';
 
+            const isCreator = currentUser && currentUser.id === c.creator_id;
+            const myName = isCreator ? (c.creator_name || 'You') : (c.rival_name || currentUser?.username || 'You');
+            const myIgn = isCreator ? c.creator_ign : (c.rival_ign || currentUser?.ff_ign || '');
+            const myRole = isCreator ? 'Host' : 'Challenger';
+
+            const oppName = isCreator ? (c.rival_name || (c.status === 'open' ? 'Waiting for rival...' : 'Challenger')) : (c.creator_name || 'Host');
+            const oppIgn = isCreator ? c.rival_ign : c.creator_ign;
+            const oppRole = isCreator ? 'Challenger' : 'Host';
+
             let actionHtml = '';
             if (c.status === 'open') {
                 const myShareUrl = `${window.location.origin}/?challenge=${c.challenge_code}#challenge=${c.challenge_code}`;
                 actionHtml = `
-                    <div style="display: flex; gap: 8px; margin-top: 10px;">
+                    <div style="margin-top: 10px; padding: 8px 10px; background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.2); border-radius: 8px; font-size: 0.76rem; color: #b45309; font-weight: 600; margin-bottom: 8px;">
+                        ⏳ কোনো প্রতিপক্ষ এখনও জয়েন করেনি। নিচের লিংকটি প্রতিপক্ষকে পাঠান।
+                    </div>
+                    <div style="display: flex; gap: 8px;">
                         <button type="button" class="btn btn-sm" onclick="navigator.clipboard.writeText('${myShareUrl}'); showToast('চ্যালেঞ্জ লিংক কপি হয়েছে!', 'success');"
-                            style="flex: 1; background: #0f172a; color: white; padding: 6px 10px; font-size: 0.76rem; border-radius: 6px; border: none;">
-                            Copy Link
+                            style="flex: 1; background: #0f172a; color: white; padding: 8px 10px; font-size: 0.76rem; font-weight: 700; border-radius: 6px; border: none; cursor: pointer;">
+                            📋 Copy Link
                         </button>
                         <button type="button" class="btn btn-sm" onclick="cancelChallenge('${c.challenge_code}')"
-                            style="background: #ef4444; color: white; padding: 6px 10px; font-size: 0.76rem; border-radius: 6px; border: none;">
-                            Cancel & Refund
+                            style="background: #ef4444; color: white; padding: 8px 10px; font-size: 0.76rem; font-weight: 700; border-radius: 6px; border: none; cursor: pointer;">
+                            ✖ Cancel & Refund
                         </button>
                     </div>
                 `;
             } else if (c.status === 'in_progress') {
-                const isCreator = currentUser && currentUser.id === c.creator_id;
                 const isAdmin = currentUser && (currentUser.role === 'admin' || currentUser.role === 'moderator');
                 let roomBox = '';
 
@@ -8778,48 +8789,92 @@ async function loadMyChallenges() {
                     </div>
 
                     <!-- Submit Result / Google Drive Proof -->
-                    <div style="border-top: 1px dashed #e2e8f0; padding-top: 10px; margin-top: 10px;">
-                        <div style="font-size: 0.78rem; font-weight: 700; color: #334155; margin-bottom: 6px;">Submit Match Result</div>
-                        <input type="file" id="chProofFile-${c.challenge_code}" accept="image/*" style="font-size: 0.75rem; margin-bottom: 8px; display: block; width: 100%;">
-                        <div style="display: flex; gap: 6px;">
-                            <button type="button" class="btn btn-sm" onclick="submitChallengeProof('${c.challenge_code}', 'won')"
-                                style="flex: 1; background: #10b981; color: white; padding: 7px 10px; font-size: 0.76rem; font-weight: 800; border-radius: 6px; border: none;">
-                                I Won (Upload Booyah)
+                    <div style="border-top: 1px dashed #e2e8f0; padding-top: 12px; margin-top: 12px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                            <span style="font-size: 0.8rem; font-weight: 800; color: #0f172a;">Submit Match Result</span>
+                            <span style="font-size: 0.68rem; color: #64748b;">(SS only needed if you Won)</span>
+                        </div>
+                        <input type="file" id="chProofFile-${c.challenge_code}" accept="image/*" 
+                            style="font-size: 0.75rem; margin-bottom: 10px; display: block; width: 100%; padding: 7px; border: 1.5px dashed #94a3b8; border-radius: 8px; background: rgba(0,0,0,0.02); box-sizing: border-box;">
+                        <div style="display: flex; gap: 10px;">
+                            <button type="button" class="btn btn-sm" onclick="submitChallengeProof('${c.challenge_code}', 'won', ${c.prize_amount})"
+                                style="flex: 1; background: #10b981; color: white; padding: 11px 8px; font-size: 0.78rem; font-weight: 800; border-radius: 8px; border: none; display: flex; align-items: center; justify-content: center; gap: 6px; box-shadow: 0 2px 6px rgba(16,185,129,0.25); cursor: pointer;">
+                                <span>🏆</span> <span>I Won (Booyah)</span>
                             </button>
-                            <button type="button" class="btn btn-sm" onclick="submitChallengeProof('${c.challenge_code}', 'lost')"
-                                style="background: #64748b; color: white; padding: 7px 10px; font-size: 0.76rem; font-weight: 700; border-radius: 6px; border: none;">
-                                I Lost
+                            <button type="button" class="btn btn-sm" onclick="submitChallengeProof('${c.challenge_code}', 'lost', ${c.prize_amount})"
+                                style="flex: 1; background: #334155; color: #f8fafc; padding: 11px 8px; font-size: 0.78rem; font-weight: 800; border-radius: 8px; border: 1px solid #475569; display: flex; align-items: center; justify-content: center; gap: 6px; cursor: pointer;">
+                                <span>🏳️</span> <span>I Lost</span>
                             </button>
                         </div>
                     </div>
                 `;
             } else if (c.status === 'completed') {
                 const proofUrl = c.creator_screenshot || c.rival_screenshot;
+                const isWinner = currentUser && currentUser.id === c.winner_id;
                 actionHtml = `
-                    <div style="margin-top: 8px; font-size: 0.78rem; color: #15803d; font-weight: 700;">
-                        Match Completed! ${proofUrl ? `<a href="${proofUrl}" target="_blank" style="color: #2563eb; text-decoration: underline; margin-left: 6px;">View Google Drive Proof</a>` : ''}
+                    <div style="margin-top: 10px; padding: 10px; background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 8px; font-size: 0.8rem; color: #15803d; font-weight: 700;">
+                        ${isWinner ? '🎉 আপনি এই ম্যাচে বিজয়ী হয়েছেন!' : '🏁 ম্যাচ সমাপ্ত হয়েছে।'} 
+                        ${proofUrl ? `<div style="margin-top: 4px;"><a href="${proofUrl}" target="_blank" style="color: #2563eb; text-decoration: underline;">📸 View Google Drive Proof</a></div>` : ''}
                     </div>
                 `;
             } else if (c.status === 'disputed') {
                 actionHtml = `
-                    <div style="margin-top: 8px; font-size: 0.78rem; color: #b91c1c; font-weight: 700;">
-                        Both claimed win. Admin reviewing Google Drive proofs.
+                    <div style="margin-top: 10px; padding: 10px; background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 8px; font-size: 0.8rem; color: #b91c1c; font-weight: 700;">
+                        ⚠️ উভয় প্লেয়ারই বিজয়ী দাবি করেছে (Disputed)। অ্যাডমিন গুগল ড্রাইভের স্ক্রিনশট রিভিউ করে উইনার নির্ধারণ করবেন।
                     </div>
                 `;
             }
 
             html += `
-                <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 14px; margin-bottom: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.04);">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                        <span style="font-family: 'Rajdhani', sans-serif; font-weight: 800; font-size: 1.05rem; color: #0f172a;">${c.challenge_code} (${c.mode})</span>
-                        <span style="background: ${statusBg}; color: ${statusColor}; font-size: 0.72rem; font-weight: 800; padding: 2px 8px; border-radius: 6px; text-transform: uppercase;">${c.status}</span>
+                <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 14px; margin-bottom: 14px; box-shadow: 0 2px 8px rgba(0,0,0,0.04);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <span style="font-family: 'Rajdhani', sans-serif; font-weight: 800; font-size: 1.05rem; color: #0f172a;">${escapeHtml(c.challenge_code)} (${escapeHtml(c.mode)})</span>
+                        <span style="background: ${statusBg}; color: ${statusColor}; font-size: 0.72rem; font-weight: 800; padding: 2px 8px; border-radius: 6px; text-transform: uppercase;">${escapeHtml(c.status)}</span>
                     </div>
-                    <div style="font-size: 0.8rem; color: #475569; margin-bottom: 6px;">
-                        Stake: <b>BDT ${c.entry_fee}</b> | Winner: <b style="color: #10b981;">BDT ${c.prize_amount}</b>
+
+                    <div style="font-size: 0.8rem; color: #475569; margin-bottom: 10px; display: flex; justify-content: space-between;">
+                        <span>Stake: <b style="color: #0f172a;">BDT ${c.entry_fee}</b></span>
+                        <span>Prize: <b style="color: #10b981;">BDT ${c.prize_amount}</b></span>
                     </div>
-                    <div style="font-size: 0.76rem; color: #64748b;">
-                        Opponent: ${c.rival_name ? c.rival_name : 'Waiting for rival...'}
+
+                    <!-- VS Battle Display Box -->
+                    <div style="background: rgba(15, 23, 42, 0.04); border: 1px solid rgba(0,0,0,0.06); border-radius: 10px; padding: 10px 12px; margin-bottom: 10px;">
+                        <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                            <!-- Left: YOU -->
+                            <div style="flex: 1; text-align: left; min-width: 0;">
+                                <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 2px;">
+                                    <span style="background: #10b981; color: white; font-size: 0.62rem; font-weight: 800; padding: 1px 6px; border-radius: 4px; text-transform: uppercase;">YOU</span>
+                                    <span style="font-size: 0.68rem; color: #64748b; font-weight: 700;">(${myRole})</span>
+                                </div>
+                                <div style="font-size: 0.88rem; font-weight: 800; color: #0f172a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                                    ${escapeHtml(myName)}
+                                </div>
+                                <div style="font-size: 0.72rem; color: #64748b;">
+                                    IGN: <b style="color: #059669;">${escapeHtml(myIgn || 'Not set')}</b>
+                                </div>
+                            </div>
+
+                            <!-- VS Badge -->
+                            <div style="width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, #ef4444, #f59e0b); display: flex; align-items: center; justify-content: center; font-family: 'Rajdhani', sans-serif; font-size: 0.82rem; font-weight: 900; color: white; box-shadow: 0 2px 6px rgba(239, 68, 68, 0.3); flex-shrink: 0;">
+                                VS
+                            </div>
+
+                            <!-- Right: OPPONENT -->
+                            <div style="flex: 1; text-align: right; min-width: 0;">
+                                <div style="display: flex; align-items: center; justify-content: flex-end; gap: 4px; margin-bottom: 2px;">
+                                    <span style="font-size: 0.68rem; color: #64748b; font-weight: 700;">(${oppRole})</span>
+                                    <span style="background: ${c.rival_id || !isCreator ? '#ef4444' : '#94a3b8'}; color: white; font-size: 0.62rem; font-weight: 800; padding: 1px 6px; border-radius: 4px; text-transform: uppercase;">OPPONENT</span>
+                                </div>
+                                <div style="font-size: 0.88rem; font-weight: 800; color: ${c.rival_id || !isCreator ? '#0f172a' : '#94a3b8'}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                                    ${escapeHtml(oppName)}
+                                </div>
+                                <div style="font-size: 0.72rem; color: #64748b;">
+                                    IGN: <b style="color: #dc2626;">${escapeHtml(oppIgn || (c.rival_id || !isCreator ? 'Not set' : 'Waiting...'))}</b>
+                                </div>
+                            </div>
+                        </div>
                     </div>
+
                     ${actionHtml}
                 </div>
             `;
@@ -8852,18 +8907,22 @@ async function submitChallengeRoom(code) {
     }
 }
 
-async function submitChallengeProof(code, claim) {
+async function submitChallengeProof(code, claim, prize) {
     if (claim === 'lost') {
-        if (!confirm('Are you sure you want to concede defeat? Your opponent will be awarded the prize.')) return;
+        const prizeTxt = prize ? `BDT ${prize}` : 'প্রাইজ মানি';
+        const msg = `⚠️ আপনি কি নিশ্চিত যে আপনি এই ম্যাচে হেরে গেছেন?\n\nএটি কনফার্ম করলে ম্যাচ সাথে সাথে শেষ হয়ে যাবে এবং আপনার প্রতিপক্ষ উইনার হিসেবে ${prizeTxt} পেয়ে যাবে!`;
+        if (!confirm(msg)) return;
         try {
+            showToast('পরাজয় রেকর্ড করা হচ্ছে...', 'info');
             const res = await fetchWithAuth(`/api/challenges/${code}/submit-proof`, {
                 method: 'POST',
                 body: JSON.stringify({ claim: 'lost', image: '' })
             });
             const data = await parseResponseSafe(res);
             if (!res.ok) throw new Error((data && (data.detail || data.message)) || 'Failed to submit');
-            showToast('Result submitted.', 'info');
+            showToast('রেজাল্ট সাবমিট হয়েছে।', 'info');
             loadMyChallenges();
+            if (typeof updateProfileDisplay === 'function') updateProfileDisplay();
         } catch (e) {
             showToast(e.message, 'error');
         }
@@ -8872,7 +8931,8 @@ async function submitChallengeProof(code, claim) {
 
     const fileInput = document.getElementById(`chProofFile-${code}`);
     if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
-        showToast('Please select your Booyah victory screenshot first!', 'error');
+        showToast('⚠️ বিজয়ী দাবি করতে প্রথমে Booyah স্ক্রিনশট ফাইল সিলেক্ট করুন!', 'error');
+        if (fileInput) fileInput.focus();
         return;
     }
 

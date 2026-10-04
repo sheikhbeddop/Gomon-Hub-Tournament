@@ -5886,6 +5886,14 @@ async function promptDisableAdminTotp() {
     }
 }
 
+function toggleAllSettingsAccordions(open) {
+    const accordions = document.querySelectorAll('#adminSection-settings .pro-settings-accordion');
+    accordions.forEach(acc => {
+        acc.open = open;
+    });
+}
+window.toggleAllSettingsAccordions = toggleAllSettingsAccordions;
+
 // -------------------------------------------------------------
 // Auto-Deposit SMS Gateway Frontend Handlers
 // -------------------------------------------------------------

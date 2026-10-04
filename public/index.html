@@ -3032,6 +3032,54 @@
                             </div>
                         </div>
 
+                        <!-- Privacy Type: Public vs Private -->
+                        <div style="margin-bottom: 16px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                                <label style="font-size: 0.82rem; font-weight: 700; color: #334155;">Match Privacy</label>
+                                <span style="font-size: 0.72rem; color: #64748b;" id="chPrivacyHint">ওপেন লবিতে সবার জন্য উন্মুক্ত থাকবে</span>
+                            </div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                                <button type="button" id="chPrivacyPublicBtn" onclick="selectChallengePrivacy('public')"
+                                    style="padding: 10px; border-radius: 10px; border: 2px solid #10b981; background: #ecfdf5; color: #065f46; font-weight: 800; font-size: 0.84rem; cursor: pointer; text-align: center; display: flex; align-items: center; justify-content: center; gap: 6px;">
+                                    <span>🌐</span> <span>Public (Open Lobby)</span>
+                                </button>
+                                <button type="button" id="chPrivacyPrivateBtn" onclick="selectChallengePrivacy('private')"
+                                    style="padding: 10px; border-radius: 10px; border: 1px solid #cbd5e1; background: #ffffff; color: #475569; font-weight: 700; font-size: 0.84rem; cursor: pointer; text-align: center; display: flex; align-items: center; justify-content: center; gap: 6px;">
+                                    <span>🔒</span> <span>Private (Link Only)</span>
+                                </button>
+                            </div>
+                            <input type="hidden" id="chSelectedPrivacy" value="public">
+                        </div>
+
+                        <!-- Public Match Start Schedule / Time Selection (Only visible when Public) -->
+                        <div id="chTimeConfigSection" style="margin-bottom: 16px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px 14px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                                <label style="font-size: 0.8rem; font-weight: 700; color: #334155;">ম্যাচ শুরুর সময় (Schedule)</label>
+                                <span style="font-size: 0.72rem; color: #10b981; font-weight: 700;">Open Lobby-তে প্রদর্শিত হবে</span>
+                            </div>
+                            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 8px;">
+                                <button type="button" class="btn btn-sm ch-time-preset active-preset" onclick="setChallengeTimePreset('Instant (5 mins)', 1)"
+                                    id="chTimePreset-1" style="padding: 7px 4px; border-radius: 8px; border: 2px solid #10b981; background: #ecfdf5; font-weight: 800; font-size: 0.76rem; color: #065f46;">⚡ এখনই (৫ মি.)</button>
+                                <button type="button" class="btn btn-sm ch-time-preset" onclick="setChallengeTimePreset('In 15 Mins', 2)"
+                                    id="chTimePreset-2" style="padding: 7px 4px; border-radius: 8px; border: 1px solid #cbd5e1; background: #ffffff; font-weight: 700; font-size: 0.76rem; color: #334155;">⏰ ১৫ মি. পর</button>
+                                <button type="button" class="btn btn-sm ch-time-preset" onclick="setChallengeTimePreset('In 30 Mins', 3)"
+                                    id="chTimePreset-3" style="padding: 7px 4px; border-radius: 8px; border: 1px solid #cbd5e1; background: #ffffff; font-weight: 700; font-size: 0.76rem; color: #334155;">⏰ ৩০ মি. পর</button>
+                            </div>
+                            <input type="text" id="chMatchTimeInput" value="Instant (5 mins)" placeholder="বা নির্দিষ্ট সময় লিখুন (যেমন: 10:30 PM)"
+                                style="width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 0.82rem; font-weight: 700; color: #0f172a; box-sizing: border-box; background: white;">
+                        </div>
+
+                        <!-- Private Notice Box (Hidden by default, shown when Private is selected) -->
+                        <div id="chPrivateNoticeBox" style="display: none; margin-bottom: 16px; background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.25); border-radius: 12px; padding: 12px 14px;">
+                            <div style="display: flex; gap: 8px; align-items: flex-start;">
+                                <span style="font-size: 1.1rem; line-height: 1;">🔒</span>
+                                <div>
+                                    <div style="font-size: 0.82rem; font-weight: 800; color: #1e40af; margin-bottom: 2px;">প্রাইভেট ম্যাচ (গোপনীয়)</div>
+                                    <div style="font-size: 0.75rem; color: #475569; line-height: 1.35;">এই ম্যাচটি Open Lobby-তে থাকবে না। শুধুমাত্র ইনভাইট লিংক শেয়ার করে বন্ধুকে জয়েন করাতে পারবেন।</div>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- Rules Configuration -->
                         <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px; margin-bottom: 18px;">
                             <div style="font-size: 0.82rem; font-weight: 800; color: #0f172a; margin-bottom: 10px;">Match Settings</div>
@@ -4927,7 +4975,7 @@
     <!-- Toast Notification Container -->
     <div class="toast-container" id="toastContainer"></div>
 
-    <script src="/static/js/app.js?v=5.6.6"></script>
+    <script src="/static/js/app.js?v=5.6.7"></script>
 
 </body>
 

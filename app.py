@@ -6170,7 +6170,6 @@ def create_custom_challenge(req: CreateChallengeRequest, user: dict = Depends(ge
     finally:
         conn.close()
 
-    notify_db_change()
     sync_db_async()
 
     return {
@@ -6257,7 +6256,6 @@ async def accept_custom_challenge(code: str, user: dict = Depends(get_current_us
     finally:
         conn.close()
 
-    notify_db_change()
     sync_db_async()
 
     try:
@@ -6296,7 +6294,6 @@ async def set_challenge_room(code: str, req: SetRoomRequest, user: dict = Depend
     finally:
         conn.close()
 
-    notify_db_change()
     sync_db_async()
     try:
         await manager.broadcast({
@@ -6387,7 +6384,6 @@ def submit_challenge_proof(code: str, req: SubmitProofRequest, user: dict = Depe
     finally:
         conn.close()
 
-    notify_db_change()
     sync_db_async()
 
     return {"success": True, "message": "Result and proof submitted successfully!", "screenshot_url": file_url}
@@ -6411,7 +6407,6 @@ def cancel_custom_challenge(code: str, user: dict = Depends(get_current_user)):
     finally:
         conn.close()
 
-    notify_db_change()
     sync_db_async()
     return {"success": True, "message": f"Challenge cancelled. BDT {ch['entry_fee']} refunded to your wallet."}
 
@@ -6477,7 +6472,6 @@ def admin_resolve_challenge(code: str, req: ResolveChallengeRequest, admin: dict
     finally:
         conn.close()
 
-    notify_db_change()
     sync_db_async()
     return {"success": True, "message": msg}
 

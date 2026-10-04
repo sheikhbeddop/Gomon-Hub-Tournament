@@ -6411,6 +6411,8 @@ class CreateChallengeRequest(BaseModel):
     gun_attributes: int = 0
     limited_ammo: int = 1
     room_creator_role: str = "creator"
+    visibility: str = "public"
+    match_time: str = ""
 
 def generate_challenge_code(conn) -> str:
     charset = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
@@ -6431,6 +6433,11 @@ def create_custom_challenge(req: CreateChallengeRequest, user: dict = Depends(ge
     prize_amount = int(total_pool * 0.90)
     platform_fee = total_pool - prize_amount
 
+    vis = req.visibility.strip().lower() if req.visibility else "public"
+    if vis not in ["public", "private"]:
+        vis = "public"
+    m_time = (req.match_time or "").strip()
+
     conn = get_db()
     try:
         purge_old_custom_challenges(conn)
@@ -6446,9 +6453,9 @@ def create_custom_challenge(req: CreateChallengeRequest, user: dict = Depends(ge
             conn.execute("""
                 INSERT INTO custom_challenges (
                     challenge_code, creator_id, mode, entry_fee, prize_amount, platform_fee,
-                    gun_attributes, limited_ammo, room_creator_role, status
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'open')
-            """, (code, user["id"], req.mode, fee, prize_amount, platform_fee, req.gun_attributes, req.limited_ammo, req.room_creator_role))
+                    gun_attributes, limited_ammo, room_creator_role, status, visibility, match_time
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?)
+            """, (code, user["id"], req.mode, fee, prize_amount, platform_fee, req.gun_attributes, req.limited_ammo, req.room_creator_role, vis, m_time))
     except HTTPException:
         raise
     except Exception as e:
@@ -6465,12 +6472,24 @@ def create_custom_challenge(req: CreateChallengeRequest, user: dict = Depends(ge
         "entry_fee": fee,
         "prize_amount": prize_amount,
         "platform_fee": platform_fee,
+        "visibility": vis,
+        "match_time": m_time,
         "message": "Challenge created successfully!"
     }
 
 def purge_old_custom_challenges(conn):
     """Auto-cancels & refunds open challenges older than 24h, and permanently purges completed/cancelled challenges older than 24h."""
     try:
+        # Ensure new schema columns exist safely
+        try:
+            conn.execute("ALTER TABLE custom_challenges ADD COLUMN visibility TEXT DEFAULT 'public'")
+        except Exception:
+            pass
+        try:
+            conn.execute("ALTER TABLE custom_challenges ADD COLUMN match_time TEXT DEFAULT ''")
+        except Exception:
+            pass
+
         with conn:
             # 1. Auto-cancel and refund any open challenges that were never accepted within 24 hours
             expired_open = conn.execute("""
@@ -6523,10 +6542,13 @@ def get_open_challenges(user: dict = Depends(get_current_user)):
         rows = conn.execute("""
             SELECT c.id, c.challenge_code, c.mode, c.entry_fee, c.prize_amount,
                    c.gun_attributes, c.limited_ammo, c.room_creator_role, c.created_at,
+                   c.visibility, c.match_time,
                    u.username as creator_name, u.ff_ign as creator_ign
             FROM custom_challenges c
             JOIN users u ON c.creator_id = u.id
-            WHERE c.status = 'open' AND c.creator_id != ?
+            WHERE c.status = 'open' 
+              AND c.creator_id != ?
+              AND (c.visibility = 'public' OR c.visibility IS NULL OR c.visibility = '')
             ORDER BY c.id DESC
             LIMIT 30
         """, (user["id"],)).fetchall()
@@ -6545,6 +6567,7 @@ def get_challenge_by_code(code: str):
             SELECT c.id, c.challenge_code, c.mode, c.entry_fee, c.prize_amount,
                    c.gun_attributes, c.limited_ammo, c.room_creator_role, c.created_at,
                    c.creator_id, c.rival_id, c.room_id, c.room_password, c.status,
+                   c.visibility, c.match_time,
                    u.username as creator_name, u.ff_ign as creator_ign,
                    u2.username as rival_name, u2.ff_ign as rival_ign
             FROM custom_challenges c

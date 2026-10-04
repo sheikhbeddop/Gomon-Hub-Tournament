@@ -116,7 +116,8 @@ TABLES_TO_COLLECTIONS = [
     "purged_match_numbers",
     "used_trx_ids",
     "incoming_payments",
-    "video_promotions"
+    "video_promotions",
+    "custom_challenges"
 ]
 
 import threading
@@ -239,7 +240,7 @@ def push_sqlite_to_mongo(conn=None, force: bool = False) -> bool:
 
                 # Clean up deleted records in MongoDB that are no longer in SQLite
                 # (Prevents kicked slots, deleted users/matches, or released TrxIDs from resurrecting on server restart)
-                if table in ["participations", "used_trx_ids", "push_subscriptions", "users", "matches", "incoming_payments", "video_promotions"]:
+                if table in ["participations", "used_trx_ids", "push_subscriptions", "users", "matches", "incoming_payments", "video_promotions", "custom_challenges"]:
                     current_ids = [d["_id"] for d in docs]
                     if current_ids:
                         try:

@@ -1523,9 +1523,7 @@ def get_public_info():
     settings_rows = conn.execute("SELECT key, value FROM settings").fetchall()
     conn.close()
     settings = {r["key"]: r["value"] for r in settings_rows}
-    current_ver = settings.get("app_version")
-    if not current_ver or current_ver in ["v1.0.0", "v1.1.0", "v2.1.0", "v2.2.0", "v2.3.0", "v2.4.0", "v2.5.0", "v2.6.0", "v2.6.1", "v2.6.2", "v2.6.3", "v2.6.4"]:
-        current_ver = CURRENT_CODE_VERSION
+    current_ver = settings.get("app_version") or CURRENT_CODE_VERSION
     return {
         "site_title": settings.get("site_title", "GOMON HUB TOURNAMENT"),
         "admin_bkash": settings.get("admin_bkash", "01988279285 (Personal)"),
@@ -6200,6 +6198,7 @@ async def admin_push_update(data: AdminPushUpdate, admin: dict = Depends(verify_
         conn.execute("INSERT INTO settings (key, value) VALUES ('app_version', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", (new_version,))
         conn.execute("INSERT INTO settings (key, value) VALUES ('app_update_notes', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", (notes,))
     conn.close()
+    sync_db_async()
 
     # 1. Real-time in-app WebSocket Broadcast
     await manager.broadcast({

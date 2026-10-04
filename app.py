@@ -946,6 +946,47 @@ def ensure_promo_codes_initialized():
 
 ensure_promo_codes_initialized()
 
+def ensure_challenges_table():
+    """Ensures custom_challenges table exists for the 1v1 and 4v4 challenge arena."""
+    try:
+        conn = get_db()
+        with conn:
+            conn.execute("""
+            CREATE TABLE IF NOT EXISTS custom_challenges (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                challenge_code TEXT UNIQUE NOT NULL,
+                creator_id INTEGER NOT NULL,
+                rival_id INTEGER DEFAULT NULL,
+                mode TEXT NOT NULL DEFAULT '1v1',
+                entry_fee INTEGER NOT NULL,
+                prize_amount INTEGER NOT NULL,
+                platform_fee INTEGER NOT NULL,
+                gun_attributes INTEGER DEFAULT 0,
+                limited_ammo INTEGER DEFAULT 1,
+                room_creator_role TEXT DEFAULT 'creator',
+                room_id TEXT DEFAULT '',
+                room_password TEXT DEFAULT '',
+                status TEXT DEFAULT 'open',
+                creator_claim TEXT DEFAULT NULL,
+                rival_claim TEXT DEFAULT NULL,
+                creator_screenshot TEXT DEFAULT '',
+                rival_screenshot TEXT DEFAULT '',
+                winner_id INTEGER DEFAULT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                accepted_at DATETIME DEFAULT NULL,
+                completed_at DATETIME DEFAULT NULL,
+                FOREIGN KEY (creator_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY (rival_id) REFERENCES users(id) ON DELETE CASCADE
+            );
+            """)
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_challenges_code ON custom_challenges(challenge_code);")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_challenges_status ON custom_challenges(status);")
+        conn.close()
+    except Exception as e:
+        print(f"[Challenges Init Notice] {e}")
+
+ensure_challenges_table()
+
 
 # -------------------------------------------------------------
 # FastAPI App & WebSocket Connection Manager
@@ -956,6 +997,10 @@ app = FastAPI(title="Free Fire Tournament Platform API")
 async def on_startup():
     try:
         ensure_promo_codes_initialized()
+    except Exception:
+        pass
+    try:
+        ensure_challenges_table()
     except Exception:
         pass
     # Run 15-day auto-purge on startup
@@ -6040,6 +6085,132 @@ def admin_reset_all_players(admin: dict = Depends(verify_admin)):
         "deleted_users": u_deleted,
         "message": f"সফলভাবে {u_deleted} জন ইউজারের পূর্বের রেকর্ড ও হিস্ট্রি মুছে ফেলা হয়েছে। এখন সবাই নতুন করে তাদের ফোন নম্বর দিয়ে অ্যাকাউন্ট খুলতে পারবে।"
     }
+
+# -------------------------------------------------------------
+# Custom Challenge Arena Endpoints (1v1 & 4v4 Escrow Battles)
+# -------------------------------------------------------------
+class CreateChallengeRequest(BaseModel):
+    mode: str = "1v1"
+    entry_fee: int = 50
+    gun_attributes: int = 0
+    limited_ammo: int = 1
+    room_creator_role: str = "creator"
+
+def generate_challenge_code(conn) -> str:
+    charset = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
+    for _ in range(100):
+        code = "CH-" + "".join(secrets.choice(charset) for _ in range(4))
+        row = conn.execute("SELECT id FROM custom_challenges WHERE challenge_code = ?", (code,)).fetchone()
+        if not row:
+            return code
+    return f"CH-{secrets.choice(charset)}{int(time.time()) % 1000}"
+
+@app.post("/api/challenges/create")
+def create_custom_challenge(req: CreateChallengeRequest, user: dict = Depends(get_current_user)):
+    fee = int(req.entry_fee)
+    if fee < 10 or fee > 10000:
+        raise HTTPException(400, "Entry fee must be between 10 and 10000 BDT")
+    
+    total_pool = fee * 2
+    prize_amount = int(total_pool * 0.90)
+    platform_fee = total_pool - prize_amount
+
+    conn = get_db()
+    with conn:
+        u_row = conn.execute("SELECT digits_balance FROM users WHERE id = ?", (user["id"],)).fetchone()
+        if not u_row or u_row["digits_balance"] < fee:
+            conn.close()
+            raise HTTPException(400, "Insufficient balance! Please deposit to create challenge.")
+        
+        # Deduct entry fee atomically
+        conn.execute("UPDATE users SET digits_balance = digits_balance - ? WHERE id = ? AND digits_balance >= ?", (fee, user["id"], fee))
+        code = generate_challenge_code(conn)
+        conn.execute("""
+            INSERT INTO custom_challenges (
+                challenge_code, creator_id, mode, entry_fee, prize_amount, platform_fee,
+                gun_attributes, limited_ammo, room_creator_role, status
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'open')
+        """, (code, user["id"], req.mode, fee, prize_amount, platform_fee, req.gun_attributes, req.limited_ammo, req.room_creator_role))
+    conn.close()
+    notify_db_change()
+    sync_db_async()
+
+    return {
+        "success": True,
+        "challenge_code": code,
+        "mode": req.mode,
+        "entry_fee": fee,
+        "prize_amount": prize_amount,
+        "platform_fee": platform_fee,
+        "message": "Challenge created successfully!"
+    }
+
+@app.get("/api/challenges/my")
+def get_my_challenges(user: dict = Depends(get_current_user)):
+    conn = get_db()
+    rows = conn.execute("""
+        SELECT c.*, 
+               u1.username as creator_name, u1.ff_ign as creator_ign,
+               u2.username as rival_name, u2.ff_ign as rival_ign
+        FROM custom_challenges c
+        JOIN users u1 ON c.creator_id = u1.id
+        LEFT JOIN users u2 ON c.rival_id = u2.id
+        WHERE c.creator_id = ? OR c.rival_id = ?
+        ORDER BY c.id DESC
+        LIMIT 50
+    """, (user["id"], user["id"])).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+@app.get("/api/challenges/open")
+def get_open_challenges(user: dict = Depends(get_current_user)):
+    conn = get_db()
+    rows = conn.execute("""
+        SELECT c.id, c.challenge_code, c.mode, c.entry_fee, c.prize_amount,
+               c.gun_attributes, c.limited_ammo, c.room_creator_role, c.created_at,
+               u.username as creator_name, u.ff_ign as creator_ign
+        FROM custom_challenges c
+        JOIN users u ON c.creator_id = u.id
+        WHERE c.status = 'open' AND c.creator_id != ?
+        ORDER BY c.id DESC
+        LIMIT 30
+    """, (user["id"],)).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+@app.post("/api/challenges/{code}/accept")
+def accept_custom_challenge(code: str, user: dict = Depends(get_current_user)):
+    conn = get_db()
+    with conn:
+        ch = conn.execute("SELECT * FROM custom_challenges WHERE challenge_code = ?", (code,)).fetchone()
+        if not ch:
+            conn.close()
+            raise HTTPException(404, "Challenge not found")
+        if ch["status"] != "open":
+            conn.close()
+            raise HTTPException(400, "This challenge is no longer open")
+        if ch["creator_id"] == user["id"]:
+            conn.close()
+            raise HTTPException(400, "You cannot accept your own challenge")
+        
+        fee = ch["entry_fee"]
+        u_row = conn.execute("SELECT digits_balance FROM users WHERE id = ?", (user["id"],)).fetchone()
+        if not u_row or u_row["digits_balance"] < fee:
+            conn.close()
+            raise HTTPException(400, f"Insufficient balance! You need BDT {fee} to accept this challenge.")
+        
+        # Deduct rival's stake atomically
+        conn.execute("UPDATE users SET digits_balance = digits_balance - ? WHERE id = ? AND digits_balance >= ?", (fee, user["id"], fee))
+        conn.execute("""
+            UPDATE custom_challenges 
+            SET rival_id = ?, status = 'in_progress', accepted_at = CURRENT_TIMESTAMP
+            WHERE challenge_code = ? AND status = 'open'
+        """, (user["id"], code))
+    conn.close()
+    notify_db_change()
+    sync_db_async()
+
+    return {"success": True, "message": "Challenge accepted! Match is now active."}
 
 class CachedStaticFiles(StaticFiles):
     async def get_response(self, path: str, scope):

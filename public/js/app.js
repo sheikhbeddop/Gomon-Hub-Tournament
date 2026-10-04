@@ -5900,25 +5900,55 @@ async function loadAdminIncomingPayments() {
         });
         if (res.ok) {
             const list = await res.json();
+            const counterEl = document.getElementById('smsFeedCounter');
+            if (counterEl && Array.isArray(list)) {
+                counterEl.textContent = `${list.length} SMS Logged`;
+            }
             if (!list || list.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 12px;">এখনো কোনো এসএমএস রিসিভ হয়নি</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 14px; font-size: 0.72rem;">এখনো কোনো এসএমএস রিসিভ হয়নি</td></tr>';
                 return;
             }
-            tbody.innerHTML = list.map(item => `
-                <tr>
-                    <td>${item.created_at ? item.created_at.split(' ')[0] + ' ' + (item.created_at.split(' ')[1] || '').substring(0, 5) : '-'}</td>
-                    <td><span class="badge-status" style="background: rgba(2, 132, 199, 0.15); color: #38bdf8; text-transform: uppercase;">${escapeHtml(item.gateway || 'bkash')}</span></td>
-                    <td style="font-family: monospace;">${escapeHtml(item.sender_phone || '-')}</td>
-                    <td style="font-weight: 800; color: var(--neon-amber);">${item.amount} 🪙</td>
-                    <td style="font-family: monospace; font-weight: 700; color: var(--neon-cyan);">${escapeHtml(item.trx_id)}</td>
-                    <td>
-                        <span class="badge-status ${item.status === 'claimed' ? 'approved' : 'pending'}">
-                            ${item.status === 'claimed' ? '✅ Claimed' : '⏳ Unclaimed'}
-                        </span>
-                    </td>
-                    <td>${item.claimed_by_username ? `<b>@${escapeHtml(item.claimed_by_username)}</b>` : '<span style="color: var(--text-muted);">-</span>'}</td>
-                </tr>
-            `).join('');
+            tbody.innerHTML = list.map(item => {
+                const gw = (item.gateway || 'bkash').toLowerCase();
+                const isClaimed = item.status === 'claimed';
+                const gwClass = gw.includes('bkash') ? 'bkash' : (gw.includes('nagad') ? 'nagad' : 'other');
+                const gwLabel = gw.includes('bkash') ? 'bKash' : (gw.includes('nagad') ? 'Nagad' : escapeHtml(gw.toUpperCase()));
+
+                let timeHtml = '-';
+                if (item.created_at) {
+                    const parts = item.created_at.split(' ');
+                    const datePart = parts[0] || '';
+                    const timePart = (parts[1] || '').substring(0, 5);
+                    timeHtml = `<span class="pro-cell-time">${datePart}</span> <span class="pro-cell-time" style="color: #64748b;">${timePart}</span>`;
+                }
+
+                return `
+                    <tr>
+                        <td>${timeHtml}</td>
+                        <td><span class="pro-gw-badge ${gwClass}">${gwLabel}</span></td>
+                        <td><span class="pro-cell-phone">${escapeHtml(item.sender_phone || '-')}</span></td>
+                        <td><span class="pro-cell-amount"><span class="symbol">৳</span>${Number(item.amount || 0).toLocaleString('en-US')}</span></td>
+                        <td>
+                            <span class="pro-cell-trx" onclick="navigator.clipboard.writeText('${escapeHtml(item.trx_id)}'); if(typeof showToast==='function') showToast('TrxID কপি করা হয়েছে!', 'info')" title="ক্লিক করে TrxID কপি করুন">
+                                ${escapeHtml(item.trx_id)}
+                                <span style="opacity: 0.6; font-size: 0.6rem;">📋</span>
+                            </span>
+                        </td>
+                        <td>
+                            <span class="pro-chip ${isClaimed ? 'pro-chip-claimed' : 'pro-chip-unclaimed'}">
+                                <span class="pro-chip-dot"></span>
+                                ${isClaimed ? 'CLAIMED' : 'UNCLAIMED'}
+                            </span>
+                        </td>
+                        <td>
+                            ${item.claimed_by_username ? 
+                                `<span class="pro-cell-user">@${escapeHtml(item.claimed_by_username)}</span>` : 
+                                `<span style="color: #64748b; font-size: 0.72rem;">—</span>`
+                            }
+                        </td>
+                    </tr>
+                `;
+            }).join('');
         }
     } catch (e) {
         console.error('Error loading incoming payments', e);

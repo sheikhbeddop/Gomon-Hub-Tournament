@@ -8606,6 +8606,73 @@ function setAmmo(val) {
     }
 }
 
+function selectChallengePrivacy(type) {
+    const hidden = document.getElementById('chSelectedPrivacy');
+    if (hidden) hidden.value = type;
+
+    const pubBtn = document.getElementById('chPrivacyPublicBtn');
+    const privBtn = document.getElementById('chPrivacyPrivateBtn');
+    const timeSec = document.getElementById('chTimeConfigSection');
+    const noticeBox = document.getElementById('chPrivateNoticeBox');
+    const hint = document.getElementById('chPrivacyHint');
+
+    if (type === 'public') {
+        if (pubBtn) {
+            pubBtn.style.background = '#ecfdf5';
+            pubBtn.style.color = '#065f46';
+            pubBtn.style.border = '2px solid #10b981';
+            pubBtn.style.fontWeight = '800';
+        }
+        if (privBtn) {
+            privBtn.style.background = '#ffffff';
+            privBtn.style.color = '#475569';
+            privBtn.style.border = '1px solid #cbd5e1';
+            privBtn.style.fontWeight = '700';
+        }
+        if (timeSec) timeSec.style.display = 'block';
+        if (noticeBox) noticeBox.style.display = 'none';
+        if (hint) hint.innerText = 'ওপেন লবিতে সবার জন্য উন্মুক্ত থাকবে';
+    } else {
+        if (privBtn) {
+            privBtn.style.background = '#eff6ff';
+            privBtn.style.color = '#1e40af';
+            privBtn.style.border = '2px solid #3b82f6';
+            privBtn.style.fontWeight = '800';
+        }
+        if (pubBtn) {
+            pubBtn.style.background = '#ffffff';
+            pubBtn.style.color = '#475569';
+            pubBtn.style.border = '1px solid #cbd5e1';
+            pubBtn.style.fontWeight = '700';
+        }
+        if (timeSec) timeSec.style.display = 'none';
+        if (noticeBox) noticeBox.style.display = 'block';
+        if (hint) hint.innerText = 'শুধুমাত্র ইনভাইট লিংক দিয়ে জয়েন করা যাবে';
+    }
+}
+
+function setChallengeTimePreset(val, idx) {
+    const inp = document.getElementById('chMatchTimeInput');
+    if (inp) inp.value = val;
+
+    for (let i = 1; i <= 3; i++) {
+        const b = document.getElementById(`chTimePreset-${i}`);
+        if (b) {
+            if (i === idx) {
+                b.style.background = '#ecfdf5';
+                b.style.color = '#065f46';
+                b.style.border = '2px solid #10b981';
+                b.style.fontWeight = '800';
+            } else {
+                b.style.background = '#ffffff';
+                b.style.color = '#334155';
+                b.style.border = '1px solid #cbd5e1';
+                b.style.fontWeight = '700';
+            }
+        }
+    }
+}
+
 async function parseResponseSafe(res) {
     try {
         const text = await res.text();
@@ -8635,6 +8702,8 @@ async function handleCreateChallenge(event) {
         const gun_attributes = parseInt(document.getElementById('chGunAttrVal').value) || 0;
         const limited_ammo = parseInt(document.getElementById('chAmmoVal').value) || 0;
         const room_creator_role = document.getElementById('chRoomHost').value;
+        const visibility = (document.getElementById('chSelectedPrivacy')?.value || 'public').trim();
+        const match_time = visibility === 'public' ? (document.getElementById('chMatchTimeInput')?.value || 'Instant (5 mins)').trim() : '';
 
         const res = await fetchWithAuth('/api/challenges/create', {
             method: 'POST',
@@ -8643,7 +8712,9 @@ async function handleCreateChallenge(event) {
                 entry_fee,
                 gun_attributes,
                 limited_ammo,
-                room_creator_role
+                room_creator_role,
+                visibility,
+                match_time
             })
         });
 
@@ -8659,7 +8730,9 @@ async function handleCreateChallenge(event) {
         if (shareInput) shareInput.value = shareUrl;
 
         if (waBtn) {
-            const msg = encodeURIComponent(`⚔️ Free Fire ${mode} Custom Challenge!\n💰 Entry Fee: ৳${entry_fee} | Winner Prize: ৳${data.prize_amount}\n🔥 চ্যালেঞ্জ গ্রহণ করতে এই লিংকে ক্লিক করুন:\n${shareUrl}`);
+            const timeLine = data.match_time ? `\n⏰ ম্যাচ শুরুর সময়: ${data.match_time}` : '';
+            const privLine = data.visibility === 'private' ? ' (Private Match)' : '';
+            const msg = encodeURIComponent(`⚔️ Free Fire ${mode}${privLine} Custom Challenge!\n💰 Entry Fee: ৳${entry_fee} | Winner Prize: ৳${data.prize_amount}${timeLine}\n🔥 চ্যালেঞ্জ গ্রহণ করতে এই লিংকে ক্লিক করুন:\n${shareUrl}`);
             waBtn.href = `https://wa.me/?text=${msg}`;
         }
 
@@ -8825,16 +8898,22 @@ async function loadMyChallenges() {
                 `;
             }
 
+            const isPrivate = (c.visibility === 'private');
+            const visBadge = isPrivate ? 
+                `<span style="background: rgba(59, 130, 246, 0.12); color: #2563eb; font-size: 0.68rem; font-weight: 800; padding: 2px 7px; border-radius: 4px; margin-left: 6px; border: 1px solid rgba(59, 130, 246, 0.3);">🔒 PRIVATE</span>` : 
+                `<span style="background: rgba(16, 185, 129, 0.12); color: #059669; font-size: 0.68rem; font-weight: 800; padding: 2px 7px; border-radius: 4px; margin-left: 6px; border: 1px solid rgba(16, 185, 129, 0.3);">🌐 PUBLIC</span>`;
+            const timeTag = c.match_time ? `<span style="font-size: 0.72rem; color: #d97706; font-weight: 700; background: rgba(245, 158, 11, 0.1); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(245, 158, 11, 0.25);">⏰ ${escapeHtml(c.match_time)}</span>` : '';
+
             html += `
                 <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 14px; margin-bottom: 14px; box-shadow: 0 2px 8px rgba(0,0,0,0.04);">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                        <span style="font-family: 'Rajdhani', sans-serif; font-weight: 800; font-size: 1.05rem; color: #0f172a;">${escapeHtml(c.challenge_code)} (${escapeHtml(c.mode)})</span>
+                        <span style="font-family: 'Rajdhani', sans-serif; font-weight: 800; font-size: 1.05rem; color: #0f172a;">${escapeHtml(c.challenge_code)} (${escapeHtml(c.mode)})${visBadge}</span>
                         <span style="background: ${statusBg}; color: ${statusColor}; font-size: 0.72rem; font-weight: 800; padding: 2px 8px; border-radius: 6px; text-transform: uppercase;">${escapeHtml(c.status)}</span>
                     </div>
 
-                    <div style="font-size: 0.8rem; color: #475569; margin-bottom: 10px; display: flex; justify-content: space-between;">
-                        <span>Stake: <b style="color: #0f172a;">BDT ${c.entry_fee}</b></span>
-                        <span>Prize: <b style="color: #10b981;">BDT ${c.prize_amount}</b></span>
+                    <div style="font-size: 0.8rem; color: #475569; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
+                        <span>Stake: <b style="color: #0f172a;">BDT ${c.entry_fee}</b> | Prize: <b style="color: #10b981;">BDT ${c.prize_amount}</b></span>
+                        ${timeTag}
                     </div>
 
                     <!-- VS Battle Display Box -->
@@ -8989,16 +9068,30 @@ async function loadOpenLobbies() {
 
         let html = '';
         list.forEach(c => {
+            const timeBadge = c.match_time ? `
+                <div style="margin-top: 5px; display: inline-flex; align-items: center; gap: 4px; background: rgba(245, 158, 11, 0.12); color: #b45309; border: 1px solid rgba(245, 158, 11, 0.3); font-size: 0.72rem; font-weight: 800; padding: 2px 7px; border-radius: 6px;">
+                    <span>⏰ শুরু:</span> <span>${escapeHtml(c.match_time)}</span>
+                </div>
+            ` : `
+                <div style="margin-top: 5px; display: inline-flex; align-items: center; gap: 4px; background: rgba(16, 185, 129, 0.1); color: #059669; font-size: 0.72rem; font-weight: 800; padding: 2px 7px; border-radius: 6px;">
+                    <span>⚡ ইনস্ট্যান্ট (৫ মি.)</span>
+                </div>
+            `;
+
             html += `
-                <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
-                    <div>
-                        <div style="font-family: 'Rajdhani', sans-serif; font-weight: 800; font-size: 1.05rem; color: #0f172a;">${c.mode} by ${c.creator_name}</div>
+                <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; gap: 10px;">
+                    <div style="flex: 1; min-width: 0;">
+                        <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                            <span style="font-family: 'Rajdhani', sans-serif; font-weight: 800; font-size: 1.05rem; color: #0f172a;">${escapeHtml(c.mode)} by ${escapeHtml(c.creator_name)}</span>
+                            ${c.creator_ign ? `<span style="font-size: 0.68rem; color: #64748b; background: rgba(0,0,0,0.05); padding: 1px 6px; border-radius: 4px;">IGN: ${escapeHtml(c.creator_ign)}</span>` : ''}
+                        </div>
                         <div style="font-size: 0.8rem; color: #475569; margin-top: 2px;">
                             Entry: <b>BDT ${c.entry_fee}</b> | Win: <b style="color: #10b981;">BDT ${c.prize_amount}</b>
                         </div>
+                        ${timeBadge}
                     </div>
                     <button type="button" class="btn btn-sm" onclick="acceptChallenge('${c.challenge_code}')"
-                        style="background: #10b981; color: white; font-weight: 800; font-size: 0.82rem; padding: 8px 14px; border-radius: 8px; border: none; cursor: pointer;">
+                        style="background: #10b981; color: white; font-weight: 800; font-size: 0.82rem; padding: 9px 16px; border-radius: 8px; border: none; cursor: pointer; flex-shrink: 0; box-shadow: 0 2px 6px rgba(16, 185, 129, 0.25);">
                         Accept
                     </button>
                 </div>
@@ -9447,6 +9540,12 @@ async function openChallengeByCode(code) {
                 <!-- Match Rules Grid -->
                 <div style="background: #090e17; border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 10px; padding: 10px 12px; margin-bottom: 6px;">
                     <div style="font-size: 0.7rem; color: #64748b; font-weight: 700; text-transform: uppercase; margin-bottom: 6px;">Match Specifications</div>
+                    ${c.match_time ? `
+                    <div style="display: flex; justify-content: space-between; font-size: 0.78rem; color: #f59e0b; padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.04);">
+                        <span>Match Schedule:</span>
+                        <b>⏰ ${escapeHtml(c.match_time)}</b>
+                    </div>
+                    ` : ''}
                     <div style="display: flex; justify-content: space-between; font-size: 0.78rem; color: #cbd5e1; padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.04);">
                         <span>Gun Attributes:</span>
                         <b>${gunAttrLabel}</b>
@@ -9455,9 +9554,13 @@ async function openChallengeByCode(code) {
                         <span>Limited Ammo:</span>
                         <b>${ammoLabel}</b>
                     </div>
-                    <div style="display: flex; justify-content: space-between; font-size: 0.78rem; color: #cbd5e1; padding: 4px 0;">
+                    <div style="display: flex; justify-content: space-between; font-size: 0.78rem; color: #cbd5e1; padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.04);">
                         <span>Room Host:</span>
                         <b>${hostRoleLabel}</b>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-size: 0.78rem; color: #cbd5e1; padding: 4px 0;">
+                        <span>Privacy:</span>
+                        <b>${c.visibility === 'private' ? '🔒 Private (Invite Only)' : '🌐 Public (Open Lobby)'}</b>
                     </div>
                 </div>
 

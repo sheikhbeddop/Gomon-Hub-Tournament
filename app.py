@@ -2849,6 +2849,148 @@ def get_me(user: dict = Depends(get_current_user)):
 # -------------------------------------------------------------
 # Matches & Schedule Engine
 # -------------------------------------------------------------
+def check_and_auto_cancel_unfilled_matches():
+    """
+    Checks all upcoming/open tournament matches whose scheduled match_time has arrived.
+    If filled_slots < total_slots (even 1 slot empty, e.g. 47/48, 7/8, or 0),
+    automatically cancels the match, refunds 100% entry fee to all registered players atomically,
+    purges match from SQLite and asynchronously purges from MongoDB Atlas.
+    """
+    try:
+        conn = get_db()
+    except Exception:
+        return
+
+    refund_events = []
+    purged_match_ids = []
+
+    try:
+        bd_now = datetime.now(timezone(timedelta(hours=6))).replace(tzinfo=None)
+
+        with conn:
+            rows = conn.execute("""
+                SELECT m.id, m.title, m.match_type, m.match_code, m.match_time, 
+                       m.entry_fee, m.total_slots, m.status,
+                       (SELECT COUNT(*) FROM participations p WHERE p.match_id = m.id) as filled_slots
+                FROM matches m
+                WHERE m.status IN ('upcoming', 'open')
+            """).fetchall()
+
+            for m in rows:
+                m_time_str = str(m["match_time"] or "").strip().replace("T", " ")
+                if not m_time_str:
+                    continue
+
+                m_dt = None
+                for fmt in ("%Y-%m-%d %H:%M", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d %I:%M %p"):
+                    try:
+                        m_dt = datetime.strptime(m_time_str, fmt)
+                        break
+                    except Exception:
+                        pass
+
+                # If match start time has arrived or passed
+                if m_dt and bd_now >= m_dt:
+                    total_slots = int(m["total_slots"] or 0)
+                    filled_slots = int(m["filled_slots"] or 0)
+
+                    # STRICT RULE: If NOT 100% full (even 1 slot empty, e.g. 47/48)
+                    if filled_slots < total_slots:
+                        match_id = m["id"]
+                        entry_fee = int(m["entry_fee"] or 0)
+                        m_code = m["match_code"] or f"MATCH-{match_id}"
+                        m_title = m["title"] or "Match"
+
+                        # 1. Atomic refund for each participant based on booked slots
+                        if entry_fee > 0 and filled_slots > 0:
+                            part_rows = conn.execute("""
+                                SELECT user_id, COUNT(*) as slots_count
+                                FROM participations
+                                WHERE match_id = ?
+                                GROUP BY user_id
+                            """, (match_id,)).fetchall()
+
+                            for p in part_rows:
+                                uid = p["user_id"]
+                                slots = p["slots_count"]
+                                refund_amount = slots * entry_fee
+                                if refund_amount > 0:
+                                    conn.execute("UPDATE users SET digits_balance = digits_balance + ? WHERE id = ?", (refund_amount, uid))
+                                    conn.execute("""
+                                        INSERT INTO audit_logs (admin_id, target_user_id, action, amount, reason)
+                                        VALUES (NULL, ?, 'MATCH_AUTO_UNFILLED_REFUND', ?, ?)
+                                    """, (uid, refund_amount, f"Auto-refunded match #{m_code} ({m_title}): Unfilled ({filled_slots}/{total_slots} slots). Refunded BDT {refund_amount} for {slots} slot(s)."))
+
+                                    fresh = conn.execute("SELECT digits_balance FROM users WHERE id = ?", (uid,)).fetchone()
+                                    new_bal = fresh["digits_balance"] if fresh else 0
+                                    refund_events.append({
+                                        "user_id": uid,
+                                        "refund_amount": refund_amount,
+                                        "new_balance": new_bal,
+                                        "match_title": m_title,
+                                        "match_code": m_code
+                                    })
+
+                        # 2. Delete match and participations completely from SQLite
+                        conn.execute("DELETE FROM matches WHERE id = ?", (match_id,))
+                        conn.execute("DELETE FROM participations WHERE match_id = ?", (match_id,))
+                        conn.execute("DELETE FROM match_results WHERE match_id = ?", (match_id,))
+
+                        # 3. Log match auto-deletion
+                        conn.execute("""
+                            INSERT INTO audit_logs (admin_id, target_user_id, action, amount, reason)
+                            VALUES (NULL, NULL, 'MATCH_AUTO_CANCEL_DELETED', 0, ?)
+                        """, (f"Auto-deleted unfilled Match #{m_code} ({m_title}) - filled {filled_slots}/{total_slots} slots",))
+
+                        purged_match_ids.append(match_id)
+    except Exception as e:
+        print(f"[Auto Match Cancel Notice] {e}")
+    finally:
+        conn.close()
+
+    # 4. Asynchronously purge deleted matches from MongoDB Atlas (zero lag / zero ghost data)
+    if purged_match_ids:
+        def _bg_atlas_purge(mids):
+            for mid in mids:
+                try:
+                    delete_from_mongo_direct("matches", mid)
+                    delete_from_mongo_direct("participations", match_id_filter=mid)
+                except Exception:
+                    pass
+        threading.Thread(target=_bg_atlas_purge, args=(purged_match_ids,), daemon=True).start()
+
+    # 5. Broadcast real-time WebSocket balance notifications to refunded online users
+    if refund_events:
+        async def _notify_refunded():
+            for ev in refund_events:
+                try:
+                    await manager.send_to_user(ev["user_id"], {
+                        "type": "BALANCE_UPDATED",
+                        "digits_balance": ev["new_balance"],
+                        "message": f"ম্যাচ #{ev['match_code']} নির্ধারিত সময়ে ফুল না হওয়ায় আপনার BDT {ev['refund_amount']} সম্পূর্ণ রিফান্ড করা হয়েছে।"
+                    })
+                except Exception:
+                    pass
+        try:
+            import asyncio
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                asyncio.create_task(_notify_refunded())
+        except Exception:
+            pass
+
+def _start_unfilled_match_watcher():
+    def _watcher():
+        while True:
+            time.sleep(60)
+            try:
+                check_and_auto_cancel_unfilled_matches()
+            except Exception:
+                pass
+    threading.Thread(target=_watcher, daemon=True).start()
+
+_start_unfilled_match_watcher()
+
 @app.get("/api/matches")
 def list_matches(request: Request):
     current_user_id = None
@@ -2860,6 +3002,7 @@ def list_matches(request: Request):
             current_user_id = payload.get("user_id")
             is_admin = (payload.get("role") in ["admin", "moderator"])
 
+    check_and_auto_cancel_unfilled_matches()
     conn = get_db()
     rows = conn.execute("""
     SELECT m.*,
@@ -5009,6 +5152,7 @@ async def admin_review_withdrawal(withdrawal_id: int, action: str, admin: dict =
 
 @app.get("/api/admin/matches")
 def admin_get_all_matches(admin: dict = Depends(verify_moderator_or_admin)):
+    check_and_auto_cancel_unfilled_matches()
     conn = get_db()
     rows = conn.execute("""
     SELECT m.*,

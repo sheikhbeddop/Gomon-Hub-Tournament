@@ -8427,6 +8427,19 @@ function setAmmo(val) {
     }
 }
 
+async function parseResponseSafe(res) {
+    try {
+        const text = await res.text();
+        try {
+            return JSON.parse(text);
+        } catch (_) {
+            return { detail: (text && text.length < 150) ? text : `Server error (${res.status})` };
+        }
+    } catch (e) {
+        return { detail: `Network error (${res.status || 'unknown'})` };
+    }
+}
+
 let latestCreatedChallengeCode = null;
 
 async function handleCreateChallenge(event) {
@@ -8452,8 +8465,8 @@ async function handleCreateChallenge(event) {
             })
         });
 
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.detail || 'Could not create challenge');
+        const data = await parseResponseSafe(res);
+        if (!res.ok) throw new Error((data && (data.detail || data.message)) || 'Could not create challenge');
 
         latestCreatedChallengeCode = data.challenge_code;
         const shareCard = document.getElementById('chShareCard');
@@ -8493,8 +8506,8 @@ async function loadMyChallenges() {
 
     try {
         const res = await fetchWithAuth('/api/challenges/my');
-        if (!res.ok) throw new Error('Failed to load challenges');
-        const list = await res.json();
+        const list = await parseResponseSafe(res);
+        if (!res.ok || !Array.isArray(list)) throw new Error((list && (list.detail || list.message)) || 'Failed to load challenges');
 
         if (!list || list.length === 0) {
             container.innerHTML = '<div style="text-align: center; color: #94a3b8; padding: 30px 10px; font-size: 0.88rem;">No active challenges found. Create one to begin.</div>';
@@ -8611,8 +8624,8 @@ async function submitChallengeRoom(code) {
             method: 'POST',
             body: JSON.stringify({ room_id: rId, room_password: rPass })
         });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.detail || 'Failed');
+        const data = await parseResponseSafe(res);
+        if (!res.ok) throw new Error((data && (data.detail || data.message)) || 'Failed to update room');
         showToast('Room details updated!', 'success');
         loadMyChallenges();
     } catch (e) {
@@ -8628,8 +8641,8 @@ async function submitChallengeProof(code, claim) {
                 method: 'POST',
                 body: JSON.stringify({ claim: 'lost', image: '' })
             });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.detail || 'Failed to submit');
+            const data = await parseResponseSafe(res);
+            if (!res.ok) throw new Error((data && (data.detail || data.message)) || 'Failed to submit');
             showToast('Result submitted.', 'info');
             loadMyChallenges();
         } catch (e) {
@@ -8654,8 +8667,8 @@ async function submitChallengeProof(code, claim) {
                 method: 'POST',
                 body: JSON.stringify({ claim: 'won', image: base64 })
             });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.detail || 'Upload failed');
+            const data = await parseResponseSafe(res);
+            if (!res.ok) throw new Error((data && (data.detail || data.message)) || 'Upload failed');
             showToast('Proof uploaded to Google Drive & result submitted!', 'success');
             loadMyChallenges();
             if (typeof updateProfileDisplay === 'function') updateProfileDisplay();
@@ -8670,8 +8683,8 @@ async function cancelChallenge(code) {
     if (!confirm('Are you sure you want to cancel this challenge and get refunded?')) return;
     try {
         const res = await fetchWithAuth(`/api/challenges/${code}/cancel`, { method: 'POST' });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.detail || 'Cancel failed');
+        const data = await parseResponseSafe(res);
+        if (!res.ok) throw new Error((data && (data.detail || data.message)) || 'Cancel failed');
         showToast(data.message || 'Challenge cancelled and refunded.', 'success');
         loadMyChallenges();
         if (typeof updateProfileDisplay === 'function') updateProfileDisplay();
@@ -8687,8 +8700,8 @@ async function loadOpenLobbies() {
 
     try {
         const res = await fetchWithAuth('/api/challenges/open');
-        if (!res.ok) throw new Error('Failed to load lobbies');
-        const list = await res.json();
+        const list = await parseResponseSafe(res);
+        if (!res.ok || !Array.isArray(list)) throw new Error((list && (list.detail || list.message)) || 'Failed to load lobbies');
 
         if (!list || list.length === 0) {
             container.innerHTML = '<div style="text-align: center; color: #94a3b8; padding: 30px 10px; font-size: 0.88rem;">No open lobbies available right now. Check back shortly.</div>';
@@ -8723,8 +8736,8 @@ async function acceptChallenge(code) {
 
     try {
         const res = await fetchWithAuth(`/api/challenges/${code}/accept`, { method: 'POST' });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.detail || 'Could not accept challenge');
+        const data = await parseResponseSafe(res);
+        if (!res.ok) throw new Error((data && (data.detail || data.message)) || 'Could not accept challenge');
 
         showToast('Challenge accepted! Match is now active.', 'success');
         switchChallengeTab('my');

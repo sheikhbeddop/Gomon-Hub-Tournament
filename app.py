@@ -6536,6 +6536,28 @@ def get_open_challenges(user: dict = Depends(get_current_user)):
     finally:
         conn.close()
 
+@app.get("/api/challenges/{code}")
+def get_challenge_by_code(code: str):
+    conn = get_db()
+    try:
+        purge_old_custom_challenges(conn)
+        row = conn.execute("""
+            SELECT c.id, c.challenge_code, c.mode, c.entry_fee, c.prize_amount,
+                   c.gun_attributes, c.limited_ammo, c.room_creator_role, c.created_at,
+                   c.creator_id, c.rival_id, c.room_id, c.room_password, c.status,
+                   u.username as creator_name, u.ff_ign as creator_ign,
+                   u2.username as rival_name, u2.ff_ign as rival_ign
+            FROM custom_challenges c
+            LEFT JOIN users u ON c.creator_id = u.id
+            LEFT JOIN users u2 ON c.rival_id = u2.id
+            WHERE c.challenge_code = ?
+        """, (code.strip(),)).fetchone()
+        if not row:
+            raise HTTPException(404, "Challenge not found")
+        return dict(row)
+    finally:
+        conn.close()
+
 @app.post("/api/challenges/{code}/accept")
 async def accept_custom_challenge(code: str, user: dict = Depends(get_current_user)):
     conn = get_db()

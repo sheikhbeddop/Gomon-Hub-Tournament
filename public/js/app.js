@@ -222,6 +222,9 @@ async function startApp() {
     await initAuth();
     loadPublicInfo();
     initServiceWorker();
+    setTimeout(() => {
+        try { checkAndTriggerDeepLinks(); } catch (e) { console.error('DeepLink init error:', e); }
+    }, 400);
 }
 
 // -------------------------------------------------------------
@@ -1432,6 +1435,7 @@ async function handleLoginSubmit(e) {
                 if (adminBtn) adminBtn.style.display = 'inline-flex';
                 try { loadAdminOverview(); } catch(e) { console.error('Error in loadAdminOverview:', e); }
             }
+            try { checkAndTriggerDeepLinks(); } catch(e) {}
         } else {
             let errMsg = data.detail || 'Invalid username or password. Please try again.';
             if (errMsg.startsWith("ADMIN_PIN_REQUIRED:")) {
@@ -1725,6 +1729,7 @@ async function handleRegisterSubmit(e) {
     try { loadMatches(); } catch(e) { console.error('Error in loadMatches:', e); }
     try { loadWalletHistory(); } catch(e) { console.error('Error in loadWalletHistory:', e); }
     try { initWebSocket(); } catch(e) { console.error('Error in initWebSocket:', e); }
+    try { checkAndTriggerDeepLinks(); } catch(e) {}
 }
 
 // -------------------------------------------------------------
@@ -7037,8 +7042,18 @@ let isProgrammaticBack = false;
 
 function initAppNavigationBarrier() {
     try {
+        const chCode = getDeepLinkChallengeCode();
+        if (chCode) {
+            sessionStorage.setItem('pending_challenge_code', chCode);
+        }
+        const matchCode = getDeepLinkMatchId();
+        if (matchCode) {
+            sessionStorage.setItem('pending_match_id', matchCode);
+        }
+
         const clean = (window.location.hash || '#matches').replace('#', '').trim();
-        const initialTab = (clean && document.getElementById('tab-' + clean)) ? ('tab-' + clean) : 'tab-matches';
+        const isDeepLinkHash = clean.includes('challenge') || clean.includes('match=');
+        const initialTab = (!isDeepLinkHash && clean && document.getElementById('tab-' + clean)) ? ('tab-' + clean) : 'tab-matches';
         appTabHistory = [initialTab];
         history.replaceState({ type: 'root', tabId: initialTab }, '', '#' + initialTab.replace('tab-', ''));
         history.pushState({ type: 'barrier', tabId: initialTab }, '', '#' + initialTab.replace('tab-', ''));
@@ -8640,11 +8655,11 @@ async function handleCreateChallenge(event) {
         const shareInput = document.getElementById('chShareLinkInput');
         const waBtn = document.getElementById('chWhatsAppShareBtn');
 
-        const shareUrl = `${window.location.origin}/#challenge=${data.challenge_code}`;
+        const shareUrl = `${window.location.origin}/?challenge=${data.challenge_code}#challenge=${data.challenge_code}`;
         if (shareInput) shareInput.value = shareUrl;
 
         if (waBtn) {
-            const msg = encodeURIComponent(`Free Fire ${mode} Custom Challenge! Entry Fee BDT ${entry_fee}. Winner takes BDT ${data.prize_amount}! Accept my challenge here: ${shareUrl}`);
+            const msg = encodeURIComponent(`⚔️ Free Fire ${mode} Custom Challenge!\n💰 Entry Fee: ৳${entry_fee} | Winner Prize: ৳${data.prize_amount}\n🔥 চ্যালেঞ্জ গ্রহণ করতে এই লিংকে ক্লিক করুন:\n${shareUrl}`);
             waBtn.href = `https://wa.me/?text=${msg}`;
         }
 
@@ -8688,9 +8703,10 @@ async function loadMyChallenges() {
 
             let actionHtml = '';
             if (c.status === 'open') {
+                const myShareUrl = `${window.location.origin}/?challenge=${c.challenge_code}#challenge=${c.challenge_code}`;
                 actionHtml = `
                     <div style="display: flex; gap: 8px; margin-top: 10px;">
-                        <button type="button" class="btn btn-sm" onclick="navigator.clipboard.writeText('${window.location.origin}/#challenge=${c.challenge_code}'); showToast('Link copied!', 'success');"
+                        <button type="button" class="btn btn-sm" onclick="navigator.clipboard.writeText('${myShareUrl}'); showToast('চ্যালেঞ্জ লিংক কপি হয়েছে!', 'success');"
                             style="flex: 1; background: #0f172a; color: white; padding: 6px 10px; font-size: 0.76rem; border-radius: 6px; border: none;">
                             Copy Link
                         </button>
@@ -9118,5 +9134,360 @@ window.cancelChallenge = cancelChallenge;
 window.loadAdminChallenges = loadAdminChallenges;
 window.adminSubmitChallengeRoom = adminSubmitChallengeRoom;
 window.adminResolveChallenge = adminResolveChallenge;
+
+// -------------------------------------------------------------
+// Custom Challenge & Match Deep-Link Direct Access Engine
+// -------------------------------------------------------------
+
+function getDeepLinkChallengeCode() {
+    try {
+        const urlParams = new URLSearchParams(window.location.search);
+        let code = urlParams.get('challenge');
+        if (code && code.trim()) return code.trim();
+
+        const hash = window.location.hash || '';
+        if (hash.includes('challenge')) {
+            const m = hash.match(/challenge[=/]([A-Za-z0-9_-]+)/i);
+            if (m && m[1]) return m[1].trim();
+        }
+
+        const pending = sessionStorage.getItem('pending_challenge_code');
+        if (pending && pending.trim()) return pending.trim();
+    } catch (e) {}
+    return null;
+}
+
+function getDeepLinkMatchId() {
+    try {
+        const urlParams = new URLSearchParams(window.location.search);
+        let id = urlParams.get('match') || urlParams.get('match_id');
+        if (id && id.trim()) return id.trim();
+
+        const hash = window.location.hash || '';
+        if (hash.includes('match')) {
+            const m = hash.match(/match(?:_id)?[=/]([0-9]+)/i);
+            if (m && m[1]) return m[1].trim();
+        }
+
+        const pending = sessionStorage.getItem('pending_match_id');
+        if (pending && pending.trim()) return pending.trim();
+    } catch (e) {}
+    return null;
+}
+
+async function openChallengeByCode(code) {
+    if (!code) return;
+    const cleanCode = String(code).trim();
+    sessionStorage.setItem('pending_challenge_code', cleanCode);
+
+    openModal('challengeInviteModal');
+    const body = document.getElementById('chInviteModalBody');
+    if (!body) return;
+
+    body.innerHTML = `
+        <div style="text-align: center; color: #94a3b8; padding: 34px 16px;">
+            <div style="width: 14px; height: 14px; border-radius: 50%; background: #10b981; margin: 0 auto 12px auto; box-shadow: 0 0 12px #10b981;"></div>
+            <div style="font-family: 'Rajdhani', sans-serif; font-size: 1.15rem; color: #f8fafc; font-weight: 700; letter-spacing: 0.5px;">CHALLENGE #${escapeHtml(cleanCode)}</div>
+            <div style="font-size: 0.82rem; color: #94a3b8; margin-top: 4px;">চ্যালেঞ্জের সম্পূর্ণ তথ্য লোড করা হচ্ছে...</div>
+        </div>
+    `;
+
+    try {
+        const res = await fetch(`/api/challenges/${encodeURIComponent(cleanCode)}`);
+        if (!res.ok) {
+            body.innerHTML = `
+                <div style="text-align: center; padding: 26px 16px; color: #cbd5e1;">
+                    <div style="font-size: 2.4rem; margin-bottom: 8px;">⚠️</div>
+                    <div style="font-family: 'Rajdhani', sans-serif; font-size: 1.25rem; font-weight: 800; color: #f87171;">CHALLENGE NOT FOUND</div>
+                    <p style="font-size: 0.82rem; color: #94a3b8; margin: 8px 0 18px 0; line-height: 1.4;">
+                        এই চ্যালেঞ্জটি হয়তো হোস্ট বাতিল করেছেন অথবা লিংকটি ভুল।
+                    </p>
+                    <button type="button" class="btn btn-outline" onclick="sessionStorage.removeItem('pending_challenge_code'); closeModal('challengeInviteModal');" style="width: 100%; border-radius: 8px; border-color: #334155; color: #cbd5e1; padding: 9px;">
+                        বন্ধ করুন
+                    </button>
+                </div>
+            `;
+            return;
+        }
+
+        const c = await res.json();
+
+        const isCreator = currentUser && (currentUser.id === c.creator_id);
+        const isRival = currentUser && (currentUser.id === c.rival_id);
+        const userBal = currentUser ? (currentUser.digits_balance || 0) : 0;
+        const hasEnoughBalance = userBal >= c.entry_fee;
+
+        const hostRoleLabel = c.room_creator_role === 'creator' ? 'Challenger (Host)' : (c.room_creator_role === 'rival' ? 'Rival (You)' : 'Admin Auto-Host');
+        const ammoLabel = c.limited_ammo === 'no' ? '♾️ Unlimited' : '📦 Limited';
+        const gunAttrLabel = c.gun_attributes === 'yes' ? '✅ ON' : '❌ OFF';
+        const modeBadge = c.mode === '4v4' ? '👥 4v4 Clash Squad' : '👤 1v1 Clash Squad';
+
+        let actionAreaHtml = '';
+
+        if (!currentUser) {
+            actionAreaHtml = `
+                <div style="background: rgba(37, 99, 235, 0.12); border: 1px solid rgba(59, 130, 246, 0.35); border-radius: 12px; padding: 14px; text-align: center; margin-top: 16px;">
+                    <div style="font-size: 0.86rem; font-weight: 700; color: #93c5fd; margin-bottom: 4px;">⚔️ চ্যালেঞ্জ গ্রহণ করতে লগইন প্রয়োজন</div>
+                    <p style="font-size: 0.76rem; color: #cbd5e1; margin: 0 0 12px 0;">আপনার Gomon Hub অ্যাকাউন্টে লগইন বা সাইন আপ করুন।</p>
+                    <button type="button" class="btn" onclick="closeModal('challengeInviteModal'); openModal('authModal');" style="width: 100%; padding: 11px; font-weight: 800; border-radius: 8px; font-size: 0.92rem; background: linear-gradient(135deg, #10b981, #059669); border: none; color: white; cursor: pointer; box-shadow: 0 4px 14px rgba(16,185,129,0.35);">
+                        🔐 Sign In / Register to Accept
+                    </button>
+                </div>
+            `;
+        } else if (c.status === 'open') {
+            if (isCreator) {
+                actionAreaHtml = `
+                    <div style="background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.35); border-radius: 12px; padding: 14px; text-align: center; margin-top: 16px;">
+                        <div style="font-size: 0.9rem; font-weight: 800; color: #fcd34d; margin-bottom: 4px;">👑 এটি আপনার তৈরি করা চ্যালেঞ্জ!</div>
+                        <p style="font-size: 0.78rem; color: #cbd5e1; margin: 0 0 12px 0;">অপোনেন্টের সাথে লিংক শেয়ার করুন। অপোনেন্ট একসেপ্ট করলে ম্যাচ শুরু হবে।</p>
+                        <div style="display: flex; gap: 8px;">
+                            <button type="button" class="btn btn-sm" onclick="navigator.clipboard.writeText('${window.location.origin}/?challenge=${c.challenge_code}#challenge=${c.challenge_code}'); showToast('চ্যালেঞ্জ লিংক কপি হয়েছে!', 'success');" style="flex: 1; background: #2563eb; color: white; border: none; padding: 9px 12px; border-radius: 8px; font-weight: 700; font-size: 0.82rem; cursor: pointer;">
+                                📋 Copy Link
+                            </button>
+                            <button type="button" class="btn btn-sm" onclick="sessionStorage.removeItem('pending_challenge_code'); closeModal('challengeInviteModal'); openChallengeModal('my');" style="flex: 1; background: #334155; color: white; border: none; padding: 9px 12px; border-radius: 8px; font-weight: 700; font-size: 0.82rem; cursor: pointer;">
+                                🎮 My Challenges
+                            </button>
+                        </div>
+                    </div>
+                `;
+            } else if (!hasEnoughBalance) {
+                actionAreaHtml = `
+                    <div style="background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.35); border-radius: 12px; padding: 14px; text-align: center; margin-top: 16px;">
+                        <div style="font-size: 0.88rem; font-weight: 800; color: #f87171; margin-bottom: 4px;">⚠️ অপর্যাপ্ত ব্যালেন্স!</div>
+                        <p style="font-size: 0.78rem; color: #cbd5e1; margin: 0 0 12px 0;">আপনার বর্তমান ব্যালেন্স ৳${userBal}, কিন্তু এই চ্যালেঞ্জের এন্ট্রি ফি ৳${c.entry_fee}।</p>
+                        <button type="button" class="btn" onclick="closeModal('challengeInviteModal'); openWalletModal();" style="width: 100%; padding: 11px; font-weight: 800; border-radius: 8px; font-size: 0.92rem; background: linear-gradient(135deg, #f59e0b, #d97706); border: none; color: white; cursor: pointer; box-shadow: 0 4px 14px rgba(245,158,11,0.35);">
+                            💳 Deposit Balance (৳${c.entry_fee - userBal} প্রয়োজন)
+                        </button>
+                    </div>
+                `;
+            } else {
+                actionAreaHtml = `
+                    <div style="margin-top: 16px;">
+                        <button type="button" id="acceptInviteBtn-${c.challenge_code}" class="btn" onclick="acceptChallengeFromInvite('${c.challenge_code}', ${c.entry_fee})" style="width: 100%; padding: 14px; font-family: 'Rajdhani', sans-serif; font-size: 1.18rem; font-weight: 800; letter-spacing: 0.5px; border-radius: 10px; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: none; box-shadow: 0 6px 20px rgba(16, 185, 129, 0.45); cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                            <span>⚔️ ACCEPT CHALLENGE</span>
+                            <span style="background: rgba(0, 0, 0, 0.25); padding: 2px 10px; border-radius: 6px; font-size: 0.92rem;">(৳${c.entry_fee})</span>
+                        </button>
+                        <div style="font-size: 0.72rem; color: #94a3b8; text-align: center; margin-top: 8px; display: flex; align-items: center; justify-content: center; gap: 4px;">
+                            <span>🔒</span> <span>Escrow সুরক্ষিত: উইনার পাবে সম্পূর্ণ ৳${c.prize_amount}</span>
+                        </div>
+                    </div>
+                `;
+            }
+        } else if (c.status === 'in_progress') {
+            if (isCreator || isRival) {
+                actionAreaHtml = `
+                    <div style="background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.35); border-radius: 12px; padding: 14px; text-align: center; margin-top: 16px;">
+                        <div style="font-size: 0.92rem; font-weight: 800; color: #34d399; margin-bottom: 6px;">🔥 ম্যাচটি বর্তমানে চলমান!</div>
+                        ${c.room_id ? `
+                            <div style="background: #090e17; border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 8px; padding: 10px; margin: 10px 0; font-family: monospace; font-size: 0.95rem; color: #38bdf8;">
+                                <div>Room ID: <b>${c.room_id}</b></div>
+                                <div style="margin-top: 3px;">Pass: <b>${c.room_password || 'None'}</b></div>
+                            </div>
+                        ` : '<div style="font-size: 0.78rem; color: #cbd5e1; margin-bottom: 10px;">রুম আইডি তৈরি হচ্ছে...</div>'}
+                        <button type="button" class="btn" onclick="sessionStorage.removeItem('pending_challenge_code'); closeModal('challengeInviteModal'); openChallengeModal('my');" style="width: 100%; background: #10b981; color: white; border: none; padding: 10px 14px; border-radius: 8px; font-weight: 700; font-size: 0.85rem; cursor: pointer;">
+                            🎮 My Challenges এ রুম ও রেজাল্ট দেখুন
+                        </button>
+                    </div>
+                `;
+            } else {
+                actionAreaHtml = `
+                    <div style="background: rgba(148, 163, 184, 0.1); border: 1px solid rgba(148, 163, 184, 0.2); border-radius: 12px; padding: 14px; text-align: center; margin-top: 16px;">
+                        <div style="font-size: 0.9rem; font-weight: 700; color: #e2e8f0; margin-bottom: 4px;">🔒 ম্যাচটি শুরু হয়ে গেছে</div>
+                        <p style="font-size: 0.78rem; color: #94a3b8; margin: 0 0 12px 0;">অন্য একজন প্লেয়ার ইতিমধ্যে এই চ্যালেঞ্জটি গ্রহণ করেছেন।</p>
+                        <button type="button" class="btn" onclick="sessionStorage.removeItem('pending_challenge_code'); closeModal('challengeInviteModal'); openChallengeModal('lobby');" style="width: 100%; background: #2563eb; color: white; border: none; padding: 10px 14px; border-radius: 8px; font-weight: 700; font-size: 0.85rem; cursor: pointer;">
+                            🌐 অন্যান্য ওপেন চ্যালেঞ্জ দেখুন
+                        </button>
+                    </div>
+                `;
+            }
+        } else if (c.status === 'completed') {
+            actionAreaHtml = `
+                <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 12px; padding: 14px; text-align: center; margin-top: 16px;">
+                    <div style="font-size: 0.92rem; font-weight: 800; color: #34d399; margin-bottom: 4px;">🏁 ম্যাচ সমাপ্ত হয়েছে</div>
+                    <p style="font-size: 0.78rem; color: #94a3b8; margin: 0 0 12px 0;">এই চ্যালেঞ্জটি সফলভাবে সম্পন্ন হয়েছে এবং প্রাইজ বিতরণ করা হয়েছে।</p>
+                    <button type="button" class="btn" onclick="sessionStorage.removeItem('pending_challenge_code'); closeModal('challengeInviteModal'); openChallengeModal('lobby');" style="width: 100%; background: #2563eb; color: white; border: none; padding: 10px 14px; border-radius: 8px; font-weight: 700; font-size: 0.85rem; cursor: pointer;">
+                        🌐 নতুন চ্যালেঞ্জ খুঁজুন
+                    </button>
+                </div>
+            `;
+        } else if (c.status === 'cancelled') {
+            actionAreaHtml = `
+                <div style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 12px; padding: 14px; text-align: center; margin-top: 16px;">
+                    <div style="font-size: 0.92rem; font-weight: 800; color: #f87171; margin-bottom: 4px;">❌ চ্যালেঞ্জ বাতিল করা হয়েছে</div>
+                    <p style="font-size: 0.78rem; color: #94a3b8; margin: 0 0 12px 0;">হোস্ট এই চ্যালেঞ্জটি বাতিল করে তার টাকা রিফান্ড নিয়েছেন।</p>
+                    <button type="button" class="btn" onclick="sessionStorage.removeItem('pending_challenge_code'); closeModal('challengeInviteModal'); openChallengeModal('create');" style="width: 100%; background: #10b981; color: white; border: none; padding: 10px 14px; border-radius: 8px; font-weight: 700; font-size: 0.85rem; cursor: pointer;">
+                        ⚔️ আপনি একটি নতুন চ্যালেঞ্জ দিন
+                    </button>
+                </div>
+            `;
+        }
+
+        body.innerHTML = `
+            <div>
+                <!-- Top VS Duel Header -->
+                <div style="background: linear-gradient(180deg, rgba(15, 23, 42, 0.8) 0%, rgba(13, 20, 36, 0.95) 100%); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 14px; padding: 16px; margin-bottom: 14px; position: relative;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                        <span style="font-family: 'Rajdhani', sans-serif; font-size: 0.82rem; font-weight: 800; color: #38bdf8; background: rgba(56, 189, 248, 0.12); padding: 3px 10px; border-radius: 999px; border: 1px solid rgba(56, 189, 248, 0.3);">
+                            ${modeBadge}
+                        </span>
+                        <span style="font-family: monospace; font-size: 0.76rem; color: #94a3b8;">
+                            #${escapeHtml(c.challenge_code)}
+                        </span>
+                    </div>
+
+                    <!-- Versus Player Cards -->
+                    <div style="display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px;">
+                        <!-- Host Player -->
+                        <div style="text-align: center; background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.25); border-radius: 10px; padding: 10px 6px;">
+                            <div style="width: 38px; height: 38px; border-radius: 50%; background: rgba(16, 185, 129, 0.2); border: 1.5px solid #10b981; display: flex; align-items: center; justify-content: center; margin: 0 auto 6px auto; font-size: 1.1rem;">
+                                👑
+                            </div>
+                            <div style="font-family: 'Rajdhani', sans-serif; font-weight: 800; font-size: 0.95rem; color: #f8fafc; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                                ${escapeHtml(c.creator_ign || c.creator_name || 'Host')}
+                            </div>
+                            <div style="font-size: 0.65rem; color: #34d399; font-weight: 700; text-transform: uppercase;">Challenger</div>
+                        </div>
+
+                        <!-- VS Badge -->
+                        <div style="width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(135deg, #ef4444, #f59e0b); display: flex; align-items: center; justify-content: center; font-family: 'Rajdhani', sans-serif; font-size: 0.95rem; font-weight: 900; color: white; box-shadow: 0 0 14px rgba(239, 68, 68, 0.5);">
+                            VS
+                        </div>
+
+                        <!-- Rival Player -->
+                        <div style="text-align: center; background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.25); border-radius: 10px; padding: 10px 6px;">
+                            <div style="width: 38px; height: 38px; border-radius: 50%; background: rgba(59, 130, 246, 0.2); border: 1.5px solid #3b82f6; display: flex; align-items: center; justify-content: center; margin: 0 auto 6px auto; font-size: 1.1rem;">
+                                🎯
+                            </div>
+                            <div style="font-family: 'Rajdhani', sans-serif; font-weight: 800; font-size: 0.95rem; color: #f8fafc; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                                ${escapeHtml(c.rival_ign || c.rival_name || 'Opponent')}
+                            </div>
+                            <div style="font-size: 0.65rem; color: #60a5fa; font-weight: 700; text-transform: uppercase;">
+                                ${c.rival_name ? 'Accepted' : 'Waiting...'}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Prize & Stake Showcase Grid -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px;">
+                    <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.25); border-radius: 10px; padding: 10px; text-align: center;">
+                        <div style="font-size: 0.7rem; color: #a7f3d0; text-transform: uppercase; font-weight: 700;">Winner Takes</div>
+                        <div style="font-family: 'Rajdhani', sans-serif; font-size: 1.45rem; font-weight: 900; color: #34d399; margin-top: 1px;">
+                            ৳${c.prize_amount}
+                        </div>
+                    </div>
+                    <div style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.25); border-radius: 10px; padding: 10px; text-align: center;">
+                        <div style="font-size: 0.7rem; color: #bfdbfe; text-transform: uppercase; font-weight: 700;">Entry Stake Fee</div>
+                        <div style="font-family: 'Rajdhani', sans-serif; font-size: 1.45rem; font-weight: 900; color: #60a5fa; margin-top: 1px;">
+                            ৳${c.entry_fee}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Match Rules Grid -->
+                <div style="background: #090e17; border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 10px; padding: 10px 12px; margin-bottom: 6px;">
+                    <div style="font-size: 0.7rem; color: #64748b; font-weight: 700; text-transform: uppercase; margin-bottom: 6px;">Match Specifications</div>
+                    <div style="display: flex; justify-content: space-between; font-size: 0.78rem; color: #cbd5e1; padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.04);">
+                        <span>Gun Attributes:</span>
+                        <b>${gunAttrLabel}</b>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-size: 0.78rem; color: #cbd5e1; padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.04);">
+                        <span>Limited Ammo:</span>
+                        <b>${ammoLabel}</b>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-size: 0.78rem; color: #cbd5e1; padding: 4px 0;">
+                        <span>Room Host:</span>
+                        <b>${hostRoleLabel}</b>
+                    </div>
+                </div>
+
+                <!-- Dynamic Action Area -->
+                ${actionAreaHtml}
+            </div>
+        `;
+    } catch (err) {
+        console.error('Error fetching challenge by code:', err);
+        body.innerHTML = `
+            <div style="text-align: center; padding: 24px 14px; color: #cbd5e1;">
+                <div style="font-size: 2.2rem; margin-bottom: 8px;">❌</div>
+                <div style="font-family: 'Rajdhani', sans-serif; font-size: 1.15rem; font-weight: 800; color: #f87171;">ERROR LOADING CHALLENGE</div>
+                <p style="font-size: 0.8rem; color: #94a3b8; margin: 6px 0 16px 0;">সার্ভার থেকে চ্যালেঞ্জের তথ্য আনতে সমস্যা হয়েছে। দয়া করে ইন্টারনেট চেক করুন।</p>
+                <button type="button" class="btn btn-outline" onclick="closeModal('challengeInviteModal');" style="width: 100%; border-radius: 8px; border-color: #334155; color: #cbd5e1; padding: 9px;">বন্ধ করুন</button>
+            </div>
+        `;
+    }
+}
+
+async function acceptChallengeFromInvite(code, fee) {
+    if (!currentUser) {
+        sessionStorage.setItem('pending_challenge_code', code);
+        closeModal('challengeInviteModal');
+        openModal('authModal');
+        showToast('Please login to accept challenge', 'info');
+        return;
+    }
+
+    if ((currentUser.digits_balance || 0) < fee) {
+        showToast(`ব্যালেন্স অপর্যাপ্ত! আপনার ব্যালেন্স ৳${currentUser.digits_balance || 0}, প্রয়োজন ৳${fee}`, 'error');
+        closeModal('challengeInviteModal');
+        openWalletModal();
+        return;
+    }
+
+    if (!confirm(`Are you sure you want to accept challenge #${code} for ৳${fee}? Your entry fee will be locked in escrow.`)) {
+        return;
+    }
+
+    const btn = document.getElementById(`acceptInviteBtn-${code}`);
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span>⏳ Processing Escrow...</span>';
+    }
+
+    try {
+        const res = await fetchWithAuth(`/api/challenges/${code}/accept`, { method: 'POST' });
+        const data = await parseResponseSafe(res);
+        if (!res.ok) throw new Error((data && (data.detail || data.message)) || 'Could not accept challenge');
+
+        sessionStorage.removeItem('pending_challenge_code');
+        closeModal('challengeInviteModal');
+
+        showToast('⚔️ Challenge accepted! Match is active.', 'success');
+        playSound('success');
+
+        if (typeof updateProfileDisplay === 'function') updateProfileDisplay();
+        if (typeof renderUserProfile === 'function') renderUserProfile();
+        openChallengeModal('my');
+    } catch (err) {
+        showToast(err.message || 'Failed to accept challenge', 'error');
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = `<span>⚔️ ACCEPT CHALLENGE</span> <span style="background: rgba(0, 0, 0, 0.25); padding: 2px 10px; border-radius: 6px; font-size: 0.92rem;">(৳${fee})</span>`;
+        }
+    }
+}
+
+function checkAndTriggerDeepLinks() {
+    const chCode = getDeepLinkChallengeCode();
+    if (chCode) {
+        openChallengeByCode(chCode);
+        return;
+    }
+
+    const matchId = getDeepLinkMatchId();
+    if (matchId) {
+        sessionStorage.removeItem('pending_match_id');
+        if (typeof openMatchInnerPortal === 'function') {
+            openMatchInnerPortal(matchId);
+        }
+    }
+}
+
+window.getDeepLinkChallengeCode = getDeepLinkChallengeCode;
+window.getDeepLinkMatchId = getDeepLinkMatchId;
+window.openChallengeByCode = openChallengeByCode;
+window.acceptChallengeFromInvite = acceptChallengeFromInvite;
+window.checkAndTriggerDeepLinks = checkAndTriggerDeepLinks;
+
 
 

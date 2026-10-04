@@ -6184,9 +6184,21 @@ def create_custom_challenge(req: CreateChallengeRequest, user: dict = Depends(ge
     }
 
 def purge_old_custom_challenges(conn):
-    """Purges completed or cancelled challenges older than 24 hours to keep database clean."""
+    """Auto-cancels & refunds open challenges older than 24h, and permanently purges completed/cancelled challenges older than 24h."""
     try:
         with conn:
+            # 1. Auto-cancel and refund any open challenges that were never accepted within 24 hours
+            expired_open = conn.execute("""
+                SELECT id, creator_id, entry_fee 
+                FROM custom_challenges 
+                WHERE status = 'open' 
+                  AND created_at <= datetime('now', '-24 hours')
+            """).fetchall()
+            for ch in expired_open:
+                conn.execute("UPDATE users SET digits_balance = digits_balance + ? WHERE id = ?", (ch["entry_fee"], ch["creator_id"]))
+                conn.execute("UPDATE custom_challenges SET status = 'cancelled', completed_at = CURRENT_TIMESTAMP WHERE id = ?", (ch["id"],))
+
+            # 2. Permanently purge completed or cancelled challenges older than 24 hours
             conn.execute("""
                 DELETE FROM custom_challenges 
                 WHERE (status = 'completed' OR status = 'cancelled')

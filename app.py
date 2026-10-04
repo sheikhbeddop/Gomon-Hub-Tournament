@@ -1809,6 +1809,11 @@ RESET_PASS_SCRIPT_URL = os.environ.get(
     "RESET_PASS_SCRIPT_URL", 
     "https://script.google.com/macros/s/AKfycbzdYKeIWwfIk91vvVrNZr_F8En2FbCoGXHoiFZugyRM7fgN7ES-9TlkoTo8nbRMwsqQ9w/exec"
 ).strip()
+
+CHALLENGE_UPLOAD_SCRIPT_URL = os.environ.get(
+    "CHALLENGE_UPLOAD_SCRIPT_URL",
+    "https://script.google.com/macros/s/AKfycbycUonBG_S5ThZmH0-OVTopcV7nwRVFhhzSjHVYvgpZvGwnvf10AulAeus5lYrrANYT/exec"
+).strip()
 GMAIL_SCRIPT_URL = DEVICE_OTP_SCRIPT_URL
 
 def send_device_otp_email(to_email: str, username: str, otp_code: str):
@@ -6211,6 +6216,137 @@ def accept_custom_challenge(code: str, user: dict = Depends(get_current_user)):
     sync_db_async()
 
     return {"success": True, "message": "Challenge accepted! Match is now active."}
+
+class SetRoomRequest(BaseModel):
+    room_id: str
+    room_password: str
+
+@app.post("/api/challenges/{code}/set-room")
+def set_challenge_room(code: str, req: SetRoomRequest, user: dict = Depends(get_current_user)):
+    conn = get_db()
+    with conn:
+        ch = conn.execute("SELECT * FROM custom_challenges WHERE challenge_code = ?", (code,)).fetchone()
+        if not ch:
+            conn.close()
+            raise HTTPException(404, "Challenge not found")
+        if user["id"] not in [ch["creator_id"], ch["rival_id"]]:
+            conn.close()
+            raise HTTPException(403, "You are not a participant in this challenge")
+        
+        conn.execute("""
+            UPDATE custom_challenges 
+            SET room_id = ?, room_password = ?
+            WHERE challenge_code = ?
+        """, (req.room_id.strip(), req.room_password.strip(), code))
+    conn.close()
+    notify_db_change()
+    sync_db_async()
+    return {"success": True, "message": "Room details updated!"}
+
+class SubmitProofRequest(BaseModel):
+    claim: str
+    image: Optional[str] = ""
+
+@app.post("/api/challenges/{code}/submit-proof")
+def submit_challenge_proof(code: str, req: SubmitProofRequest, user: dict = Depends(get_current_user)):
+    claim = req.claim.lower().strip()
+    if claim not in ["won", "lost"]:
+        raise HTTPException(400, "Invalid claim: must be 'won' or 'lost'")
+
+    conn = get_db()
+    with conn:
+        ch = conn.execute("SELECT * FROM custom_challenges WHERE challenge_code = ?", (code,)).fetchone()
+        if not ch:
+            conn.close()
+            raise HTTPException(404, "Challenge not found")
+        if ch["status"] not in ["in_progress", "disputed"]:
+            conn.close()
+            raise HTTPException(400, f"Challenge is currently '{ch['status']}'")
+        if user["id"] not in [ch["creator_id"], ch["rival_id"]]:
+            conn.close()
+            raise HTTPException(403, "You are not a participant in this challenge")
+
+        is_creator = (user["id"] == ch["creator_id"])
+        file_url = ""
+
+        # Upload image to Google Drive via Google Apps Script Webhook
+        if req.image and CHALLENGE_UPLOAD_SCRIPT_URL:
+            try:
+                import urllib.request
+                clean_b64 = req.image.split(",")[-1] if "," in req.image else req.image
+                payload = json.dumps({
+                    "image": clean_b64,
+                    "filename": f"{code}_{user['username']}.jpg"
+                }).encode("utf-8")
+                gas_req = urllib.request.Request(
+                    CHALLENGE_UPLOAD_SCRIPT_URL,
+                    data=payload,
+                    headers={"Content-Type": "application/json"}
+                )
+                with urllib.request.urlopen(gas_req, timeout=12) as gas_resp:
+                    gas_res = json.loads(gas_resp.read().decode("utf-8"))
+                    file_url = gas_res.get("fileUrl", "")
+            except Exception as ge:
+                print(f"[Google Drive Upload Notice] {ge}")
+
+        if is_creator:
+            conn.execute("""
+                UPDATE custom_challenges
+                SET creator_claim = ?, creator_screenshot = CASE WHEN ? != '' THEN ? ELSE creator_screenshot END
+                WHERE challenge_code = ?
+            """, (claim, file_url, file_url, code))
+        else:
+            conn.execute("""
+                UPDATE custom_challenges
+                SET rival_claim = ?, rival_screenshot = CASE WHEN ? != '' THEN ? ELSE rival_screenshot END
+                WHERE challenge_code = ?
+            """, (claim, file_url, file_url, code))
+
+        # Check resolution
+        updated_ch = conn.execute("SELECT * FROM custom_challenges WHERE challenge_code = ?", (code,)).fetchone()
+        c_claim = updated_ch["creator_claim"]
+        r_claim = updated_ch["rival_claim"]
+
+        if (c_claim == "won" and r_claim == "lost") or (c_claim is None and r_claim == "lost"):
+            # Creator wins
+            winner_id = updated_ch["creator_id"]
+            conn.execute("UPDATE users SET digits_balance = digits_balance + ? WHERE id = ?", (updated_ch["prize_amount"], winner_id))
+            conn.execute("UPDATE custom_challenges SET status = 'completed', winner_id = ?, completed_at = CURRENT_TIMESTAMP WHERE challenge_code = ?", (winner_id, code))
+        elif (r_claim == "won" and c_claim == "lost") or (r_claim is None and c_claim == "lost"):
+            # Rival wins
+            winner_id = updated_ch["rival_id"]
+            conn.execute("UPDATE users SET digits_balance = digits_balance + ? WHERE id = ?", (updated_ch["prize_amount"], winner_id))
+            conn.execute("UPDATE custom_challenges SET status = 'completed', winner_id = ?, completed_at = CURRENT_TIMESTAMP WHERE challenge_code = ?", (winner_id, code))
+        elif c_claim == "won" and r_claim == "won":
+            conn.execute("UPDATE custom_challenges SET status = 'disputed' WHERE challenge_code = ?", (code,))
+    conn.close()
+    notify_db_change()
+    sync_db_async()
+
+    return {"success": True, "message": "Result and proof submitted successfully!", "screenshot_url": file_url}
+
+@app.post("/api/challenges/{code}/cancel")
+def cancel_custom_challenge(code: str, user: dict = Depends(get_current_user)):
+    conn = get_db()
+    with conn:
+        ch = conn.execute("SELECT * FROM custom_challenges WHERE challenge_code = ?", (code,)).fetchone()
+        if not ch:
+            conn.close()
+            raise HTTPException(404, "Challenge not found")
+        if ch["creator_id"] != user["id"]:
+            conn.close()
+            raise HTTPException(403, "Only the creator can cancel this challenge")
+        if ch["status"] != "open":
+            conn.close()
+            raise HTTPException(400, "Cannot cancel: a rival has already accepted this challenge")
+        
+        # Refund creator
+        conn.execute("UPDATE users SET digits_balance = digits_balance + ? WHERE id = ?", (ch["entry_fee"], user["id"]))
+        conn.execute("UPDATE custom_challenges SET status = 'cancelled' WHERE challenge_code = ?", (code,))
+    conn.close()
+    notify_db_change()
+    sync_db_async()
+    return {"success": True, "message": f"Challenge cancelled. BDT {ch['entry_fee']} refunded to your wallet."}
 
 class CachedStaticFiles(StaticFiles):
     async def get_response(self, path: str, scope):

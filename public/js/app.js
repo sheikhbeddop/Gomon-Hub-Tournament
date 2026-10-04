@@ -4115,6 +4115,8 @@ async function loadAdminOverview() {
             if (statPendingWith) statPendingWith.innerText = data.pending_withdrawals || 0;
             document.getElementById('adminStatTotalMatches').innerText = data.total_matches;
             document.getElementById('adminStatCirculatingDigits').innerText = data.total_digits_circulating;
+            const statPendingChal = document.getElementById('adminStatPendingChallenges');
+            if (statPendingChal) statPendingChal.innerText = data.pending_challenges || 0;
 
             renderPendingDeposits(data.pending_deposits_list);
             renderPendingWithdrawals(data.pending_withdrawals_list);
@@ -6060,6 +6062,16 @@ function handleWsMessage(data) {
             showToast(`📢 ${data.message}`, 'info');
             playSound('alert');
         }
+    } else if (data.type === 'ADMIN_CHALLENGE_NOTICE') {
+        if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'moderator')) {
+            showToast(`⚔️ Challenge #${data.code} waiting for Admin Room!`, 'info');
+            playSound('alert');
+            if (typeof loadAdminChallenges === 'function') loadAdminChallenges();
+            if (typeof loadAdminOverview === 'function') loadAdminOverview();
+        }
+    } else if (data.type === 'CHALLENGE_ROOM_UPDATED') {
+        showToast(`🎯 Challenge #${data.code} room details released!`, 'info');
+        if (typeof loadMyChallenges === 'function') loadMyChallenges();
     } else if (data.type === 'ADMIN_ANNOUNCEMENT') {
         playSound('alert');
         showToast(`🚨 ${data.title}: ${data.message}`, 'error');
@@ -6311,6 +6323,7 @@ function switchAdminSection(sectionId) {
         if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'moderator')) loadAdminUsers();
     } else if (sectionId === 'matches') {
         loadMatches();
+        loadAdminChallenges();
     } else if (sectionId === 'moderators') {
         if (currentUser && currentUser.role === 'admin') loadModeratorScoreboard();
     } else if (sectionId === 'history') {
@@ -8534,18 +8547,42 @@ async function loadMyChallenges() {
                     </div>
                 `;
             } else if (c.status === 'in_progress') {
-                actionHtml = `
-                    <!-- Room Credentials Section -->
-                    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px; margin-top: 10px;">
-                        ${c.room_id ? `
-                            <div style="font-size: 0.82rem; color: #0f172a; font-weight: 700; margin-bottom: 6px;">
-                                Room ID: <span style="font-family: monospace; color: #2563eb;">${c.room_id}</span> | Pass: <span style="font-family: monospace; color: #2563eb;">${c.room_password || 'None'}</span>
+                const isCreator = currentUser && currentUser.id === c.creator_id;
+                const isAdmin = currentUser && (currentUser.role === 'admin' || currentUser.role === 'moderator');
+                let roomBox = '';
+
+                if (c.room_id) {
+                    roomBox = `
+                        <div style="font-size: 0.82rem; color: #0f172a; font-weight: 700; margin-bottom: 6px;">
+                            Room ID: <span style="font-family: monospace; color: #2563eb;">${c.room_id}</span> | Pass: <span style="font-family: monospace; color: #2563eb;">${c.room_password || 'None'}</span>
+                        </div>
+                        <button type="button" class="btn btn-sm" onclick="navigator.clipboard.writeText('${c.room_id}'); showToast('Room ID copied!', 'success');"
+                            style="background: #2563eb; color: white; padding: 4px 10px; font-size: 0.72rem; border-radius: 6px; border: none;">
+                            Copy Room ID
+                        </button>
+                    `;
+                } else if (c.room_creator_role === 'admin') {
+                    if (isAdmin) {
+                        roomBox = `
+                            <div style="font-size: 0.78rem; font-weight: 700; color: #1e40af; margin-bottom: 6px;">Host: Admin Room (Provide ID & Pass)</div>
+                            <div style="display: flex; gap: 6px; margin-bottom: 6px;">
+                                <input type="text" id="chRoomIdInput-${c.challenge_code}" placeholder="Room ID" style="flex: 1; padding: 6px 8px; font-size: 0.78rem; border-radius: 6px; border: 1px solid #cbd5e1;">
+                                <input type="text" id="chRoomPassInput-${c.challenge_code}" placeholder="Pass" style="width: 80px; padding: 6px 8px; font-size: 0.78rem; border-radius: 6px; border: 1px solid #cbd5e1;">
                             </div>
-                            <button type="button" class="btn btn-sm" onclick="navigator.clipboard.writeText('${c.room_id}'); showToast('Room ID copied!', 'success');"
-                                style="background: #2563eb; color: white; padding: 4px 10px; font-size: 0.72rem; border-radius: 6px; border: none;">
-                                Copy Room ID
+                            <button type="button" class="btn btn-sm" onclick="submitChallengeRoom('${c.challenge_code}')"
+                                style="background: #2563eb; color: white; padding: 6px 12px; font-size: 0.74rem; font-weight: 700; border-radius: 6px; border: none;">
+                                Release Room & Start
                             </button>
-                        ` : `
+                        `;
+                    } else {
+                        roomBox = `
+                            <div style="font-size: 0.8rem; font-weight: 700; color: #1e40af; margin-bottom: 3px;">Host: Admin Will Create Room</div>
+                            <div style="font-size: 0.74rem; color: #3b82f6;">Admin has been notified. The Room ID & Password will appear here once Admin creates it.</div>
+                        `;
+                    }
+                } else {
+                    if (isCreator || isAdmin) {
+                        roomBox = `
                             <div style="font-size: 0.78rem; font-weight: 700; color: #334155; margin-bottom: 6px;">Provide Room ID & Password</div>
                             <div style="display: flex; gap: 6px; margin-bottom: 6px;">
                                 <input type="text" id="chRoomIdInput-${c.challenge_code}" placeholder="Room ID" style="flex: 1; padding: 6px 8px; font-size: 0.78rem; border-radius: 6px; border: 1px solid #cbd5e1;">
@@ -8555,7 +8592,19 @@ async function loadMyChallenges() {
                                 style="background: #10b981; color: white; padding: 6px 12px; font-size: 0.74rem; font-weight: 700; border-radius: 6px; border: none;">
                                 Update Room
                             </button>
-                        `}
+                        `;
+                    } else {
+                        roomBox = `
+                            <div style="font-size: 0.8rem; font-weight: 700; color: #334155; margin-bottom: 3px;">Host: Creator Will Create Room</div>
+                            <div style="font-size: 0.74rem; color: #64748b;">Waiting for the challenge creator to create room and release ID & Password.</div>
+                        `;
+                    }
+                }
+
+                actionHtml = `
+                    <!-- Room Credentials Section -->
+                    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px; margin-top: 10px;">
+                        ${roomBox}
                     </div>
 
                     <!-- Submit Result / Google Drive Proof -->
@@ -8747,6 +8796,156 @@ async function acceptChallenge(code) {
     }
 }
 
+async function loadAdminChallenges() {
+    const tbody = document.getElementById('adminChallengesTableBody');
+    if (!tbody) return;
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 20px;">Loading challenges...</td></tr>';
+
+    try {
+        const res = await fetchWithAuth('/api/admin/challenges');
+        const list = await parseResponseSafe(res);
+        if (!res.ok || !Array.isArray(list)) {
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #ef4444; padding: 20px;">Could not load challenges.</td></tr>';
+            return;
+        }
+
+        if (list.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 20px;">No custom challenges found.</td></tr>';
+            return;
+        }
+
+        let html = '';
+        list.forEach(c => {
+            const isNeedsAdminRoom = (c.room_creator_role === 'admin' && c.status === 'in_progress' && !c.room_id);
+            const isDisputed = (c.status === 'disputed');
+            const rowBg = isDisputed ? '#fff1f2' : isNeedsAdminRoom ? '#eff6ff' : 'transparent';
+
+            let actionHtml = '';
+            if (c.status === 'in_progress') {
+                if (!c.room_id) {
+                    actionHtml = `
+                        <div style="display: flex; gap: 4px; align-items: center;">
+                            <input type="text" id="admChRoomId-${c.challenge_code}" placeholder="Room ID" style="width: 85px; padding: 4px 6px; font-size: 0.74rem; border: 1px solid #cbd5e1; border-radius: 4px;">
+                            <input type="text" id="admChRoomPass-${c.challenge_code}" placeholder="Pass" style="width: 55px; padding: 4px 6px; font-size: 0.74rem; border: 1px solid #cbd5e1; border-radius: 4px;">
+                            <button type="button" class="btn btn-sm" onclick="adminSubmitChallengeRoom('${c.challenge_code}')"
+                                style="background: #2563eb; color: white; font-size: 0.72rem; padding: 5px 8px; border-radius: 4px; border: none; font-weight: 700; white-space: nowrap;">
+                                Release & Start
+                            </button>
+                        </div>
+                    `;
+                } else {
+                    actionHtml = `
+                        <div style="display: flex; gap: 4px; align-items: center;">
+                            <span style="font-family: monospace; font-size: 0.74rem; color: #2563eb;">${c.room_id} / ${c.room_password || '-'}</span>
+                            <button type="button" class="btn btn-sm" onclick="document.getElementById('admChEditBox-${c.challenge_code}').style.display='flex'; this.style.display='none';"
+                                style="background: #64748b; color: white; font-size: 0.68rem; padding: 3px 6px; border-radius: 4px; border: none;">Edit</button>
+                        </div>
+                        <div id="admChEditBox-${c.challenge_code}" style="display: none; gap: 4px; margin-top: 4px;">
+                            <input type="text" id="admChRoomId-${c.challenge_code}" value="${c.room_id}" style="width: 85px; padding: 4px 6px; font-size: 0.74rem; border: 1px solid #cbd5e1; border-radius: 4px;">
+                            <input type="text" id="admChRoomPass-${c.challenge_code}" value="${c.room_password || ''}" style="width: 55px; padding: 4px 6px; font-size: 0.74rem; border: 1px solid #cbd5e1; border-radius: 4px;">
+                            <button type="button" class="btn btn-sm" onclick="adminSubmitChallengeRoom('${c.challenge_code}')"
+                                style="background: #10b981; color: white; font-size: 0.72rem; padding: 4px 8px; border-radius: 4px; border: none; font-weight: 700;">Save</button>
+                        </div>
+                    `;
+                }
+            } else if (c.status === 'disputed') {
+                actionHtml = `
+                    <div style="display: flex; flex-direction: column; gap: 4px;">
+                        <div style="display: flex; gap: 4px;">
+                            ${c.creator_screenshot ? `<a href="${c.creator_screenshot}" target="_blank" style="font-size: 0.70rem; color: #2563eb; text-decoration: underline;">Creator Proof</a>` : '<span style="font-size: 0.70rem; color: #94a3b8;">No Creator Proof</span>'}
+                            ${c.rival_screenshot ? `<a href="${c.rival_screenshot}" target="_blank" style="font-size: 0.70rem; color: #2563eb; text-decoration: underline;">Rival Proof</a>` : '<span style="font-size: 0.70rem; color: #94a3b8;">No Rival Proof</span>'}
+                        </div>
+                        <div style="display: flex; gap: 4px;">
+                            <button type="button" class="btn btn-xs" onclick="adminResolveChallenge('${c.challenge_code}', 'creator')" style="background: #10b981; color: white; font-size: 0.68rem; padding: 3px 6px; border: none; border-radius: 4px;">Creator Won</button>
+                            <button type="button" class="btn btn-xs" onclick="adminResolveChallenge('${c.challenge_code}', 'rival')" style="background: #3b82f6; color: white; font-size: 0.68rem; padding: 3px 6px; border: none; border-radius: 4px;">Rival Won</button>
+                            <button type="button" class="btn btn-xs" onclick="adminResolveChallenge('${c.challenge_code}', 'refund')" style="background: #ef4444; color: white; font-size: 0.68rem; padding: 3px 6px; border: none; border-radius: 4px;">Refund</button>
+                        </div>
+                    </div>
+                `;
+            } else if (c.status === 'completed') {
+                actionHtml = `<span style="color: #15803d; font-weight: 700; font-size: 0.74rem;">Winner Paid</span>`;
+            } else if (c.status === 'open') {
+                actionHtml = `<span style="color: #b45309; font-weight: 700; font-size: 0.74rem;">Waiting for Rival</span>`;
+            } else {
+                actionHtml = `<span style="color: #64748b; font-size: 0.74rem;">${c.status}</span>`;
+            }
+
+            html += `
+                <tr style="background: ${rowBg};">
+                    <td>
+                        <b style="font-family: 'Rajdhani', sans-serif; font-size: 0.92rem;">${c.challenge_code}</b>
+                        <div style="font-size: 0.72rem; color: #64748b;">${c.mode}</div>
+                    </td>
+                    <td>
+                        <div style="font-weight: 700; color: #0f172a;">${c.creator_name} <span style="font-size: 0.72rem; color: #64748b;">(${c.creator_ign || '-'})</span></div>
+                        <div style="font-size: 0.74rem; color: #475569;">vs ${c.rival_name ? `${c.rival_name} (${c.rival_ign || '-'})` : '<i style="color: #94a3b8;">None</i>'}</div>
+                    </td>
+                    <td>
+                        <div><b>BDT ${c.entry_fee}</b></div>
+                        <div style="font-size: 0.72rem; color: #10b981; font-weight: 700;">Win: BDT ${c.prize_amount}</div>
+                    </td>
+                    <td>
+                        <span style="font-weight: 700; font-size: 0.74rem; color: ${c.room_creator_role === 'admin' ? '#2563eb' : '#0f172a'};">
+                            ${c.room_creator_role === 'admin' ? 'Admin' : 'Creator'}
+                        </span>
+                    </td>
+                    <td>
+                        <span style="font-size: 0.70rem; font-weight: 800; padding: 2px 6px; border-radius: 4px; text-transform: uppercase; background: ${c.status === 'completed' ? '#dcfce7' : c.status === 'open' ? '#fef3c7' : c.status === 'disputed' ? '#fee2e2' : '#e0f2fe'}; color: ${c.status === 'completed' ? '#15803d' : c.status === 'open' ? '#b45309' : c.status === 'disputed' ? '#b91c1c' : '#0369a1'};">
+                            ${isNeedsAdminRoom ? 'Needs Admin Room' : c.status}
+                        </span>
+                    </td>
+                    <td colspan="2" style="padding: 8px;">
+                        ${actionHtml}
+                    </td>
+                </tr>
+            `;
+        });
+        tbody.innerHTML = html;
+    } catch (e) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #ef4444; padding: 20px;">Could not load challenges.</td></tr>';
+    }
+}
+
+async function adminSubmitChallengeRoom(code) {
+    const rId = (document.getElementById(`admChRoomId-${code}`)?.value || '').trim();
+    const rPass = (document.getElementById(`admChRoomPass-${code}`)?.value || '').trim();
+    if (!rId) {
+        showToast('Please enter Room ID', 'error');
+        return;
+    }
+
+    try {
+        const res = await fetchWithAuth(`/api/challenges/${code}/set-room`, {
+            method: 'POST',
+            body: JSON.stringify({ room_id: rId, room_password: rPass })
+        });
+        const data = await parseResponseSafe(res);
+        if (!res.ok) throw new Error((data && (data.detail || data.message)) || 'Failed to update room');
+        showToast(`Room ID released for #${code}! Match is active.`, 'success');
+        loadAdminChallenges();
+        loadAdminOverview();
+    } catch (e) {
+        showToast(e.message, 'error');
+    }
+}
+
+async function adminResolveChallenge(code, role) {
+    if (!confirm(`Are you sure you want to resolve challenge #${code} with action: "${role}"?`)) return;
+    try {
+        const res = await fetchWithAuth(`/api/admin/challenges/${code}/resolve`, {
+            method: 'POST',
+            body: JSON.stringify({ winner_role: role })
+        });
+        const data = await parseResponseSafe(res);
+        if (!res.ok) throw new Error((data && (data.detail || data.message)) || 'Resolution failed');
+        showToast(data.message || 'Challenge resolved successfully!', 'success');
+        loadAdminChallenges();
+        loadAdminOverview();
+    } catch (e) {
+        showToast(e.message, 'error');
+    }
+}
+
 window.openChallengeModal = openChallengeModal;
 window.switchChallengeTab = switchChallengeTab;
 window.selectChallengeMode = selectChallengeMode;
@@ -8762,5 +8961,8 @@ window.acceptChallenge = acceptChallenge;
 window.submitChallengeRoom = submitChallengeRoom;
 window.submitChallengeProof = submitChallengeProof;
 window.cancelChallenge = cancelChallenge;
+window.loadAdminChallenges = loadAdminChallenges;
+window.adminSubmitChallengeRoom = adminSubmitChallengeRoom;
+window.adminResolveChallenge = adminResolveChallenge;
 
 

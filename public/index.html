@@ -3123,6 +3123,35 @@
         </div>
     </div>
 
+    <!-- MODAL: CHALLENGE INVITATION / OPPONENT ACCEPT -->
+    <div class="modal-overlay" id="challengeInviteModal" style="display: none;">
+        <div class="modal-box" style="max-width: 480px; max-height: 90vh; overflow-y: auto; border-radius: 18px; padding: 0; background: #0d1424; border: 1.5px solid rgba(16, 185, 129, 0.4); box-shadow: 0 16px 48px rgba(0, 0, 0, 0.75);">
+            <!-- Cyber Header -->
+            <div style="padding: 16px 20px; background: linear-gradient(135deg, rgba(16, 185, 129, 0.22), rgba(15, 23, 42, 0.95)); border-bottom: 1px solid rgba(255, 255, 255, 0.08); display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 10;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <div style="width: 38px; height: 38px; border-radius: 10px; background: rgba(16, 185, 129, 0.2); border: 1px solid rgba(16, 185, 129, 0.4); display: flex; align-items: center; justify-content: center; font-size: 1.3rem;">
+                        ⚔️
+                    </div>
+                    <div>
+                        <h3 style="font-family: 'Rajdhani', sans-serif; font-size: 1.25rem; font-weight: 800; color: #f8fafc; margin: 0; line-height: 1.2; letter-spacing: 0.5px;">
+                            CUSTOM CHALLENGE ARENA
+                        </h3>
+                        <p style="font-size: 0.72rem; color: #34d399; margin: 2px 0 0 0; font-weight: 700;">1v1 & 4v4 Clash Squad Escrow Battle</p>
+                    </div>
+                </div>
+                <button type="button" class="btn-close" onclick="sessionStorage.removeItem('pending_challenge_code'); closeModal('challengeInviteModal');" style="color: #94a3b8; font-size: 1.5rem; background: none; border: none; cursor: pointer; line-height: 1;">&times;</button>
+            </div>
+
+            <!-- Dynamic Body populated by JavaScript -->
+            <div class="modal-body" id="chInviteModalBody" style="padding: 20px;">
+                <div style="text-align: center; color: #94a3b8; padding: 30px;">
+                    <div class="pro-live-dot" style="margin-bottom: 10px;"></div>
+                    <div>চ্যালেঞ্জের বিবরণ লোড হচ্ছে...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- MODAL 1: AUTH (LOGIN & REGISTER - USER MOCKUP DESIGN) -->
     <div class="modal-overlay auth-modal-overlay" id="authModal">
         <!-- 1. SIGN IN VIEW (User Mockup 1: GOMON HUB Circle Logo) -->
@@ -4898,7 +4927,7 @@
     <!-- Toast Notification Container -->
     <div class="toast-container" id="toastContainer"></div>
 
-    <script src="/static/js/app.js?v=5.6.4"></script>
+    <script src="/static/js/app.js?v=5.6.5"></script>
 
 </body>
 

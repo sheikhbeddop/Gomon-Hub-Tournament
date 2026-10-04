@@ -336,6 +336,24 @@
                             <div class="ref-menu-arrow">&#8250;</div>
                         </button>
 
+                        <!-- 2C. Create Your Own Challenge -->
+                        <button type="button" class="ref-menu-item" onclick="openChallengeModal()">
+                            <div class="ref-menu-icon" style="background: rgba(16, 185, 129, 0.1);">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2"
+                                    stroke-linecap="round" stroke-linejoin="round">
+                                    <circle cx="12" cy="12" r="10"></circle>
+                                    <circle cx="12" cy="12" r="6"></circle>
+                                    <circle cx="12" cy="12" r="2"></circle>
+                                </svg>
+                            </div>
+                            <div class="ref-menu-label" style="display: flex; align-items: center; gap: 8px;">
+                                <span style="font-weight: 700; color: #0f172a;">Create Your Own Challenge</span>
+                                <span
+                                    style="background: linear-gradient(135deg, #10b981, #059669); color: #fff; font-size: 0.65rem; font-weight: 800; padding: 2px 7px; border-radius: 99px; text-transform: uppercase;">Custom</span>
+                            </div>
+                            <div class="ref-menu-arrow">&#8250;</div>
+                        </button>
+
                         <!-- 3. My Profile -->
                         <button type="button" class="ref-menu-item" onclick="openMyProfileModal()">
                             <div class="ref-menu-icon">
@@ -2774,6 +2792,194 @@
                         style="border-color: #cbd5e1; color: #334155; padding: 10px; border-radius: 10px; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 8px;">
                         📋 Copy Support Number
                     </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: CREATE YOUR OWN CHALLENGE (All-In-One Arena) -->
+    <div class="modal-overlay" id="challengeModal">
+        <div class="modal-box" style="max-width: 500px; max-height: 90vh; overflow-y: auto; border-radius: 20px; padding: 0;">
+            <!-- Modal Header -->
+            <div class="modal-header" style="padding: 16px 20px; border-bottom: 1px solid #e2e8f0; background: #ffffff; position: sticky; top: 0; z-index: 10;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <div style="width: 36px; height: 36px; border-radius: 10px; background: rgba(16, 185, 129, 0.12); display: flex; align-items: center; justify-content: center;">
+                        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <circle cx="12" cy="12" r="6"></circle>
+                            <circle cx="12" cy="12" r="2"></circle>
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 style="font-family: 'Rajdhani', sans-serif; font-size: 1.25rem; font-weight: 800; color: #0f172a; margin: 0; line-height: 1.2;">
+                            Custom Challenge Arena
+                        </h3>
+                        <p style="font-size: 0.76rem; color: #64748b; margin: 2px 0 0 0;">1v1 & 4v4 Clash Squad Escrow Battles</p>
+                    </div>
+                </div>
+                <button type="button" class="btn-close" onclick="closeModal('challengeModal')">&times;</button>
+            </div>
+
+            <!-- Arena Sub-Navigation Tabs -->
+            <div style="display: flex; background: #f8fafc; border-bottom: 1px solid #e2e8f0; padding: 6px 12px; gap: 6px;">
+                <button type="button" id="chTabBtn-create" onclick="switchChallengeTab('create')"
+                    style="flex: 1; padding: 8px 12px; font-size: 0.82rem; font-weight: 700; border-radius: 8px; border: none; background: #10b981; color: #ffffff; cursor: pointer; transition: all 0.2s;">
+                    Create Challenge
+                </button>
+                <button type="button" id="chTabBtn-my" onclick="switchChallengeTab('my')"
+                    style="flex: 1; padding: 8px 12px; font-size: 0.82rem; font-weight: 700; border-radius: 8px; border: none; background: transparent; color: #64748b; cursor: pointer; transition: all 0.2s;">
+                    My Challenges
+                </button>
+                <button type="button" id="chTabBtn-lobby" onclick="switchChallengeTab('lobby')"
+                    style="flex: 1; padding: 8px 12px; font-size: 0.82rem; font-weight: 700; border-radius: 8px; border: none; background: transparent; color: #64748b; cursor: pointer; transition: all 0.2s;">
+                    Open Lobbies
+                </button>
+            </div>
+
+            <!-- Modal Body Container -->
+            <div class="modal-body" style="padding: 20px;">
+                <!-- TAB 1: CREATE CHALLENGE -->
+                <div id="chContent-create">
+                    <!-- Form -->
+                    <form id="createChallengeForm" onsubmit="handleCreateChallenge(event)">
+                        <!-- Mode Selector -->
+                        <div style="margin-bottom: 16px;">
+                            <label style="display: block; font-size: 0.82rem; font-weight: 700; color: #334155; margin-bottom: 8px;">Match Mode</label>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                                <button type="button" id="chModeBtn-1v1" onclick="selectChallengeMode('1v1')"
+                                    style="padding: 12px; border-radius: 10px; border: 2px solid #10b981; background: #ecfdf5; color: #065f46; font-weight: 800; font-size: 0.9rem; cursor: pointer; text-align: center;">
+                                    1v1 Clash Squad
+                                </button>
+                                <button type="button" id="chModeBtn-4v4" onclick="selectChallengeMode('4v4')"
+                                    style="padding: 12px; border-radius: 10px; border: 1px solid #cbd5e1; background: #ffffff; color: #475569; font-weight: 700; font-size: 0.9rem; cursor: pointer; text-align: center;">
+                                    4v4 Squad
+                                </button>
+                            </div>
+                            <input type="hidden" id="chSelectedMode" value="1v1">
+                        </div>
+
+                        <!-- Entry Fee -->
+                        <div style="margin-bottom: 16px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                                <label style="font-size: 0.82rem; font-weight: 700; color: #334155;">Entry Fee (BDT)</label>
+                                <span style="font-size: 0.75rem; color: #64748b;">Per player stake</span>
+                            </div>
+                            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 8px;">
+                                <button type="button" class="btn btn-sm ch-fee-preset" onclick="setChallengeFee(20)"
+                                    style="padding: 8px 4px; border-radius: 8px; border: 1px solid #cbd5e1; background: #ffffff; font-weight: 700; font-size: 0.85rem; color: #334155;">20</button>
+                                <button type="button" class="btn btn-sm ch-fee-preset active-preset" onclick="setChallengeFee(50)"
+                                    style="padding: 8px 4px; border-radius: 8px; border: 2px solid #10b981; background: #ecfdf5; font-weight: 800; font-size: 0.85rem; color: #065f46;">50</button>
+                                <button type="button" class="btn btn-sm ch-fee-preset" onclick="setChallengeFee(100)"
+                                    style="padding: 8px 4px; border-radius: 8px; border: 1px solid #cbd5e1; background: #ffffff; font-weight: 700; font-size: 0.85rem; color: #334155;">100</button>
+                                <button type="button" class="btn btn-sm ch-fee-preset" onclick="setChallengeFee(200)"
+                                    style="padding: 8px 4px; border-radius: 8px; border: 1px solid #cbd5e1; background: #ffffff; font-weight: 700; font-size: 0.85rem; color: #334155;">200</button>
+                            </div>
+                            <input type="number" id="chFeeInput" value="50" min="10" max="5000" oninput="calculateChallengePool()"
+                                style="width: 100%; padding: 11px 14px; border-radius: 10px; border: 1px solid #cbd5e1; font-weight: 800; font-size: 1.05rem; color: #0f172a; box-sizing: border-box;">
+                        </div>
+
+                        <!-- Live Pool & Prize Calculation Card -->
+                        <div style="background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%); border: 1px solid #a7f3d0; border-radius: 12px; padding: 12px 14px; margin-bottom: 16px;">
+                            <div style="display: flex; justify-content: space-between; font-size: 0.82rem; color: #065f46; margin-bottom: 4px;">
+                                <span>Total Match Pool:</span>
+                                <b id="chTotalPoolDisplay">BDT 100</b>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; font-size: 0.95rem; color: #047857; margin-bottom: 4px;">
+                                <span>Winner Reward (90%):</span>
+                                <b id="chWinnerRewardDisplay">BDT 90</b>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; font-size: 0.76rem; color: #64748b;">
+                                <span>Platform Escrow Fee (10%):</span>
+                                <span id="chPlatformFeeDisplay">BDT 10</span>
+                            </div>
+                        </div>
+
+                        <!-- Rules Configuration -->
+                        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px; margin-bottom: 18px;">
+                            <div style="font-size: 0.82rem; font-weight: 800; color: #0f172a; margin-bottom: 10px;">Match Settings</div>
+                            
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                                <span style="font-size: 0.8rem; font-weight: 600; color: #475569;">Gun Attributes</span>
+                                <div style="display: flex; gap: 4px;">
+                                    <button type="button" id="chGunOff" onclick="setGunAttr(0)"
+                                        style="padding: 4px 10px; font-size: 0.74rem; font-weight: 800; border-radius: 6px; border: 1px solid #10b981; background: #10b981; color: white;">OFF</button>
+                                    <button type="button" id="chGunOn" onclick="setGunAttr(1)"
+                                        style="padding: 4px 10px; font-size: 0.74rem; font-weight: 600; border-radius: 6px; border: 1px solid #cbd5e1; background: #ffffff; color: #64748b;">ON</button>
+                                </div>
+                                <input type="hidden" id="chGunAttrVal" value="0">
+                            </div>
+
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                                <span style="font-size: 0.8rem; font-weight: 600; color: #475569;">Limited Ammo</span>
+                                <div style="display: flex; gap: 4px;">
+                                    <button type="button" id="chAmmoYes" onclick="setAmmo(1)"
+                                        style="padding: 4px 10px; font-size: 0.74rem; font-weight: 800; border-radius: 6px; border: 1px solid #10b981; background: #10b981; color: white;">YES</button>
+                                    <button type="button" id="chAmmoNo" onclick="setAmmo(0)"
+                                        style="padding: 4px 10px; font-size: 0.74rem; font-weight: 600; border-radius: 6px; border: 1px solid #cbd5e1; background: #ffffff; color: #64748b;">NO</button>
+                                </div>
+                                <input type="hidden" id="chAmmoVal" value="1">
+                            </div>
+
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <span style="font-size: 0.8rem; font-weight: 600; color: #475569;">Custom Room Host</span>
+                                <select id="chRoomHost" style="font-size: 0.78rem; font-weight: 700; padding: 5px 8px; border-radius: 6px; border: 1px solid #cbd5e1; background: white; color: #0f172a;">
+                                    <option value="creator">I will create room</option>
+                                    <option value="rival">Rival will create room</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Action Submit Button (Zero Emoji) -->
+                        <button type="submit" id="chSubmitBtn" class="btn"
+                            style="width: 100%; background: #10b981; color: #ffffff; padding: 13px; border-radius: 10px; font-weight: 800; font-size: 0.95rem; border: none; cursor: pointer; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25);">
+                            Create Challenge & Lock Stake
+                        </button>
+                    </form>
+
+                    <!-- Success Share Banner (Hidden until created) -->
+                    <div id="chShareCard" style="display: none; margin-top: 18px; background: #ffffff; border: 2px dashed #10b981; border-radius: 14px; padding: 16px; text-align: center;">
+                        <h4 style="font-family: 'Rajdhani', sans-serif; font-size: 1.15rem; font-weight: 800; color: #047857; margin: 0 0 6px 0;">
+                            Challenge Created Successfully
+                        </h4>
+                        <p style="font-size: 0.8rem; color: #64748b; margin: 0 0 12px 0;">Share this link with your opponent to begin match.</p>
+
+                        <div style="display: flex; gap: 6px; margin-bottom: 12px;">
+                            <input type="text" id="chShareLinkInput" readonly
+                                style="flex: 1; padding: 8px 10px; font-size: 0.8rem; border-radius: 8px; border: 1px solid #cbd5e1; background: #f8fafc; font-family: monospace;">
+                            <button type="button" class="btn btn-sm" onclick="copyChallengeLink()"
+                                style="background: #0f172a; color: #ffffff; padding: 8px 12px; font-size: 0.8rem; font-weight: 700; border-radius: 8px; border: none;">
+                                Copy
+                            </button>
+                        </div>
+
+                        <div style="display: flex; flex-direction: column; gap: 8px;">
+                            <a id="chWhatsAppShareBtn" href="#" target="_blank" class="btn btn-sm"
+                                style="background: #25d366; color: #ffffff; padding: 10px; font-weight: 700; border-radius: 8px; text-decoration: none; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.582 2.128 2.182-.573c.978.58 1.911.928 3.145.929 3.178 0 5.767-2.587 5.768-5.766.001-3.187-2.575-5.771-5.764-5.771zm3.392 8.244c-.144.405-.837.774-1.17.824-.299.045-.677.063-1.092-.069-.252-.08-.575-.187-.988-.365-1.739-.751-2.874-2.502-2.961-2.617-.087-.116-.708-.94-.708-1.793s.448-1.273.607-1.446c.159-.173.346-.217.462-.217l.332.006c.106.005.249-.04.39.298.144.347.491 1.2.534 1.287.043.087.072.188.014.304-.058.116-.087.188-.173.289l-.26.304c-.087.086-.177.18-.076.354.101.174.449.741.964 1.201.662.591 1.221.774 1.394.86s.274.072.376-.043c.101-.116.433-.506.549-.68.116-.173.231-.145.39-.087s1.011.477 1.184.564.289.13.332.202c.045.072.045.419-.1.824z" />
+                                </svg>
+                                Send to Opponent on WhatsApp
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 2: MY CHALLENGES -->
+                <div id="chContent-my" style="display: none;">
+                    <div id="chMyListContainer">
+                        <div style="text-align: center; color: #94a3b8; padding: 30px 10px; font-size: 0.88rem;">
+                            No active challenges found. Create one to begin.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 3: OPEN LOBBIES -->
+                <div id="chContent-lobby" style="display: none;">
+                    <div id="chLobbyListContainer">
+                        <div style="text-align: center; color: #94a3b8; padding: 30px 10px; font-size: 0.88rem;">
+                            No open lobbies available right now. Check back shortly.
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

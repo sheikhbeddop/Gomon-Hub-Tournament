@@ -3,7 +3,7 @@
 const CACHE_NAME = 'gomon-hub-v8.2';
 const PRECACHE_ASSETS = [
     '/',
-    '/static/css/style.css?v=5.5.0',
+    '/static/css/style.css?v=5.5.1',
     '/static/css/auth-components.css?v=5.4.3',
     '/static/js/app.js?v=5.6.2',
     '/manifest.json',

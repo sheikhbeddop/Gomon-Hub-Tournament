@@ -7,6 +7,7 @@ import hashlib
 import secrets
 import sqlite3
 import base64
+import struct
 import re
 import threading
 from typing import Optional, List
@@ -359,6 +360,31 @@ def verify_token(token: str) -> Optional[dict]:
         return payload
     except Exception:
         return None
+
+def generate_base32_secret(length: int = 16) -> str:
+    alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
+    return "".join(secrets.choice(alphabet) for _ in range(length))
+
+def verify_totp(secret: str, token: str, window: int = 1, interval: int = 30) -> bool:
+    try:
+        clean_secret = secret.replace(" ", "").upper()
+        padding = (8 - len(clean_secret) % 8) % 8
+        key = base64.b32decode(clean_secret + "=" * padding)
+        current_counter = int(time.time() // interval)
+        token_str = str(token).strip()
+        if len(token_str) != 6 or not token_str.isdigit():
+            return False
+        token_int = int(token_str)
+        for offset in range(-window, window + 1):
+            msg = struct.pack(">Q", current_counter + offset)
+            h = hmac.new(key, msg, hashlib.sha1).digest()
+            o = h[-1] & 0x0F
+            code = (struct.unpack(">I", h[o:o+4])[0] & 0x7FFFFFFF) % 1000000
+            if code == token_int:
+                return True
+        return False
+    except Exception:
+        return False
 
 def get_match_code_prefix(match_type: str) -> str:
     mt = (match_type or "").strip().lower()
@@ -2262,6 +2288,8 @@ async def login(data: LoginRequest):
     if user["role"] == "admin":
         conn_pin = get_db()
         pin_row = conn_pin.execute("SELECT value FROM settings WHERE key = 'master_admin_pin'").fetchone()
+        totp_row = conn_pin.execute("SELECT value FROM settings WHERE key = 'admin_totp_secret'").fetchone()
+        totp_enabled_row = conn_pin.execute("SELECT value FROM settings WHERE key = 'admin_totp_enabled'").fetchone()
         conn_pin.close()
         # Priority order: 1. Render ADMIN_PIN env variable, 2. Database setting, 3. Safety recovery fallback
         env_pin = os.environ.get("ADMIN_PIN", "").strip() or os.environ.get("MASTER_ADMIN_PIN", "").strip()
@@ -2270,13 +2298,17 @@ async def login(data: LoginRequest):
         if not expected_pin:
             expected_pin = "".join(chr(c) for c in [50, 48, 50, 54, 56, 56])
         
+        totp_secret = str(totp_row["value"]).strip() if (totp_row and totp_row["value"]) else ""
+        totp_enabled = str(totp_enabled_row["value"]).strip() == "1" if totp_enabled_row else False
         provided_pin = (data.admin_pin or "").strip()
         if not provided_pin:
             raise HTTPException(
                 status_code=403, 
                 detail="ADMIN_PIN_REQUIRED:এডমিন অ্যাকাউন্টে প্রবেশের জন্য ৬ ডিজিটের গোপন সিকিউরিটি পিন দিন!"
             )
-        if provided_pin != expected_pin:
+        is_pin_match = (provided_pin == expected_pin)
+        is_totp_match = (totp_enabled and totp_secret and verify_totp(totp_secret, provided_pin))
+        if not (is_pin_match or is_totp_match):
             raise HTTPException(
                 status_code=403, 
                 detail="ভুল এডমিন সিকিউরিটি পিন! সঠিক পিন ছাড়া প্রবেশাধিকার সম্পূর্ণ নিষিদ্ধ।"
@@ -5999,6 +6031,115 @@ async def admin_change_own_password(data: AdminChangePasswordRequest, admin: dic
         "message": "এডমিন আইডি, পাসওয়ার্ড ও সিকিউরিটি পিন সফলভাবে আপডেট হয়েছে!",
         "new_username": target_username,
         "token": new_token
+    }
+
+class AdminTotpVerifyRequest(BaseModel):
+    code: str
+
+class AdminTotpDisableRequest(BaseModel):
+    master_pin: str
+
+@app.get("/api/admin/totp/status")
+async def admin_get_totp_status(admin: dict = Depends(verify_admin)):
+    conn = get_db()
+    try:
+        enabled_row = conn.execute("SELECT value FROM settings WHERE key = 'admin_totp_enabled'").fetchone()
+        is_enabled = (str(enabled_row["value"]).strip() == "1") if enabled_row else False
+        return {"enabled": is_enabled}
+    finally:
+        conn.close()
+
+@app.post("/api/admin/totp/generate")
+async def admin_generate_totp(admin: dict = Depends(verify_admin)):
+    secret = generate_base32_secret(16)
+    conn = get_db()
+    try:
+        with conn:
+            conn.execute("""
+                INSERT INTO settings (key, value) VALUES ('admin_totp_pending_secret', ?)
+                ON CONFLICT(key) DO UPDATE SET value = excluded.value
+            """, (secret,))
+    finally:
+        conn.close()
+    
+    otpauth_url = f"otpauth://totp/GOMON%20HUB:admin?secret={secret}&issuer=GOMON%20HUB"
+    return {
+        "success": True,
+        "secret": secret,
+        "otpauth_url": otpauth_url
+    }
+
+@app.post("/api/admin/totp/verify-activate")
+async def admin_verify_activate_totp(data: AdminTotpVerifyRequest, admin: dict = Depends(verify_admin)):
+    code = (data.code or "").strip()
+    conn = get_db()
+    try:
+        pending_row = conn.execute("SELECT value FROM settings WHERE key = 'admin_totp_pending_secret'").fetchone()
+        pending_secret = str(pending_row["value"]).strip() if pending_row else ""
+        if not pending_secret:
+            raise HTTPException(status_code=400, detail="কোনো পেন্ডিং সেটআপ পাওয়া যায়নি। পুনরায় জেনারেট করুন।")
+        
+        if not verify_totp(pending_secret, code):
+            raise HTTPException(status_code=400, detail="ভুল ৬ ডিজিট কোড! Google Authenticator অ্যাপে দেখানো বর্তমান কোডটি দিন।")
+        
+        with conn:
+            conn.execute("""
+                INSERT INTO settings (key, value) VALUES ('admin_totp_secret', ?)
+                ON CONFLICT(key) DO UPDATE SET value = excluded.value
+            """, (pending_secret,))
+            conn.execute("""
+                INSERT INTO settings (key, value) VALUES ('admin_totp_enabled', '1')
+                ON CONFLICT(key) DO UPDATE SET value = excluded.value
+            """, ())
+            conn.execute("DELETE FROM settings WHERE key = 'admin_totp_pending_secret'")
+            conn.execute("""
+                INSERT INTO audit_logs (admin_id, target_user_id, action, amount, reason)
+                VALUES (?, ?, 'ADMIN_ENABLED_TOTP_2FA', 0, 'Master Admin successfully activated Google Authenticator 2FA')
+            """, (admin["id"], admin["id"]))
+    finally:
+        conn.close()
+
+    try:
+        sync_db_async()
+    except Exception:
+        pass
+
+    return {
+        "success": True,
+        "message": "Google Authenticator সফলভাবে অ্যাক্টিভ করা হয়েছে!"
+    }
+
+@app.post("/api/admin/totp/disable")
+async def admin_disable_totp(data: AdminTotpDisableRequest, admin: dict = Depends(verify_admin)):
+    master_pin = (data.master_pin or "").strip()
+    conn = get_db()
+    try:
+        pin_row = conn.execute("SELECT value FROM settings WHERE key = 'master_admin_pin'").fetchone()
+        env_pin = os.environ.get("ADMIN_PIN", "").strip() or os.environ.get("MASTER_ADMIN_PIN", "").strip()
+        expected_pin = env_pin or (str(pin_row["value"]).strip() if pin_row else "") or "".join(chr(c) for c in [50, 48, 50, 54, 56, 56])
+        if master_pin != expected_pin:
+            raise HTTPException(status_code=403, detail="ভুল মাস্টার পিন! নিষ্ক্রিয় করার অনুমতি দেওয়া হলো না।")
+        
+        with conn:
+            conn.execute("""
+                INSERT INTO settings (key, value) VALUES ('admin_totp_enabled', '0')
+                ON CONFLICT(key) DO UPDATE SET value = excluded.value
+            """, ())
+            conn.execute("""
+                INSERT INTO audit_logs (admin_id, target_user_id, action, amount, reason)
+                VALUES (?, ?, 'ADMIN_DISABLED_TOTP_2FA', 0, 'Master Admin disabled Google Authenticator using Master PIN')
+            """, (admin["id"], admin["id"]))
+    finally:
+        conn.close()
+
+    try:
+        sync_db_async()
+    except Exception:
+        pass
+
+    return {
+        "success": True,
+        "message": "Google Authenticator সফলভাবে নিষ্ক্রিয় করা হয়েছে।"
     }
 
 @app.post("/api/admin/broadcast")

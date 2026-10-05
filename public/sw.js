@@ -1,11 +1,11 @@
 // Service Worker for GOMON HUB TOURNAMENT (PWA Offline & Push Engine)
 
-const CACHE_NAME = 'gomon-hub-v8.8';
+const CACHE_NAME = 'gomon-hub-v8.9';
 const PRECACHE_ASSETS = [
     '/',
-    '/static/css/style.css?v=5.5.3',
+    '/static/css/style.css?v=5.5.4',
     '/static/css/auth-components.css?v=5.4.3',
-    '/static/js/app.js?v=5.6.8',
+    '/static/js/app.js?v=5.6.9',
     '/manifest.json',
     '/favicon.ico',
     '/gomon_hub_logo.png',
@@ -43,7 +43,7 @@ self.addEventListener('message', (event) => {
     }
 });
 
-// Fetch Handler: App Shell Cache-First (Ultra Bandwidth Saver), Network-Only for Dynamic APIs & WebSockets
+// Fetch Handler: Network-First for Navigation/HTML, Cache-First for Static Assets, Network-Only for APIs & WebSockets
 self.addEventListener('fetch', (event) => {
     // Only intercept GET requests
     if (event.request.method !== 'GET') {
@@ -60,20 +60,20 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
-    // 1. Navigation / HTML pages (e.g., '/', '/index.html'): Cache-First with Network Fallback
+    // 1. Navigation / HTML pages (e.g., '/', '/index.html'): Network-First with Cache Fallback
     if (event.request.mode === 'navigate' || url.pathname === '/' || url.pathname.endsWith('.html')) {
         event.respondWith(
-            caches.match('/').then((cached) => {
-                if (cached) {
-                    return cached;
+            fetch(event.request).then((networkResponse) => {
+                if (networkResponse && networkResponse.status === 200) {
+                    const clone = networkResponse.clone();
+                    caches.open(CACHE_NAME).then((cache) => cache.put('/', clone));
                 }
-                return fetch(event.request).then((networkResponse) => {
-                    if (networkResponse && networkResponse.status === 200) {
-                        const clone = networkResponse.clone();
-                        caches.open(CACHE_NAME).then((cache) => cache.put('/', clone));
+                return networkResponse;
+            }).catch(() => {
+                return caches.match('/').then((cached) => {
+                    if (cached) {
+                        return cached;
                     }
-                    return networkResponse;
-                }).catch(() => {
                     return new Response('Offline: Network connection unavailable', {
                         status: 503,
                         statusText: 'Service Unavailable',
@@ -85,7 +85,7 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
-    // 2. Static Assets (CSS, JS, Images, Icons, Fonts, Manifest): Cache-First
+    // 2. Static Assets (CSS, JS, Images, Icons, Fonts, Manifest): Cache-First with Network Fetch
     const isStaticAsset = url.pathname.startsWith('/static/') || 
         url.pathname.endsWith('.css') || 
         url.pathname.endsWith('.js') || 
@@ -94,29 +94,23 @@ self.addEventListener('fetch', (event) => {
         url.pathname.endsWith('.jpeg') || 
         url.pathname.endsWith('.webp') || 
         url.pathname.endsWith('.ico') || 
-        url.pathname.endsWith('.svg') ||
-        url.pathname.endsWith('.woff2') ||
-        url.pathname === '/manifest.json' ||
+        url.pathname.endsWith('.svg') || 
+        url.pathname.endsWith('.woff2') || 
+        url.pathname === '/manifest.json' || 
         url.pathname === '/favicon.ico';
 
     if (isStaticAsset) {
         event.respondWith(
-            caches.match(event.request, { ignoreSearch: false }).then((cached) => {
+            caches.match(event.request).then((cached) => {
                 if (cached) {
                     return cached;
                 }
-                // Fallback check with ignoreSearch for versioned static assets
-                return caches.match(event.request, { ignoreSearch: true }).then((cachedFuzzy) => {
-                    if (cachedFuzzy) {
-                        return cachedFuzzy;
+                return fetch(event.request).then((networkResponse) => {
+                    if (networkResponse && networkResponse.status === 200) {
+                        const clone = networkResponse.clone();
+                        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
                     }
-                    return fetch(event.request).then((networkResponse) => {
-                        if (networkResponse && networkResponse.status === 200) {
-                            const clone = networkResponse.clone();
-                            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
-                        }
-                        return networkResponse;
-                    });
+                    return networkResponse;
                 });
             })
         );

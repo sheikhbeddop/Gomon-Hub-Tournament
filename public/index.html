@@ -899,6 +899,25 @@
 
                             <div class="admin-grid-stats admin-only-card" id="adminStatsGrid"
                                 style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-bottom: 20px;">
+                                <!-- 0. Master Admin Net Profit Card -->
+                                <div class="admin-stat-card admin-profit-card" id="adminProfitStatCard" style="display: none; cursor: pointer; transition: all 0.2s ease;"
+                                    onclick="openAdminProfitModal()"
+                                    onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 16px rgba(16, 185, 129, 0.2)';"
+                                    onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='var(--shadow-card)';">
+                                    <div class="admin-stat-icon"
+                                        style="background: rgba(16, 185, 129, 0.18); color: #10b981;">💰</div>
+                                    <div style="flex: 1;">
+                                        <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px;">
+                                            <div style="font-size: 0.72rem; color: #10b981; text-transform: uppercase; font-weight: 800; letter-spacing: 0.4px;">
+                                                Today's Net Profit</div>
+                                            <span style="font-size: 0.62rem; background: rgba(16, 185, 129, 0.15); color: #059669; padding: 1px 5px; border-radius: 4px; font-weight: 800;">LIVE</span>
+                                        </div>
+                                        <div style="font-size: 1.55rem; font-weight: 800; font-family: 'Rajdhani', sans-serif; color: #10b981;"
+                                            id="adminStatTodayProfit">৳0</div>
+                                    </div>
+                                    <span style="font-size: 0.8rem; color: #10b981; font-weight: 700;">➔</span>
+                                </div>
+
                                 <!-- 1. Total Players -->
                                 <div class="admin-stat-card" style="cursor: pointer; transition: all 0.2s ease;"
                                     onclick="switchAdminSection('players')"
@@ -4918,6 +4937,177 @@
                     <span id="auditLogsCountSummary">Showing 0 logs</span>
                 </div>
                 <button type="button" class="btn audit-btn-reset" onclick="closeModal('adminAuditLogsModal')">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 2.9: MASTER ADMIN 30-DAY PROFIT LEDGER -->
+    <div class="modal-overlay" id="adminProfitModal">
+        <div class="modal-box profit-modal-box">
+            <!-- Modal Header -->
+            <div class="profit-modal-header">
+                <div class="profit-header-left">
+                    <div class="profit-header-title">
+                        <h3><span>💰 Daily Profit & Financial Ledger</span></h3>
+                        <span class="profit-badge-shield">🛡️ Master Admin Only</span>
+                    </div>
+                    <div class="profit-header-sub">
+                        <span>100% accurate net earnings calculation • 30-Day Auto-Purge Policy</span>
+                    </div>
+                </div>
+                <button class="modal-close" onclick="closeModal('adminProfitModal')">&times;</button>
+            </div>
+
+            <!-- Toolbar: Date Selection & Actions -->
+            <div class="profit-toolbar">
+                <div class="profit-toolbar-row">
+                    <div class="profit-date-controls">
+                        <label class="profit-label">Select Date:</label>
+                        <input type="date" id="adminProfitDatePicker" class="form-input profit-date-input"
+                            onchange="handleProfitDateChange(this.value)">
+                        <button type="button" class="btn btn-sm profit-btn-chip active" id="profitChipToday"
+                            onclick="setProfitQuickDate('today')">Today (আজকে)</button>
+                        <button type="button" class="btn btn-sm profit-btn-chip" id="profitChipYesterday"
+                            onclick="setProfitQuickDate('yesterday')">Yesterday (গতকাল)</button>
+                    </div>
+                    <div class="profit-toolbar-actions">
+                        <button type="button" class="btn profit-btn-refresh" onclick="refreshAdminProfitData()">
+                            ⚡ Re-Calculate
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Scrollable Body -->
+            <div class="profit-body-scroll">
+                <!-- KPI Stat Cards -->
+                <div class="profit-kpi-grid">
+                    <!-- Net Pure Profit -->
+                    <div class="profit-kpi-card highlight-profit">
+                        <div class="kpi-icon">💵</div>
+                        <div class="kpi-content">
+                            <div class="kpi-title">Net Pure Profit (নিট লাভ)</div>
+                            <div class="kpi-value" id="kpiNetProfit">+৳0</div>
+                            <div class="kpi-hint" id="kpiTargetDateLabel">Selected Date</div>
+                        </div>
+                    </div>
+
+                    <!-- Total Collected -->
+                    <div class="profit-kpi-card">
+                        <div class="kpi-icon">🎟️</div>
+                        <div class="kpi-content">
+                            <div class="kpi-title">Entry Fees Collected</div>
+                            <div class="kpi-value" id="kpiEntryFees">৳0</div>
+                            <div class="kpi-hint">Total Player Entry Fees</div>
+                        </div>
+                    </div>
+
+                    <!-- Total Prizes Given -->
+                    <div class="profit-kpi-card">
+                        <div class="kpi-icon">🏆</div>
+                        <div class="kpi-content">
+                            <div class="kpi-title">Prizes Distributed</div>
+                            <div class="kpi-value" id="kpiPrizesGiven">৳0</div>
+                            <div class="kpi-hint">Rank & Kill Bounties</div>
+                        </div>
+                    </div>
+
+                    <!-- Completed Matches -->
+                    <div class="profit-kpi-card">
+                        <div class="kpi-icon">🎮</div>
+                        <div class="kpi-content">
+                            <div class="kpi-title">Completed Matches</div>
+                            <div class="kpi-value" id="kpiCompletedMatches">0</div>
+                            <div class="kpi-hint">Finished in this period</div>
+                        </div>
+                    </div>
+
+                    <!-- 30-Day Cumulative Profit -->
+                    <div class="profit-kpi-card highlight-monthly">
+                        <div class="kpi-icon">📈</div>
+                        <div class="kpi-content">
+                            <div class="kpi-title">30-Day Total Profit</div>
+                            <div class="kpi-value" id="kpiMonthlyTotal">+৳0</div>
+                            <div class="kpi-hint">Last 30 Days Combined</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tabs: Daily Match Breakdown vs 30-Day History -->
+                <div class="profit-tabs-header">
+                    <button type="button" class="profit-tab-btn active" id="profitTabBtnBreakdown"
+                        onclick="switchProfitTab('breakdown')">
+                        📋 Matches in Selected Day (<span id="profitMatchCountBadge">0</span>)
+                    </button>
+                    <button type="button" class="profit-tab-btn" id="profitTabBtnHistory"
+                        onclick="switchProfitTab('history')">
+                        📅 30-Day Daily Profit Ledger (<span id="profitHistoryDaysBadge">0</span> Days)
+                    </button>
+                </div>
+
+                <!-- Tab 1: Daily Match Breakdown -->
+                <div class="profit-tab-content" id="profitTabBreakdown">
+                    <div class="profit-table-card">
+                        <div class="table-scroll">
+                            <table class="profit-table">
+                                <thead>
+                                    <tr>
+                                        <th>Match Code</th>
+                                        <th>Title & Mode</th>
+                                        <th>Completed (BST)</th>
+                                        <th style="text-align: center;">Players</th>
+                                        <th style="text-align: right;">Entry Fee</th>
+                                        <th style="text-align: right;">Total Collected</th>
+                                        <th style="text-align: right;">Prizes Given</th>
+                                        <th style="text-align: right;">Match Margin</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="profitMatchBreakdownBody">
+                                    <tr>
+                                        <td colspan="8" style="text-align: center; padding: 24px; color: var(--text-muted);">
+                                            No completed matches found for this date.
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab 2: 30-Day Monthly History -->
+                <div class="profit-tab-content" id="profitTabHistory" style="display: none;">
+                    <div class="profit-table-card">
+                        <div class="table-scroll">
+                            <table class="profit-table">
+                                <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th style="text-align: center;">Completed Matches</th>
+                                        <th style="text-align: right;">Total Entry Collected</th>
+                                        <th style="text-align: right;">Total Prizes Distributed</th>
+                                        <th style="text-align: right;">Net Profit</th>
+                                        <th style="text-align: center;">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="profitMonthlyHistoryBody">
+                                    <tr>
+                                        <td colspan="6" style="text-align: center; padding: 24px; color: var(--text-muted);">
+                                            Loading 30-day profit records...
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="profit-footer">
+                <div class="profit-footer-notice">
+                    <span>🛡️ Confidential Master Admin Ledger • Retained for 30 Days (1 Month) then auto-purged</span>
+                </div>
+                <button type="button" class="btn audit-btn-reset" onclick="closeModal('adminProfitModal')">Close</button>
             </div>
         </div>
     </div>

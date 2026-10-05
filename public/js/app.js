@@ -4133,6 +4133,16 @@ async function loadAdminOverview() {
             loadAdminUsers();
             loadAdminIncomingPayments();
             try { loadAdminTotpStatus(); } catch(e) {}
+
+            // Master Admin Exclusive Net Profit Stats
+            if (currentUser && currentUser.role === 'admin') {
+                const profitCard = document.getElementById('adminProfitStatCard');
+                if (profitCard) profitCard.style.display = 'flex';
+                try { loadAdminProfitStat(); } catch(e) {}
+            } else {
+                const profitCard = document.getElementById('adminProfitStatCard');
+                if (profitCard) profitCard.style.display = 'none';
+            }
         }
     } catch (e) {
         console.error(e);
@@ -5104,6 +5114,285 @@ function renderAdminAuditLogs(logs) {
             </tr>
         `;
     }).join('');
+}
+
+// ----------------------------------------------------
+// 💰 MASTER ADMIN 30-DAY PROFIT ANALYTICS ENGINE
+// ----------------------------------------------------
+let currentProfitSelectedDate = null;
+let currentProfitActiveTab = 'breakdown';
+
+async function loadAdminProfitStat() {
+    if (!currentUser || currentUser.role !== 'admin') return;
+    try {
+        const res = await fetch('/api/admin/profit-analytics', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.ok) {
+            const data = await res.json();
+            const statProfit = document.getElementById('adminStatTodayProfit');
+            if (statProfit && data.summary) {
+                const net = Number(data.summary.net_profit) || 0;
+                if (net > 0) {
+                    statProfit.innerText = `+৳${net.toLocaleString('en-US')}`;
+                    statProfit.style.color = '#10b981';
+                } else if (net < 0) {
+                    statProfit.innerText = `-৳${Math.abs(net).toLocaleString('en-US')}`;
+                    statProfit.style.color = '#ef4444';
+                } else {
+                    statProfit.innerText = `৳0`;
+                    statProfit.style.color = '#10b981';
+                }
+            }
+        }
+    } catch (e) {
+        console.error('Error loading admin profit stat:', e);
+    }
+}
+
+async function openAdminProfitModal(selectedDate = null) {
+    if (!currentUser || currentUser.role !== 'admin') return;
+    
+    openModal('adminProfitModal');
+    switchProfitTab('breakdown');
+
+    // Default to today in local client if none passed
+    if (!selectedDate) {
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        selectedDate = `${year}-${month}-${day}`;
+    }
+
+    currentProfitSelectedDate = selectedDate;
+    const datePicker = document.getElementById('adminProfitDatePicker');
+    if (datePicker) datePicker.value = selectedDate;
+
+    updateProfitChipStates(selectedDate);
+    await fetchAndRenderProfitData(selectedDate);
+}
+
+function updateProfitChipStates(selectedDate) {
+    const now = new Date();
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    
+    const yest = new Date();
+    yest.setDate(yest.getDate() - 1);
+    const yestStr = `${yest.getFullYear()}-${String(yest.getMonth() + 1).padStart(2, '0')}-${String(yest.getDate()).padStart(2, '0')}`;
+
+    const chipToday = document.getElementById('profitChipToday');
+    const chipYest = document.getElementById('profitChipYesterday');
+
+    if (chipToday) {
+        if (selectedDate === todayStr) chipToday.classList.add('active');
+        else chipToday.classList.remove('active');
+    }
+    if (chipYest) {
+        if (selectedDate === yestStr) chipYest.classList.add('active');
+        else chipYest.classList.remove('active');
+    }
+}
+
+function handleProfitDateChange(val) {
+    if (!val) return;
+    currentProfitSelectedDate = val;
+    updateProfitChipStates(val);
+    fetchAndRenderProfitData(val);
+}
+
+function setProfitQuickDate(type) {
+    const now = new Date();
+    if (type === 'yesterday') {
+        now.setDate(now.getDate() - 1);
+    }
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const dateStr = `${year}-${month}-${day}`;
+    
+    currentProfitSelectedDate = dateStr;
+    const datePicker = document.getElementById('adminProfitDatePicker');
+    if (datePicker) datePicker.value = dateStr;
+
+    updateProfitChipStates(dateStr);
+    fetchAndRenderProfitData(dateStr);
+}
+
+function switchProfitTab(tabName) {
+    currentProfitActiveTab = tabName;
+    const tabBreakdown = document.getElementById('profitTabBreakdown');
+    const tabHistory = document.getElementById('profitTabHistory');
+    const btnBreakdown = document.getElementById('profitTabBtnBreakdown');
+    const btnHistory = document.getElementById('profitTabBtnHistory');
+
+    if (tabName === 'breakdown') {
+        if (tabBreakdown) tabBreakdown.style.display = 'block';
+        if (tabHistory) tabHistory.style.display = 'none';
+        if (btnBreakdown) btnBreakdown.classList.add('active');
+        if (btnHistory) btnHistory.classList.remove('active');
+    } else {
+        if (tabBreakdown) tabBreakdown.style.display = 'none';
+        if (tabHistory) tabHistory.style.display = 'block';
+        if (btnBreakdown) btnBreakdown.classList.remove('active');
+        if (btnHistory) btnHistory.classList.add('active');
+    }
+}
+
+function refreshAdminProfitData() {
+    if (currentProfitSelectedDate) {
+        fetchAndRenderProfitData(currentProfitSelectedDate);
+    }
+}
+
+async function fetchAndRenderProfitData(dateStr) {
+    const breakdownBody = document.getElementById('profitMatchBreakdownBody');
+    if (breakdownBody) {
+        breakdownBody.innerHTML = `<tr><td colspan="8" style="text-align: center; padding: 24px; color: var(--text-muted);"><span class="audit-pulse-dot" style="display:inline-block; margin-right:6px;"></span> Calculating live financial profit...</td></tr>`;
+    }
+
+    try {
+        const res = await fetch(`/api/admin/profit-analytics?date=${dateStr}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.ok) {
+            const data = await res.json();
+            renderAdminProfitModalData(data);
+        } else {
+            if (breakdownBody) breakdownBody.innerHTML = `<tr><td colspan="8" style="text-align: center; padding: 24px; color: #ef4444;">Failed to load profit analytics.</td></tr>`;
+        }
+    } catch (e) {
+        console.error('Error fetching profit analytics:', e);
+        if (breakdownBody) breakdownBody.innerHTML = `<tr><td colspan="8" style="text-align: center; padding: 24px; color: #ef4444;">Server connection error.</td></tr>`;
+    }
+}
+
+function renderAdminProfitModalData(data) {
+    const summary = data.summary || {};
+    const breakdown = data.breakdown || [];
+    const history = data.monthly_history || [];
+
+    // KPI: Net Pure Profit
+    const kpiNet = document.getElementById('kpiNetProfit');
+    const net = Number(summary.net_profit) || 0;
+    if (kpiNet) {
+        if (net > 0) {
+            kpiNet.innerText = `+৳${net.toLocaleString('en-US')}`;
+            kpiNet.style.color = '#059669';
+        } else if (net < 0) {
+            kpiNet.innerText = `-৳${Math.abs(net).toLocaleString('en-US')}`;
+            kpiNet.style.color = '#dc2626';
+        } else {
+            kpiNet.innerText = `৳0`;
+            kpiNet.style.color = '#10b981';
+        }
+    }
+
+    // KPI: Target Date label
+    const dateLabel = document.getElementById('kpiTargetDateLabel');
+    if (dateLabel) {
+        dateLabel.innerText = data.is_today ? `Today (${data.target_date})` : data.target_date;
+    }
+
+    // KPI: Entry Fees
+    const kpiEntry = document.getElementById('kpiEntryFees');
+    if (kpiEntry) kpiEntry.innerText = `৳${(Number(summary.tournament_entry_fees) || 0).toLocaleString('en-US')}`;
+
+    // KPI: Prizes Given
+    const kpiPrizes = document.getElementById('kpiPrizesGiven');
+    if (kpiPrizes) kpiPrizes.innerText = `৳${(Number(summary.tournament_prizes) || 0).toLocaleString('en-US')}`;
+
+    // KPI: Completed Matches
+    const kpiMatches = document.getElementById('kpiCompletedMatches');
+    if (kpiMatches) kpiMatches.innerText = `${summary.total_completed_events || 0}`;
+
+    // KPI: 30-Day Cumulative Total
+    const kpiMonthly = document.getElementById('kpiMonthlyTotal');
+    const cum = Number(summary.cumulative_30d_profit) || 0;
+    if (kpiMonthly) {
+        kpiMonthly.innerText = cum >= 0 ? `+৳${cum.toLocaleString('en-US')}` : `-৳${Math.abs(cum).toLocaleString('en-US')}`;
+    }
+
+    // Badges
+    const badgeCount = document.getElementById('profitMatchCountBadge');
+    if (badgeCount) badgeCount.innerText = `${breakdown.length}`;
+    const badgeHistory = document.getElementById('profitHistoryDaysBadge');
+    if (badgeHistory) badgeHistory.innerText = `${history.length}`;
+
+    // 1. Render Daily Match Breakdown Table
+    const breakdownBody = document.getElementById('profitMatchBreakdownBody');
+    if (breakdownBody) {
+        if (breakdown.length === 0) {
+            breakdownBody.innerHTML = `<tr><td colspan="8" style="text-align: center; padding: 28px; color: var(--text-muted);">No completed matches or challenges found for <b>${escapeHtml(data.target_date)}</b>.</td></tr>`;
+        } else {
+            breakdownBody.innerHTML = breakdown.map(item => {
+                const profitNum = Number(item.profit) || 0;
+                let profitBadge = `<b style="color: #94a3b8;">৳0</b>`;
+                if (profitNum > 0) {
+                    profitBadge = `<b style="color: #059669; font-size: 0.85rem;">+৳${profitNum.toLocaleString('en-US')}</b>`;
+                } else if (profitNum < 0) {
+                    profitBadge = `<b style="color: #dc2626; font-size: 0.85rem;">-৳${Math.abs(profitNum).toLocaleString('en-US')}</b>`;
+                }
+
+                const compTime = item.completed_at ? item.completed_at.split(' ')[1] || item.completed_at : '-';
+
+                return `
+                    <tr>
+                        <td><code class="audit-match-chip">${escapeHtml(item.code)}</code></td>
+                        <td>
+                            <b>${escapeHtml(item.title)}</b>
+                            <div style="font-size: 0.7rem; color: var(--text-muted);">${escapeHtml(item.match_type || '')}</div>
+                        </td>
+                        <td style="font-family: monospace; font-size: 0.72rem; color: var(--text-muted);">🕒 ${escapeHtml(compTime)}</td>
+                        <td style="text-align: center;"><span style="font-weight: 700; color: #6366f1;">${item.joined_players}</span></td>
+                        <td style="text-align: right; color: var(--text-muted);">৳${Number(item.entry_fee || 0).toLocaleString('en-US')}</td>
+                        <td style="text-align: right; font-weight: 700;">৳${Number(item.collected || 0).toLocaleString('en-US')}</td>
+                        <td style="text-align: right; color: #dc2626;">৳${Number(item.prizes || 0).toLocaleString('en-US')}</td>
+                        <td style="text-align: right;">${profitBadge}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+    }
+
+    // 2. Render 30-Day Monthly History Table
+    const historyBody = document.getElementById('profitMonthlyHistoryBody');
+    if (historyBody) {
+        if (history.length === 0) {
+            historyBody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 28px; color: var(--text-muted);">No 30-day profit records archived yet. Records will log daily.</td></tr>`;
+        } else {
+            historyBody.innerHTML = history.map(h => {
+                const netDay = Number(h.net_profit) || 0;
+                let netBadge = `<b style="color: #94a3b8;">৳0</b>`;
+                if (netDay > 0) {
+                    netBadge = `<span style="color: #059669; font-weight: 800; font-size: 0.88rem;">+৳${netDay.toLocaleString('en-US')}</span>`;
+                } else if (netDay < 0) {
+                    netBadge = `<span style="color: #dc2626; font-weight: 800; font-size: 0.88rem;">-৳${Math.abs(netDay).toLocaleString('en-US')}</span>`;
+                }
+
+                const totalMatches = (Number(h.tournament_matches) || 0) + (Number(h.challenge_matches) || 0);
+                const isSelected = (h.profit_date === data.target_date);
+
+                return `
+                    <tr style="${isSelected ? 'background: rgba(16, 185, 129, 0.08); font-weight: 700;' : ''}">
+                        <td>
+                            <b>${escapeHtml(h.profit_date)}</b>
+                            ${h.profit_date === data.target_date ? '<span style="font-size:0.65rem; background:#10b981; color:#fff; padding:1px 5px; border-radius:3px; margin-left:4px;">ACTIVE</span>' : ''}
+                        </td>
+                        <td style="text-align: center;">${totalMatches}</td>
+                        <td style="text-align: right;">৳${Number(h.tournament_entry_fees || 0).toLocaleString('en-US')}</td>
+                        <td style="text-align: right; color: #dc2626;">৳${Number(h.tournament_prizes || 0).toLocaleString('en-US')}</td>
+                        <td style="text-align: right;">${netBadge}</td>
+                        <td style="text-align: center;">
+                            <button type="button" class="btn btn-outline btn-xs" onclick="openAdminProfitModal('${h.profit_date}')" style="padding: 2px 8px; font-size: 0.7rem; border-color: #10b981; color: #059669; cursor: pointer;">
+                                👁️ View Day
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+    }
 }
 
 function togglePassVisibility(userId) {

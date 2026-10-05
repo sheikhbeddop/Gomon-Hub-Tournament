@@ -963,10 +963,14 @@ def ensure_promo_codes_initialized():
             except Exception:
                 pass
             users_without_code = conn.execute("SELECT id, username FROM users WHERE promo_code IS NULL OR promo_code = '' ORDER BY id ASC").fetchall()
+            has_new_codes = False
             for u in users_without_code:
                 code = generate_unique_promo_code(conn)
                 conn.execute("UPDATE users SET promo_code = ? WHERE id = ?", (code, u["id"]))
+                has_new_codes = True
         conn.close()
+        if has_new_codes:
+            sync_db_async()
     except Exception as e:
         print(f"[Promo Code Init Notice] {e}")
 
@@ -2425,6 +2429,7 @@ async def login(data: LoginRequest):
                 user_promo = generate_unique_promo_code(c_pc)
                 c_pc.execute("UPDATE users SET promo_code = ? WHERE id = ?", (user_promo, u_dict["id"]))
             c_pc.close()
+            sync_db_async()
         except Exception:
             pass
 
@@ -2849,7 +2854,10 @@ def get_me(user: dict = Depends(get_current_user)):
             promo_code = generate_unique_promo_code(conn)
             with conn:
                 conn.execute("UPDATE users SET promo_code = ? WHERE id = ?", (promo_code, user["id"]))
-        conn.close()
+            conn.close()
+            sync_db_async()
+        else:
+            conn.close()
     except Exception:
         win_points = user.get("win_points") or 0
         email = user.get("email") or ""

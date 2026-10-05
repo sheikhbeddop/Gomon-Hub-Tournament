@@ -4536,6 +4536,201 @@ def admin_get_audit_logs(
     conn.close()
     return {"logs": [dict(r) for r in rows]}
 
+@app.get("/api/admin/profit-analytics")
+def admin_get_profit_analytics(
+    date: Optional[str] = None,
+    admin: dict = Depends(verify_admin)
+):
+    conn = get_db()
+    try:
+        # 1. Ensure daily_profit_ledger table exists
+        conn.execute("""
+        CREATE TABLE IF NOT EXISTS daily_profit_ledger (
+            profit_date TEXT PRIMARY KEY,
+            tournament_matches INTEGER DEFAULT 0,
+            tournament_entry_fees INTEGER DEFAULT 0,
+            tournament_prizes INTEGER DEFAULT 0,
+            tournament_profit INTEGER DEFAULT 0,
+            challenge_matches INTEGER DEFAULT 0,
+            challenge_fees INTEGER DEFAULT 0,
+            net_profit INTEGER DEFAULT 0,
+            details_json TEXT DEFAULT '[]',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+        """)
+
+        # 2. Strict 30-Day (1-Month) Retention Purge for Profit Ledger
+        conn.execute("DELETE FROM daily_profit_ledger WHERE profit_date < date('now', '-31 days')")
+
+        # 3. Target date determination (Default to current Bangladesh Standard Time UTC+6)
+        bd_now = datetime.now(timezone(timedelta(hours=6))).replace(tzinfo=None)
+        today_bst = bd_now.strftime("%Y-%m-%d")
+        target_date = date.strip() if (date and len(date.strip()) == 10) else today_bst
+
+        # 4. Fetch tournament matches completed on target_date (converted to BST)
+        matches_rows = conn.execute("""
+            SELECT 
+                m.id,
+                m.match_code,
+                m.title,
+                m.match_type,
+                m.entry_fee,
+                m.completed_at,
+                datetime(m.completed_at, '+6 hours') as completed_at_bst,
+                (SELECT COUNT(*) FROM participations p WHERE p.match_id = m.id) as joined_players,
+                (SELECT COALESCE(SUM(mr.total_prize), 0) FROM match_results mr WHERE mr.match_id = m.id) as total_prizes_given
+            FROM matches m
+            WHERE m.status = 'completed'
+              AND date(datetime(COALESCE(m.completed_at, m.created_at), '+6 hours')) = ?
+            ORDER BY m.completed_at DESC, m.id DESC
+        """, (target_date,)).fetchall()
+
+        match_items = []
+        tourney_matches_cnt = 0
+        tourney_entry_sum = 0
+        tourney_prizes_sum = 0
+
+        for r in matches_rows:
+            entry_fee = int(r["entry_fee"] or 0)
+            joined = int(r["joined_players"] or 0)
+            collected = entry_fee * joined
+            prizes = int(r["total_prizes_given"] or 0)
+            m_profit = collected - prizes
+            
+            tourney_matches_cnt += 1
+            tourney_entry_sum += collected
+            tourney_prizes_sum += prizes
+            
+            match_items.append({
+                "type": "tournament",
+                "id": r["id"],
+                "code": r["match_code"] or f"#{r['id']}",
+                "title": r["title"] or "Tournament Match",
+                "match_type": r["match_type"] or "Custom",
+                "entry_fee": entry_fee,
+                "joined_players": joined,
+                "collected": collected,
+                "prizes": prizes,
+                "profit": m_profit,
+                "completed_at": r["completed_at_bst"] or r["completed_at"]
+            })
+
+        tourney_net_profit = tourney_entry_sum - tourney_prizes_sum
+
+        # 5. Fetch custom challenges completed on target_date (if any)
+        challenge_items = []
+        challenge_matches_cnt = 0
+        challenge_fees_sum = 0
+        try:
+            chal_rows = conn.execute("""
+                SELECT 
+                    id,
+                    challenge_code,
+                    mode,
+                    entry_fee,
+                    prize_amount,
+                    platform_fee,
+                    completed_at,
+                    datetime(completed_at, '+6 hours') as completed_at_bst
+                FROM custom_challenges
+                WHERE status = 'completed'
+                  AND completed_at IS NOT NULL
+                  AND date(datetime(completed_at, '+6 hours')) = ?
+                ORDER BY completed_at DESC
+            """, (target_date,)).fetchall()
+            
+            for c in chal_rows:
+                fee = int(c["platform_fee"] or 0)
+                challenge_matches_cnt += 1
+                challenge_fees_sum += fee
+                challenge_items.append({
+                    "type": "challenge",
+                    "id": c["id"],
+                    "code": c["challenge_code"],
+                    "title": f"Custom Challenge ({c['mode']})",
+                    "match_type": c["mode"],
+                    "entry_fee": c["entry_fee"],
+                    "joined_players": 2,
+                    "collected": c["entry_fee"] * 2,
+                    "prizes": c["prize_amount"],
+                    "profit": fee,
+                    "completed_at": c["completed_at_bst"] or c["completed_at"]
+                })
+        except Exception:
+            pass
+
+        # Total Net Profit for target date
+        day_total_net = tourney_net_profit + challenge_fees_sum
+        all_breakdown = match_items + challenge_items
+
+        # 6. Save or update target_date snapshot in daily_profit_ledger
+        conn.execute("""
+            INSERT OR REPLACE INTO daily_profit_ledger (
+                profit_date,
+                tournament_matches,
+                tournament_entry_fees,
+                tournament_prizes,
+                tournament_profit,
+                challenge_matches,
+                challenge_fees,
+                net_profit,
+                details_json,
+                updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        """, (
+            target_date,
+            tourney_matches_cnt,
+            tourney_entry_sum,
+            tourney_prizes_sum,
+            tourney_net_profit,
+            challenge_matches_cnt,
+            challenge_fees_sum,
+            day_total_net,
+            json.dumps(all_breakdown)
+        ))
+        conn.commit()
+
+        # 7. Query up to 31 days (1 Month) of daily history from daily_profit_ledger
+        history_rows = conn.execute("""
+            SELECT 
+                profit_date,
+                tournament_matches,
+                tournament_entry_fees,
+                tournament_prizes,
+                tournament_profit,
+                challenge_matches,
+                challenge_fees,
+                net_profit,
+                updated_at
+            FROM daily_profit_ledger
+            ORDER BY profit_date DESC
+            LIMIT 31
+        """).fetchall()
+
+        history_list = [dict(hr) for hr in history_rows]
+        cumulative_30d_profit = sum(int(hr["net_profit"] or 0) for hr in history_list)
+
+        return {
+            "target_date": target_date,
+            "is_today": (target_date == today_bst),
+            "summary": {
+                "tournament_matches": tourney_matches_cnt,
+                "tournament_entry_fees": tourney_entry_sum,
+                "tournament_prizes": tourney_prizes_sum,
+                "tournament_profit": tourney_net_profit,
+                "challenge_matches": challenge_matches_cnt,
+                "challenge_fees": challenge_fees_sum,
+                "net_profit": day_total_net,
+                "total_completed_events": tourney_matches_cnt + challenge_matches_cnt,
+                "cumulative_30d_profit": cumulative_30d_profit
+            },
+            "breakdown": all_breakdown,
+            "monthly_history": history_list
+        }
+    finally:
+        conn.close()
+
 @app.post("/api/admin/users/adjust-digits")
 @app.post("/api/admin/users/{target_user_id}/adjust-digits")
 async def admin_adjust_digits(data: AdminAdjustDigits, target_user_id: Optional[int] = None, admin: dict = Depends(verify_admin)):

@@ -5604,6 +5604,10 @@ body:has(#tab-admin.active) .main-container,
     background: rgba(0, 0, 0, 0.55) !important;
     backdrop-filter: blur(16px) saturate(180%) !important;
     -webkit-backdrop-filter: blur(16px) saturate(180%) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 16px !important;
 }
 
 #myProfileDetailsModal .modal-box {
@@ -5615,6 +5619,9 @@ body:has(#tab-admin.active) .main-container,
     box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55), inset 0 1px 1px rgba(255, 255, 255, 0.22) !important;
     color: #f8fafc !important;
     overflow: hidden !important;
+    width: 92% !important;
+    max-width: 440px !important;
+    margin: auto !important;
 }
 
 html:not([data-theme="dark"]) #myProfileDetailsModal .modal-box {

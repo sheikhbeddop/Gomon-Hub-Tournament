@@ -7526,7 +7526,7 @@ function restoreLastActiveView(isCached = false) {
 const EXIT_DOUBLE_PRESS_WINDOW = 1000; // 1 second window
 let lastBackPressTime = 0;
 let appTabHistory = ['tab-matches'];
-let isProgrammaticBack = false;
+let programmaticBackCount = 0;
 
 function initAppNavigationBarrier() {
     try {
@@ -7550,8 +7550,8 @@ function initAppNavigationBarrier() {
 
 // Browser Back/Forward hardware & gesture navigation listener
 window.addEventListener('popstate', () => {
-    if (isProgrammaticBack) {
-        isProgrammaticBack = false;
+    if (programmaticBackCount > 0) {
+        programmaticBackCount--;
         return;
     }
 
@@ -7607,6 +7607,11 @@ window.addEventListener('popstate', () => {
 
     // 3. Priority 2: Check Tab Navigation History Stack (LIFO)
     if (appTabHistory.length > 1) {
+        const currentActiveTab = sessionStorage.getItem('current_active_tab') || 'tab-matches';
+        // If history.state is already the currently active tab (e.g. returning from a closed modal), keep user on current tab
+        if (history.state && history.state.type === 'tab' && history.state.tabId === currentActiveTab) {
+            return;
+        }
         appTabHistory.pop(); // Remove current tab from stack
         const prevTab = appTabHistory[appTabHistory.length - 1]; // Previous visited tab
         if (prevTab && document.getElementById(prevTab)) {
@@ -8083,11 +8088,11 @@ function closeModal(id, fromPopstate = false) {
     }
     if (!fromPopstate) {
         if (history.state && history.state.type === 'modal' && history.state.modalId === id) {
-            isProgrammaticBack = true;
+            programmaticBackCount++;
             try {
                 history.back();
             } catch (e) {}
-            setTimeout(() => { isProgrammaticBack = false; }, 150);
+            setTimeout(() => { if (programmaticBackCount > 0) programmaticBackCount--; }, 2000);
         }
     }
 }
@@ -8655,6 +8660,12 @@ document.addEventListener('contextmenu', function(e) {
 // Video Promotion & Earn System
 // -------------------------------------------------------------
 function openPromotionModal() {
+    if (!currentUser) {
+        try {
+            const stored = localStorage.getItem('ff_user');
+            if (stored) currentUser = JSON.parse(stored);
+        } catch (e) {}
+    }
     if (!currentUser) {
         showToast('ভিডিও প্রমোশন সাবমিট করতে প্রথমে লগইন করুন', 'info');
         openModal('authModal');

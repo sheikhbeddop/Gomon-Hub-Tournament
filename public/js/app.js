@@ -223,6 +223,7 @@ async function startApp() {
         const initialProfModal = document.getElementById('myProfileDetailsModal');
         if (initialProfModal) {
             initialProfModal.classList.remove('show');
+            initialProfModal.style.setProperty('display', 'none', 'important');
         }
     } catch (_) {}
 
@@ -8054,7 +8055,7 @@ function openModal(id) {
     const modal = document.getElementById(id);
     if (modal) {
         modal.classList.add('show');
-        modal.style.removeProperty('display');
+        modal.style.setProperty('display', 'flex', 'important');
     }
     const persistableModals = ['walletModal', 'withdrawModal', 'promotionModal', 'allRulesModal', 'topPlayersModal', 'devProfileModal', 'supportModal', 'adminAuditLogsModal'];
     if (persistableModals.includes(id)) {
@@ -8073,7 +8074,10 @@ function closeModal(id, fromPopstate = false) {
         return; // Non-logged-in users cannot dismiss login modal to enter app
     }
     const modal = document.getElementById(id);
-    if (modal) modal.classList.remove('show');
+    if (modal) {
+        modal.classList.remove('show');
+        modal.style.setProperty('display', 'none', 'important');
+    }
     if (sessionStorage.getItem('current_active_modal') === id) {
         sessionStorage.removeItem('current_active_modal');
     }

@@ -9,10 +9,15 @@ let adminBkashNumber = 'লোড হচ্ছে...';
 let adminWithdrawNumber = 'লোড হচ্ছে...';
 
 function copyAdminBkash() {
+    if (!currentUser) {
+        showToast('বিকাশ নাম্বার দেখতে বা কপি করতে অনুগ্রহ করে আগে লগইন করুন!', 'warning');
+        openModal('authModal');
+        return;
+    }
     const raw = adminBkashNumber || '';
     if (!raw || raw.includes('লগইন') || raw === 'লোড হচ্ছে...') {
-        showToast('বিকাশ নাম্বার দেখতে বা কপি করতে অনুগ্রহ করে আগে লগইন করুন!', 'warning');
-        openModal('loginModal');
+        loadPublicInfo();
+        showToast('বিকাশ নাম্বার রিফ্রেশ করা হচ্ছে, অনুগ্রহ করে কয়েক সেকেন্ড পর আবার চাপ দিন...', 'info');
         return;
     }
     const numOnly = raw.split(' ')[0].trim();
@@ -23,10 +28,15 @@ function copyAdminBkash() {
 }
 
 function copyAdminWithdraw() {
+    if (!currentUser) {
+        showToast('উইথড্র নাম্বার দেখতে বা কপি করতে অনুগ্রহ করে আগে লগইন করুন!', 'warning');
+        openModal('authModal');
+        return;
+    }
     const raw = adminWithdrawNumber || adminBkashNumber || '';
     if (!raw || raw.includes('লগইন') || raw === 'লোড হচ্ছে...') {
-        showToast('উইথড্র নাম্বার দেখতে বা কপি করতে অনুগ্রহ করে আগে লগইন করুন!', 'warning');
-        openModal('loginModal');
+        loadPublicInfo();
+        showToast('উইথড্র নাম্বার রিফ্রেশ করা হচ্ছে, অনুগ্রহ করে কয়েক সেকেন্ড পর আবার চাপ দিন...', 'info');
         return;
     }
     const numOnly = raw.split(' ')[0].trim();
@@ -306,8 +316,18 @@ async function loadPublicInfo() {
         const fetchHeaders = activeToken ? { 'Authorization': `Bearer ${activeToken}` } : {};
         const res = await fetch('/api/info?_t=' + Date.now(), { headers: fetchHeaders });
         const data = await res.json();
-        adminBkashNumber = data.admin_bkash || 'লোড হচ্ছে...';
-        adminWithdrawNumber = data.admin_withdraw_number || adminBkashNumber;
+        
+        if (data.admin_bkash && !data.admin_bkash.includes('লগইন')) {
+            adminBkashNumber = data.admin_bkash;
+        } else if (!adminBkashNumber || adminBkashNumber === 'লোড হচ্ছে...' || adminBkashNumber.includes('লগইন')) {
+            adminBkashNumber = (data.admin_bkash && !data.admin_bkash.includes('লগইন')) ? data.admin_bkash : '01988279285 (Personal)';
+        }
+
+        if (data.admin_withdraw_number && !data.admin_withdraw_number.includes('লগইন')) {
+            adminWithdrawNumber = data.admin_withdraw_number;
+        } else if (!adminWithdrawNumber || adminWithdrawNumber === 'লোড হচ্ছে...' || adminWithdrawNumber.includes('লগইন')) {
+            adminWithdrawNumber = (data.admin_withdraw_number && !data.admin_withdraw_number.includes('লগইন')) ? data.admin_withdraw_number : '01952851550';
+        }
         vapidPublicKey = data.vapid_public_key;
 
         // Update all deposit numbers in UI
@@ -328,10 +348,14 @@ async function loadPublicInfo() {
         }
 
         const setBk = document.getElementById('settingAdminBkash');
-        if (setBk) setBk.value = adminBkashNumber;
+        if (setBk && adminBkashNumber && !adminBkashNumber.includes('লগইন') && adminBkashNumber !== 'লোড হচ্ছে...') {
+            setBk.value = adminBkashNumber;
+        }
 
         const setWith = document.getElementById('settingAdminWithdraw');
-        if (setWith) setWith.value = adminWithdrawNumber;
+        if (setWith && adminWithdrawNumber && !adminWithdrawNumber.includes('লগইন') && adminWithdrawNumber !== 'লোড হচ্ছে...') {
+            setWith.value = adminWithdrawNumber;
+        }
 
         const setTi = document.getElementById('settingSiteTitle');
         if (setTi) setTi.value = data.site_title || '';
@@ -438,6 +462,7 @@ async function initAuth() {
                 loadAdminOverview();
                 loadModeratorScoreboard();
             }
+            try { loadPublicInfo(); } catch (_) {}
         } else if (res.status === 403) {
             const data = await res.json();
             alert(data.detail || "🚨 Your account has been banned from GOMON HUB!");
@@ -1091,6 +1116,7 @@ async function handleForgotNewPassSubmit(e) {
             try { loadMatches(); } catch(err) {}
             try { loadWalletHistory(); } catch(err) {}
             try { initWebSocket(); } catch(err) {}
+            try { loadPublicInfo(); } catch(err) {}
             if (currentUser.role === 'admin') {
                 const adminBtn = document.getElementById('tabBtn-admin');
                 if (adminBtn) adminBtn.style.display = 'inline-flex';
@@ -1299,6 +1325,7 @@ async function handleVerifyOtpSubmit(e) {
             try { loadMatches(); } catch(err) {}
             try { loadWalletHistory(); } catch(err) {}
             try { initWebSocket(); } catch(err) {}
+            try { loadPublicInfo(); } catch(err) {}
             if (currentUser.role === 'admin') {
                 const adminBtn = document.getElementById('tabBtn-admin');
                 if (adminBtn) adminBtn.style.display = 'inline-flex';
@@ -1745,6 +1772,7 @@ async function handleRegisterSubmit(e) {
     try { loadMatches(); } catch(e) { console.error('Error in loadMatches:', e); }
     try { loadWalletHistory(); } catch(e) { console.error('Error in loadWalletHistory:', e); }
     try { initWebSocket(); } catch(e) { console.error('Error in initWebSocket:', e); }
+    try { loadPublicInfo(); } catch(e) {}
     try { checkAndTriggerDeepLinks(); } catch(e) {}
 }
 
@@ -6066,77 +6094,80 @@ async function handleSettingsSubmit(e) {
     const notice = (document.getElementById('settingNotice') ? document.getElementById('settingNotice').value : '').trim();
     const notice_en = (document.getElementById('settingNoticeEn') ? document.getElementById('settingNoticeEn').value : '').trim();
 
+    if (admin_bkash.includes('লগইন') || admin_bkash.includes('লোড')) {
+        showToast('অনুগ্রহ করে সঠিক বিকাশ ডিপোজিট নাম্বার টাইপ করুন', 'warning');
+        return;
+    }
+    if (admin_withdraw_number.includes('লগইন') || admin_withdraw_number.includes('লোড')) {
+        showToast('অনুগ্রহ করে সঠিক উইথড্র নাম্বার টাইপ করুন', 'warning');
+        return;
+    }
+
     try {
-        const res = await fetch('/api/admin/settings', {
+        const res = await fetchWithAuth('/api/admin/settings', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-            },
             body: JSON.stringify({ admin_bkash, admin_withdraw_number, site_title, notice, notice_en })
         });
         if (res.ok) {
             showToast('সব সেটিংস সফলভাবে সেভ হয়েছে!', 'success');
-            loadPublicInfo();
+            await loadPublicInfo();
         } else {
-            showToast('সেটিংস সেভ করতে সমস্যা হয়েছে', 'error');
+            let errText = 'সেটিংস সেভ করতে সমস্যা হয়েছে';
+            try { const errData = await res.json(); if (errData && errData.detail) errText = errData.detail; } catch(_) {}
+            showToast(errText, 'error');
         }
     } catch (e) {
-        showToast('Operation failed', 'error');
+        showToast('Operation failed: ' + (e.message || ''), 'error');
     }
 }
 
 async function quickUpdateDepositNumber() {
     const el = document.getElementById('settingAdminBkash');
     const admin_bkash = el ? el.value.trim() : '';
-    if (!admin_bkash) {
-        showToast('ডিপোজিট বিকাশ নাম্বার প্রদান করুন', 'warning');
+    if (!admin_bkash || admin_bkash.includes('লগইন') || admin_bkash.includes('লোড')) {
+        showToast('অনুগ্রহ করে সঠিক ডিপোজিট বিকাশ নাম্বার প্রদান করুন', 'warning');
         return;
     }
     try {
-        const res = await fetch('/api/admin/settings', {
+        const res = await fetchWithAuth('/api/admin/settings', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-            },
             body: JSON.stringify({ admin_bkash })
         });
         if (res.ok) {
             showToast(`ডিপোজিট নাম্বার আপডেট হয়েছে: ${admin_bkash}`, 'success');
-            loadPublicInfo();
+            await loadPublicInfo();
         } else {
-            showToast('ডিপোজিট নাম্বার আপডেট ব্যর্থ হয়েছে', 'error');
+            let errText = 'ডিপোজিট নাম্বার আপডেট ব্যর্থ হয়েছে';
+            try { const errData = await res.json(); if (errData && errData.detail) errText = errData.detail; } catch(_) {}
+            showToast(errText, 'error');
         }
     } catch (e) {
-        showToast('সার্ভারে সমস্যা হয়েছে', 'error');
+        showToast('সার্ভারে সমস্যা হয়েছে: ' + (e.message || ''), 'error');
     }
 }
 
 async function quickUpdateWithdrawNumber() {
     const el = document.getElementById('settingAdminWithdraw');
     const admin_withdraw_number = el ? el.value.trim() : '';
-    if (!admin_withdraw_number) {
-        showToast('উইথড্র নাম্বার প্রদান করুন', 'warning');
+    if (!admin_withdraw_number || admin_withdraw_number.includes('লগইন') || admin_withdraw_number.includes('লোড')) {
+        showToast('অনুগ্রহ করে সঠিক উইথড্র নাম্বার প্রদান করুন', 'warning');
         return;
     }
     try {
-        const res = await fetch('/api/admin/settings', {
+        const res = await fetchWithAuth('/api/admin/settings', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-            },
             body: JSON.stringify({ admin_withdraw_number })
         });
         if (res.ok) {
             showToast(`উইথড্র নাম্বার আপডেট হয়েছে: ${admin_withdraw_number}`, 'success');
-            loadPublicInfo();
+            await loadPublicInfo();
         } else {
-            showToast('উইথড্র নাম্বার আপডেট ব্যর্থ হয়েছে', 'error');
+            let errText = 'উইথড্র নাম্বার আপডেট ব্যর্থ হয়েছে';
+            try { const errData = await res.json(); if (errData && errData.detail) errText = errData.detail; } catch(_) {}
+            showToast(errText, 'error');
         }
     } catch (e) {
-        showToast('সার্ভারে সমস্যা হয়েছে', 'error');
+        showToast('সার্ভারে সমস্যা হয়েছে: ' + (e.message || ''), 'error');
     }
 }
 
@@ -6150,22 +6181,20 @@ async function quickUpdateNotice() {
         return;
     }
     try {
-        const res = await fetch('/api/admin/settings', {
+        const res = await fetchWithAuth('/api/admin/settings', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-            },
             body: JSON.stringify({ notice, notice_en })
         });
         if (res.ok) {
             showToast('ব্যানার নোটিশ সফলভাবে আপডেট হয়েছে! 🎉', 'success');
-            loadPublicInfo();
+            await loadPublicInfo();
         } else {
-            showToast('নোটিশ আপডেট ব্যর্থ হয়েছে', 'error');
+            let errText = 'নোটিশ আপডেট ব্যর্থ হয়েছে';
+            try { const errData = await res.json(); if (errData && errData.detail) errText = errData.detail; } catch(_) {}
+            showToast(errText, 'error');
         }
     } catch (e) {
-        showToast('সার্ভারে সমস্যা হয়েছে', 'error');
+        showToast('সার্ভারে সমস্যা হয়েছে: ' + (e.message || ''), 'error');
     }
 }
 
@@ -6933,6 +6962,7 @@ function switchAdminSection(sectionId) {
         loadAdminMatchHistory();
     } else if (sectionId === 'settings') {
         initSmsGatewayCard();
+        try { loadPublicInfo(); } catch (_) {}
     } else if (sectionId === 'promotions') {
         loadAdminPromotions();
     }
@@ -7679,12 +7709,19 @@ function openWalletModal() {
     }
     const modalBal = document.getElementById('walletModalUserBalance');
     if (modalBal) modalBal.innerText = (currentUser.digits_balance || 0) + ' Digits';
+    if (adminBkashNumber && !adminBkashNumber.includes('লগইন')) {
+        document.querySelectorAll('.displayBkashNumber, [id="displayBkashNumber"]').forEach(el => {
+            el.innerText = adminBkashNumber;
+        });
+    }
     openModal('walletModal');
     loadWalletHistory();
+    try { loadPublicInfo(); } catch(_) {}
 }
 
 function openWithdrawModal() {
     if (!currentUser) {
+        showToast('উইথড্র করতে অনুগ্রহ করে আগে লগইন করুন!', 'warning');
         openModal('authModal');
         return;
     }
@@ -7694,8 +7731,14 @@ function openWithdrawModal() {
     if (phoneInp) {
         phoneInp.value = '';
     }
+    if (adminWithdrawNumber && !adminWithdrawNumber.includes('লগইন')) {
+        document.querySelectorAll('.displayWithdrawNumber, [id="displayWithdrawNumber"]').forEach(el => {
+            el.innerText = adminWithdrawNumber;
+        });
+    }
     openModal('withdrawModal');
     loadWithdrawHistory();
+    try { loadPublicInfo(); } catch(_) {}
 }
 
 async function submitWithdrawForm(e) {

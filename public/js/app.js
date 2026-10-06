@@ -216,6 +216,16 @@ function doDismissSplashScreen() {
 // Initialization on Page Load
 // -------------------------------------------------------------
 async function startApp() {
+    try {
+        if (sessionStorage.getItem('current_active_modal') === 'myProfileDetailsModal') {
+            sessionStorage.removeItem('current_active_modal');
+        }
+        const initialProfModal = document.getElementById('myProfileDetailsModal');
+        if (initialProfModal) {
+            initialProfModal.classList.remove('show');
+        }
+    } catch (_) {}
+
     setTimeout(doDismissSplashScreen, 800);
 
     const uInp = document.getElementById('loginUsername');
@@ -7489,12 +7499,12 @@ function restoreLastActiveView(isCached = false) {
         }
     }
 
-    // Restore active modal if one was open
+    // Restore active modal if one was open (profile details modal is never auto-restored on launch)
     const savedModal = sessionStorage.getItem('current_active_modal');
-    if (savedModal) {
-        if (savedModal === 'myProfileDetailsModal') {
-            sessionStorage.removeItem('current_active_modal');
-        } else if (savedModal === 'walletModal') {
+    if (savedModal === 'myProfileDetailsModal') {
+        sessionStorage.removeItem('current_active_modal');
+    } else if (savedModal) {
+        if (savedModal === 'walletModal') {
             openWalletModal();
         } else if (savedModal === 'withdrawModal') {
             openWithdrawModal();

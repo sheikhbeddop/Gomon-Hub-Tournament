@@ -5597,6 +5597,194 @@ body:has(#tab-admin.active) .main-container,
     color: #94a3b8 !important;
 }
 
+/* ============================================================= */
+/* iOS Ultra-Frosted Glassmorphism: My Profile Details Modal     */
+/* ============================================================= */
+#myProfileDetailsModal.modal-overlay {
+    background: rgba(0, 0, 0, 0.55) !important;
+    backdrop-filter: blur(16px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(16px) saturate(180%) !important;
+}
+
+#myProfileDetailsModal .modal-box {
+    background: rgba(18, 24, 42, 0.68) !important;
+    backdrop-filter: blur(32px) saturate(200%) !important;
+    -webkit-backdrop-filter: blur(32px) saturate(200%) !important;
+    border: 1px solid rgba(255, 255, 255, 0.16) !important;
+    border-radius: 26px !important;
+    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55), inset 0 1px 1px rgba(255, 255, 255, 0.22) !important;
+    color: #f8fafc !important;
+    overflow: hidden !important;
+}
+
+html:not([data-theme="dark"]) #myProfileDetailsModal .modal-box {
+    background: rgba(255, 255, 255, 0.72) !important;
+    border: 1px solid rgba(255, 255, 255, 0.65) !important;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15), inset 0 1px 1px #ffffff !important;
+    color: #0f172a !important;
+}
+
+#myProfileDetailsModal .modal-header {
+    background: transparent !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+    padding: 16px 20px !important;
+}
+
+html:not([data-theme="dark"]) #myProfileDetailsModal .modal-header {
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06) !important;
+}
+
+#myProfileDetailsModal .modal-header h3 {
+    color: #38bdf8 !important;
+    text-shadow: 0 2px 10px rgba(56, 189, 248, 0.3) !important;
+}
+
+html:not([data-theme="dark"]) #myProfileDetailsModal .modal-header h3 {
+    color: #2563eb !important;
+    text-shadow: none !important;
+}
+
+#myProfileDetailsModal .btn-close {
+    background: rgba(255, 255, 255, 0.1) !important;
+    border: 1px solid rgba(255, 255, 255, 0.15) !important;
+    color: #f8fafc !important;
+    border-radius: 50% !important;
+    width: 32px !important;
+    height: 32px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-size: 1.1rem !important;
+    line-height: 1 !important;
+    transition: all 0.2s ease !important;
+    cursor: pointer !important;
+}
+
+#myProfileDetailsModal .btn-close:hover {
+    background: rgba(255, 255, 255, 0.2) !important;
+    transform: scale(1.05) !important;
+}
+
+html:not([data-theme="dark"]) #myProfileDetailsModal .btn-close {
+    background: rgba(0, 0, 0, 0.06) !important;
+    border-color: rgba(0, 0, 0, 0.1) !important;
+    color: #334155 !important;
+}
+
+#myProfileDetailsModal #profUsername {
+    color: #ffffff !important;
+    text-shadow: 0 2px 12px rgba(0, 0, 0, 0.35) !important;
+}
+
+html:not([data-theme="dark"]) #myProfileDetailsModal #profUsername {
+    color: #0f172a !important;
+    text-shadow: none !important;
+}
+
+#myProfileDetailsModal .ios-profile-glass-card {
+    background: rgba(255, 255, 255, 0.04) !important;
+    backdrop-filter: blur(16px) !important;
+    -webkit-backdrop-filter: blur(16px) !important;
+    border: 1px solid rgba(255, 255, 255, 0.09) !important;
+    border-radius: 18px !important;
+    padding: 12px 16px !important;
+    margin-bottom: 16px !important;
+}
+
+html:not([data-theme="dark"]) #myProfileDetailsModal .ios-profile-glass-card {
+    background: rgba(0, 0, 0, 0.025) !important;
+    border: 1px solid rgba(0, 0, 0, 0.08) !important;
+}
+
+#myProfileDetailsModal .ios-glass-row {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    padding: 8px 0 !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06) !important;
+}
+
+#myProfileDetailsModal .ios-glass-row:last-child {
+    border-bottom: none !important;
+}
+
+html:not([data-theme="dark"]) #myProfileDetailsModal .ios-glass-row {
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05) !important;
+}
+
+#myProfileDetailsModal .ios-glass-lbl {
+    font-size: 0.85rem !important;
+    font-weight: 600 !important;
+    color: rgba(255, 255, 255, 0.65) !important;
+}
+
+html:not([data-theme="dark"]) #myProfileDetailsModal .ios-glass-lbl {
+    color: #64748b !important;
+}
+
+#myProfileDetailsModal .ios-glass-val {
+    font-size: 0.92rem !important;
+    font-weight: 700 !important;
+    color: #f8fafc !important;
+}
+
+html:not([data-theme="dark"]) #myProfileDetailsModal .ios-glass-val {
+    color: #0f172a !important;
+}
+
+#myProfileDetailsModal #profPlayerId,
+#myProfileDetailsModal #profPromoCode {
+    color: #38bdf8 !important;
+    background: rgba(56, 189, 248, 0.12) !important;
+    border: 1px solid rgba(56, 189, 248, 0.3) !important;
+    padding: 2px 8px !important;
+    border-radius: 6px !important;
+    font-family: 'Rajdhani', monospace, sans-serif !important;
+    font-size: 0.95rem !important;
+    font-weight: 800 !important;
+    cursor: pointer !important;
+    transition: all 0.2s ease !important;
+    display: inline-block !important;
+}
+
+#myProfileDetailsModal #profPlayerId:hover,
+#myProfileDetailsModal #profPromoCode:hover {
+    background: rgba(56, 189, 248, 0.25) !important;
+    border-color: #38bdf8 !important;
+    transform: translateY(-1px) !important;
+}
+
+#myProfileDetailsModal .ios-glass-close-btn {
+    width: 100% !important;
+    padding: 12px !important;
+    font-weight: 700 !important;
+    font-size: 0.95rem !important;
+    background: rgba(255, 255, 255, 0.08) !important;
+    border: 1px solid rgba(255, 255, 255, 0.14) !important;
+    border-radius: 14px !important;
+    color: #ffffff !important;
+    backdrop-filter: blur(10px) !important;
+    -webkit-backdrop-filter: blur(10px) !important;
+    cursor: pointer !important;
+    transition: all 0.2s ease !important;
+}
+
+#myProfileDetailsModal .ios-glass-close-btn:hover {
+    background: rgba(255, 255, 255, 0.16) !important;
+    border-color: rgba(255, 255, 255, 0.25) !important;
+    transform: translateY(-1px) !important;
+}
+
+html:not([data-theme="dark"]) #myProfileDetailsModal .ios-glass-close-btn {
+    background: rgba(0, 0, 0, 0.05) !important;
+    border: 1px solid rgba(0, 0, 0, 0.1) !important;
+    color: #1e293b !important;
+}
+
+html:not([data-theme="dark"]) #myProfileDetailsModal .ios-glass-close-btn:hover {
+    background: rgba(0, 0, 0, 0.09) !important;
+}
+
 
 
 

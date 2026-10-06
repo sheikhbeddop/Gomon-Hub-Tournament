@@ -2669,7 +2669,7 @@
     </script>
 
     <!-- MODAL: MY PROFILE DETAILS (Opened from Profile Menu) -->
-    <div class="modal-overlay" id="myProfileDetailsModal">
+    <div class="modal-overlay" id="myProfileDetailsModal" onclick="if(event.target === this) closeModal('myProfileDetailsModal')">
         <div class="modal-box" style="max-width: 480px;">
             <div class="modal-header">
                 <div style="display: flex; align-items: center; gap: 8px;">
@@ -5171,7 +5171,7 @@
     <!-- Toast Notification Container -->
     <div class="toast-container" id="toastContainer"></div>
 
-    <script src="/static/js/app.js?v=5.7.0"></script>
+    <script src="/static/js/app.js?v=5.7.1"></script>
 
 </body>
 

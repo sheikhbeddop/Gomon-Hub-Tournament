@@ -5,11 +5,16 @@
 
 let currentUser = null;
 let token = localStorage.getItem('ff_token') || null;
-let adminBkashNumber = '01988279285 (Personal)';
-let adminWithdrawNumber = '01988279285 (Personal)';
+let adminBkashNumber = 'লোড হচ্ছে...';
+let adminWithdrawNumber = 'লোড হচ্ছে...';
 
 function copyAdminBkash() {
-    const raw = adminBkashNumber || '01988279285';
+    const raw = adminBkashNumber || '';
+    if (!raw || raw.includes('লগইন') || raw === 'লোড হচ্ছে...') {
+        showToast('বিকাশ নাম্বার দেখতে বা কপি করতে অনুগ্রহ করে আগে লগইন করুন!', 'warning');
+        openModal('loginModal');
+        return;
+    }
     const numOnly = raw.split(' ')[0].trim();
     if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(numOnly);
@@ -18,7 +23,12 @@ function copyAdminBkash() {
 }
 
 function copyAdminWithdraw() {
-    const raw = adminWithdrawNumber || adminBkashNumber || '01988279285';
+    const raw = adminWithdrawNumber || adminBkashNumber || '';
+    if (!raw || raw.includes('লগইন') || raw === 'লোড হচ্ছে...') {
+        showToast('উইথড্র নাম্বার দেখতে বা কপি করতে অনুগ্রহ করে আগে লগইন করুন!', 'warning');
+        openModal('loginModal');
+        return;
+    }
     const numOnly = raw.split(' ')[0].trim();
     if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(numOnly);
@@ -292,9 +302,11 @@ function updateNoticeTicker(noticeText, noticeEnText) {
 
 async function loadPublicInfo() {
     try {
-        const res = await fetch('/api/info?_t=' + Date.now());
+        const activeToken = token || localStorage.getItem('token') || localStorage.getItem('ff_token');
+        const fetchHeaders = activeToken ? { 'Authorization': `Bearer ${activeToken}` } : {};
+        const res = await fetch('/api/info?_t=' + Date.now(), { headers: fetchHeaders });
         const data = await res.json();
-        adminBkashNumber = data.admin_bkash || '01988279285 (Personal)';
+        adminBkashNumber = data.admin_bkash || 'লোড হচ্ছে...';
         adminWithdrawNumber = data.admin_withdraw_number || adminBkashNumber;
         vapidPublicKey = data.vapid_public_key;
 
@@ -1430,6 +1442,7 @@ async function handleLoginSubmit(e) {
             try { openWelcomeNotice(true); } catch(e) {}
             try { renderLoggedInNav(); } catch(e) { console.error('Error in renderLoggedInNav:', e); }
             try { renderUserProfile(); } catch(e) { console.error('Error in renderUserProfile:', e); }
+            try { loadPublicInfo(); } catch(e) {}
             try { loadMatches(); } catch(e) { console.error('Error in loadMatches:', e); }
             try { loadWalletHistory(); } catch(e) { console.error('Error in loadWalletHistory:', e); }
             try { initWebSocket(); } catch(e) { console.error('Error in initWebSocket:', e); }

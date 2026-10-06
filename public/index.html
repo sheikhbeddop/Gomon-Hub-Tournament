@@ -2543,8 +2543,7 @@
     </div>
 
     <!-- MODAL: VIDEO PROMOTION & EARN (Promote on YouTube/TikTok/Facebook/Instagram) -->
-    <div class="modal-overlay" id="promotionModal" style="z-index: 999999;"
-        onclick="if(event.target === this) closeModal('promotionModal')">
+    <div class="modal-overlay" id="promotionModal">
         <div class="modal-box" style="max-width: 520px; max-height: 90vh; display: flex; flex-direction: column;">
             <div class="modal-header">
                 <div style="display: flex; align-items: center; gap: 10px;">
@@ -2578,7 +2577,7 @@
                         <li style="margin-bottom: 4px;">ভিডিওতে স্পষ্টভাবে তুলে ধরতে হবে কীভাবে এই ওয়েবসাইটে টুর্নামেন্ট খেলে ঘরে বসে আনলিমিটেড আয়ের দারুণ সুযোগ রয়েছে।</li>
                         <li style="margin-bottom: 4px;">ভিডিও স্ক্রিনে <b>GOMON HUB</b> বা <b>GOMON HUB TOURNAMENT</b> লেখা থাকতে হবে এবং কমেন্ট ও ডেসক্রিপশনে ওয়েবসাইট ও ইউটিউব লিংক যুক্ত করতে হবে।</li>
                         <li style="margin-bottom: 4px;">ভিডিওতে সর্বনিম্ন <b>১,০০০ (1K) ভিউ</b> এবং সন্তোষজনক অডিয়েন্স রেসপন্স (লাইক/কমেন্ট) থাকতে হবে।</li>
-                        <li>লিংক সাবমিট করার পর ম্যানুয়াল ভেরিফিকেশনের জন্য <b>সর্বনিম্ন ২ দিন</b> অপেক্ষা করতে হবে। ভিডিওর কোয়ালিটি অনুযায়ী ওয়ালেটে <b>৳১০ থেকে সর্বোচ্চ ৳৫,০০০</b> পর্যন্ত রিওয়ার্ড দেওয়া হবে!</li>
+                        <li style="margin-bottom: 4px;">লিংক সাবমিট করার পর ম্যানুয়াল ভেরিফিকেশনের জন্য <b>সর্বনিম্ন ২ দিন</b> অপেক্ষা করতে হবে। ভিডিওর কোয়ালিটি অনুযায়ী ওয়ালেটে <b>৳১০ থেকে সর্বোচ্চ ৳৫,০০০</b> পর্যন্ত রিওয়ার্ড দেওয়া হবে!</li>
                     </ul>
                 </div>
 
@@ -2636,37 +2635,6 @@
             </div>
         </div>
     </div>
-
-    <!-- Inline openPromotionModal: guarantees instant execution on mobile & cached browsers -->
-    <script>
-        function openPromotionModal() {
-            try {
-                var token = localStorage.getItem('token') || localStorage.getItem('ff_token');
-                if (!token && (!window.currentUser || !window.currentUser.id)) {
-                    if (typeof showToast === 'function') showToast('ভিডিও প্রমোশন সাবমিট করতে প্রথমে লগইন করুন', 'info');
-                    if (typeof openModal === 'function') openModal('authModal');
-                    return;
-                }
-                var urlInp = document.getElementById('promoVideoUrl');
-                if (urlInp) urlInp.value = '';
-                var notesInp = document.getElementById('promoNotes');
-                if (notesInp) notesInp.value = '';
-                if (typeof handlePromoUrlInput === 'function') handlePromoUrlInput('');
-
-                var modal = document.getElementById('promotionModal');
-                if (modal) {
-                    modal.classList.add('show');
-                    modal.style.removeProperty('display');
-                }
-                if (typeof loadMyPromotions === 'function') {
-                    loadMyPromotions();
-                }
-            } catch (e) {
-                console.error('openPromotionModal error:', e);
-            }
-        }
-        window.openPromotionModal = openPromotionModal;
-    </script>
 
     <!-- MODAL: MY PROFILE DETAILS (Opened from Profile Menu) -->
     <div class="modal-overlay" id="myProfileDetailsModal">
@@ -5186,7 +5154,7 @@
     <!-- Toast Notification Container -->
     <div class="toast-container" id="toastContainer"></div>
 
-    <script src="/static/js/app.js?v=5.7.2"></script>
+    <script src="/static/js/app.js?v=5.7.3"></script>
 
 </body>
 

@@ -5604,13 +5604,22 @@ body:has(#tab-admin.active) .main-container,
     background: rgba(0, 0, 0, 0.55) !important;
     backdrop-filter: blur(16px) saturate(180%) !important;
     -webkit-backdrop-filter: blur(16px) saturate(180%) !important;
-    display: flex !important;
     align-items: center !important;
     justify-content: center !important;
     padding: 16px !important;
+    cursor: pointer;
+}
+
+#myProfileDetailsModal.modal-overlay:not(.show) {
+    display: none !important;
+}
+
+#myProfileDetailsModal.modal-overlay.show {
+    display: flex !important;
 }
 
 #myProfileDetailsModal .modal-box {
+    cursor: default;
     background: rgba(18, 24, 42, 0.68) !important;
     backdrop-filter: blur(32px) saturate(200%) !important;
     -webkit-backdrop-filter: blur(32px) saturate(200%) !important;

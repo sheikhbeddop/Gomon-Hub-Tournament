@@ -1543,21 +1543,18 @@ def get_public_info(request: Request):
     settings = {r["key"]: r["value"] for r in settings_rows}
     current_ver = settings.get("app_version") or CURRENT_CODE_VERSION
 
-    # Protect phone numbers from anonymous web scrapers & bots
-    is_authenticated = False
-    auth_header = request.headers.get("Authorization")
-    if auth_header and auth_header.startswith("Bearer "):
-        payload = verify_token(auth_header.split(" ")[1])
-        if payload:
-            is_authenticated = True
+    admin_bkash_raw = (settings.get("admin_bkash") or "01988279285 (Personal)").strip()
+    if not admin_bkash_raw or "লগইন" in admin_bkash_raw or "লোড" in admin_bkash_raw:
+        admin_bkash_raw = "01988279285 (Personal)"
 
-    admin_bkash_raw = settings.get("admin_bkash", "01988279285 (Personal)")
-    admin_withdraw_raw = settings.get("admin_withdraw_number", admin_bkash_raw)
+    admin_withdraw_raw = (settings.get("admin_withdraw_number") or "01952851550").strip()
+    if not admin_withdraw_raw or "লগইন" in admin_withdraw_raw or "লোড" in admin_withdraw_raw:
+        admin_withdraw_raw = "01952851550"
 
     return {
         "site_title": settings.get("site_title", "GOMON HUB TOURNAMENT"),
-        "admin_bkash": admin_bkash_raw if is_authenticated else "লগইন করে ডিপোজিট নাম্বার দেখুন",
-        "admin_withdraw_number": admin_withdraw_raw if is_authenticated else "লগইন করে নাম্বার দেখুন",
+        "admin_bkash": admin_bkash_raw,
+        "admin_withdraw_number": admin_withdraw_raw,
         "notice": settings.get("notice", ""),
         "notice_en": settings.get("notice_en", ""),
         "app_version": current_ver,
@@ -6146,13 +6143,21 @@ def admin_get_match_history(category: Optional[str] = None, admin: dict = Depend
 @app.post("/api/admin/settings")
 async def admin_update_settings(data: dict, admin: dict = Depends(verify_admin)):
     conn = get_db()
+    broadcast_data = {
+        "type": "SETTINGS_UPDATED"
+    }
     with conn:
         for k, v in data.items():
             if v is not None:
+                val_str = str(v).strip()
+                # Prevent saving placeholder text into actual settings
+                if k in ["admin_bkash", "admin_withdraw_number"] and ("লগইন" in val_str or "লোড" in val_str):
+                    continue
                 conn.execute("""
                 INSERT INTO settings (key, value) VALUES (?, ?)
                 ON CONFLICT(key) DO UPDATE SET value = excluded.value
-                """, (k, str(v).strip()))
+                """, (k, val_str))
+                broadcast_data[k] = val_str
     conn.close()
 
     try:
@@ -6161,20 +6166,6 @@ async def admin_update_settings(data: dict, admin: dict = Depends(verify_admin))
         pass
 
     # Real-time WebSocket sync to all connected mobile & PC clients
-    broadcast_data = {
-        "type": "SETTINGS_UPDATED"
-    }
-    if "notice" in data:
-        broadcast_data["notice"] = data["notice"]
-    if "notice_en" in data:
-        broadcast_data["notice_en"] = data["notice_en"]
-    if "site_title" in data:
-        broadcast_data["site_title"] = data["site_title"]
-    if "admin_bkash" in data:
-        broadcast_data["admin_bkash"] = data["admin_bkash"]
-    if "admin_withdraw_number" in data:
-        broadcast_data["admin_withdraw_number"] = data["admin_withdraw_number"]
-
     await manager.broadcast(broadcast_data)
 
     return {"success": True, "message": "Settings updated and broadcasted successfully"}

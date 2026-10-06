@@ -1140,6 +1140,15 @@ async def add_no_cache_header(request: Request, call_next):
         response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"
+
+    # Cyber Security Headers (Protection against Clickjacking, MIME sniffing, and external framing)
+    response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    if request.headers.get("x-forwarded-proto") == "https" or request.url.scheme == "https":
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+
     return response
 
 
@@ -1521,17 +1530,33 @@ class PushSubscribeRequest(BaseModel):
 # -------------------------------------------------------------
 CURRENT_CODE_VERSION = "v3.1.0"
 
+@app.get("/api/health")
+def health_check():
+    return {"status": "ok", "time": int(time.time())}
+
 @app.get("/api/info")
-def get_public_info():
+def get_public_info(request: Request):
     conn = get_db()
     settings_rows = conn.execute("SELECT key, value FROM settings").fetchall()
     conn.close()
     settings = {r["key"]: r["value"] for r in settings_rows}
     current_ver = settings.get("app_version") or CURRENT_CODE_VERSION
+
+    # Protect phone numbers from anonymous web scrapers & bots
+    is_authenticated = False
+    auth_header = request.headers.get("Authorization")
+    if auth_header and auth_header.startswith("Bearer "):
+        payload = verify_token(auth_header.split(" ")[1])
+        if payload:
+            is_authenticated = True
+
+    admin_bkash_raw = settings.get("admin_bkash", "01988279285 (Personal)")
+    admin_withdraw_raw = settings.get("admin_withdraw_number", admin_bkash_raw)
+
     return {
         "site_title": settings.get("site_title", "GOMON HUB TOURNAMENT"),
-        "admin_bkash": settings.get("admin_bkash", "01988279285 (Personal)"),
-        "admin_withdraw_number": settings.get("admin_withdraw_number", settings.get("admin_bkash", "01988279285 (Personal)")),
+        "admin_bkash": admin_bkash_raw if is_authenticated else "লগইন করে ডিপোজিট নাম্বার দেখুন",
+        "admin_withdraw_number": admin_withdraw_raw if is_authenticated else "লগইন করে নাম্বার দেখুন",
         "notice": settings.get("notice", ""),
         "notice_en": settings.get("notice_en", ""),
         "app_version": current_ver,
@@ -3029,7 +3054,7 @@ def _start_unfilled_match_watcher():
 
 _start_unfilled_match_watcher()
 
-@app.get("/api/matches")
+@app.get("/api/matches", dependencies=[Depends(check_rate_limit("matches_list", 60, 60, "খুব দ্রুত রিকোয়েস্ট পাঠানো হচ্ছে! অনুগ্রহ করে কিছুক্ষণ অপেক্ষা করুন।"))])
 def list_matches(request: Request):
     current_user_id = None
     is_admin = False

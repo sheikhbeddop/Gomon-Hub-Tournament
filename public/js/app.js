@@ -7492,12 +7492,12 @@ function restoreLastActiveView(isCached = false) {
     // Restore active modal if one was open
     const savedModal = sessionStorage.getItem('current_active_modal');
     if (savedModal) {
-        if (savedModal === 'walletModal') {
+        if (savedModal === 'myProfileDetailsModal') {
+            sessionStorage.removeItem('current_active_modal');
+        } else if (savedModal === 'walletModal') {
             openWalletModal();
         } else if (savedModal === 'withdrawModal') {
             openWithdrawModal();
-        } else if (savedModal === 'myProfileDetailsModal') {
-            openMyProfileModal();
         } else if (savedModal === 'allRulesModal') {
             openRulesModal();
         } else {
@@ -8046,7 +8046,7 @@ function openModal(id) {
         modal.classList.add('show');
         modal.style.removeProperty('display');
     }
-    const persistableModals = ['walletModal', 'withdrawModal', 'promotionModal', 'myProfileDetailsModal', 'allRulesModal', 'topPlayersModal', 'devProfileModal', 'supportModal', 'adminAuditLogsModal'];
+    const persistableModals = ['walletModal', 'withdrawModal', 'promotionModal', 'allRulesModal', 'topPlayersModal', 'devProfileModal', 'supportModal', 'adminAuditLogsModal'];
     if (persistableModals.includes(id)) {
         sessionStorage.setItem('current_active_modal', id);
     }

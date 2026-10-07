@@ -86,7 +86,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet"
         href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Rajdhani:wght@600;700;800&display=swap">
-    <link rel="stylesheet" href="/static/css/style.css?v=5.5.9">
+    <link rel="stylesheet" href="/static/css/style.css?v=5.6.0">
     <link rel="stylesheet" href="/static/css/auth-components.css?v=5.4.3">
 
     <script>
@@ -2663,10 +2663,10 @@
                     </div>
                 </div>
 
-                <div
-                    style="background: #f8fafc; border-radius: 12px; border: 1px solid #e2e8f0; padding: 14px 16px; margin-bottom: 16px;">
+                <div id="profInfoCard"
+                    style="border-radius: 12px; padding: 14px 16px; margin-bottom: 16px;">
                     <div
-                        style="display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #f1f5f9;">
+                        style="display: flex; justify-content: space-between; align-items: center; padding: 6px 0;">
                         <span style="font-size: 0.85rem; color: #64748b;">Player ID:</span>
                         <b id="profPlayerId" onclick="copyProfilePlayerId()" title="Click to copy player ID"
                             style="color: #2563eb; font-family: monospace; font-size: 0.95rem; font-weight: 800; cursor: pointer; padding: 2px 6px; border-radius: 4px; transition: background 0.2s;"
@@ -2674,7 +2674,7 @@
                             onmouseout="this.style.backgroundColor='transparent'">ID N/A</b>
                     </div>
                     <div
-                        style="display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #f1f5f9;">
+                        style="display: flex; justify-content: space-between; align-items: center; padding: 6px 0;">
                         <span style="font-size: 0.85rem; color: #64748b;">Promo Code:</span>
                         <b id="profPromoCode" onclick="copyProfilePromoCode()" title="Click to copy promo code"
                             style="color: #2563eb; font-family: monospace; font-size: 0.95rem; font-weight: 800; cursor: pointer; padding: 2px 6px; border-radius: 4px; transition: background 0.2s;"
@@ -2682,22 +2682,22 @@
                             onmouseout="this.style.backgroundColor='transparent'">GOMONHUB-N/A</b>
                     </div>
                     <div
-                        style="display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #f1f5f9;">
+                        style="display: flex; justify-content: space-between; align-items: center; padding: 6px 0;">
                         <span style="font-size: 0.85rem; color: #64748b;">Phone Number:</span>
                         <b id="profPhone" style="color: #0f172a;">Not provided</b>
                     </div>
                     <div
-                        style="display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #f1f5f9;">
+                        style="display: flex; justify-content: space-between; align-items: center; padding: 6px 0;">
                         <span style="font-size: 0.85rem; color: #64748b;">Email Address:</span>
                         <b id="profEmail" style="color: #0f172a;">Not provided</b>
                     </div>
                     <div
-                        style="display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #f1f5f9;">
+                        style="display: flex; justify-content: space-between; align-items: center; padding: 6px 0;">
                         <span style="font-size: 0.85rem; color: #64748b;">Free Fire IGN:</span>
                         <b id="profFFIgn" style="color: #0f172a;">Not set</b>
                     </div>
                     <div
-                        style="display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #f1f5f9;">
+                        style="display: flex; justify-content: space-between; align-items: center; padding: 6px 0;">
                         <span style="font-size: 0.85rem; color: #64748b;">Free Fire UID:</span>
                         <b id="profFFUid" style="color: #0f172a;">Not set</b>
                     </div>
@@ -2714,7 +2714,7 @@
                 <span id="profMatchesWon" style="display:none;">0</span>
 
                 <button type="button" class="btn btn-ghost"
-                    style="width: 100%; padding: 11px; font-weight: 700; border: 1px solid #e2e8f0; border-radius: 8px; color: #64748b;"
+                    style="width: 100%; padding: 11px; font-weight: 700; border-radius: 8px;"
                     onclick="closeModal('myProfileDetailsModal');">
                     Close
                 </button>

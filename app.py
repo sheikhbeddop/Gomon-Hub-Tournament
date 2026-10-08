@@ -490,6 +490,7 @@ def init_db():
             role TEXT DEFAULT 'player',
             status TEXT DEFAULT 'active',
             timeout_until DATETIME,
+            promo_code TEXT,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
 
@@ -749,6 +750,16 @@ def init_db():
             pass
 
         try:
+            conn.execute("ALTER TABLE users ADD COLUMN promo_code TEXT")
+        except Exception:
+            pass
+
+        try:
+            conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_promo_code ON users(promo_code)")
+        except Exception:
+            pass
+
+        try:
             conn.execute("ALTER TABLE users ADD COLUMN timeout_until DATETIME")
         except Exception:
             pass
@@ -900,6 +911,25 @@ def init_db():
                 FOREIGN KEY (user_id) REFERENCES users (id)
             )
         """)
+
+        # Ensure user_referrals table is initialized before MongoDB Cloud restore
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS user_referrals (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                referrer_id INTEGER NOT NULL,
+                referee_id INTEGER UNIQUE NOT NULL,
+                promo_code_used TEXT,
+                referee_bonus INTEGER DEFAULT 5,
+                referrer_bonus INTEGER DEFAULT 5,
+                is_deposit_rewarded INTEGER DEFAULT 0,
+                deposit_rewarded_at DATETIME DEFAULT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (referrer_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY (referee_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_referrals_referee ON user_referrals(referee_id);")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_referrals_referrer ON user_referrals(referrer_id);")
 
     conn.close()
 

@@ -469,7 +469,7 @@ def purge_records_older_than_15_days(db=None):
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
 
-    purged_counts = {"matches": 0, "results": 0, "participations": 0, "deposits": 0, "withdrawals": 0, "audit_logs": 0}
+    purged_counts = {"matches": 0, "results": 0, "participations": 0, "deposits": 0, "withdrawals": 0, "audit_logs": 0, "incoming_payments": 0, "push_subscriptions": 0}
     old_match_ids = []
     old_dep_ids = []
     old_wd_ids = []
@@ -578,6 +578,23 @@ def purge_records_older_than_15_days(db=None):
         cursor.execute("DELETE FROM audit_logs WHERE created_at < ?", (cutoff_str,))
         purged_counts["audit_logs"] = cursor.rowcount
 
+        # 5. Purge old incoming_payments (claimed >15 days, unclaimed >30 days)
+        cutoff_30d_str = (datetime.utcnow() - timedelta(days=30)).strftime("%Y-%m-%d %H:%M:%S")
+        cursor.execute("""
+            DELETE FROM incoming_payments 
+            WHERE (status = 'claimed' AND (
+                (claimed_at IS NOT NULL AND claimed_at != '' AND claimed_at < ?)
+                OR ((claimed_at IS NULL OR claimed_at = '') AND created_at < ?)
+            ))
+            OR (status = 'unclaimed' AND created_at < ?)
+        """, (cutoff_str, cutoff_str, cutoff_30d_str))
+        purged_counts["incoming_payments"] = cursor.rowcount
+
+        # 6. Purge dead push_subscriptions older than 90 days
+        cutoff_90d_str = (datetime.utcnow() - timedelta(days=90)).strftime("%Y-%m-%d %H:%M:%S")
+        cursor.execute("DELETE FROM push_subscriptions WHERE created_at < ?", (cutoff_90d_str,))
+        purged_counts["push_subscriptions"] = cursor.rowcount
+
         conn.commit()
     except Exception as e:
         print(f"[Purge Error - SQLite] {e}")
@@ -648,6 +665,26 @@ def purge_records_older_than_15_days(db=None):
                     {"created_at": {"$lt": cutoff_iso}}
                 ]
             })
+
+            # Purge old incoming_payments from MongoDB Atlas
+            mongo["incoming_payments"].delete_many({
+                "$or": [
+                    {
+                        "status": "claimed",
+                        "$or": [
+                            {"claimed_at": {"$lt": cutoff_str}},
+                            {"created_at": {"$lt": cutoff_str}}
+                        ]
+                    },
+                    {
+                        "status": "unclaimed",
+                        "created_at": {"$lt": cutoff_30d_str}
+                    }
+                ]
+            })
+
+            # Purge dead push_subscriptions older than 90 days from MongoDB Atlas
+            mongo["push_subscriptions"].delete_many({"created_at": {"$lt": cutoff_90d_str}})
         except Exception as e:
             print(f"[Purge Error - MongoDB] {e}")
 

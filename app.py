@@ -4248,6 +4248,37 @@ def get_wallet_history(user: dict = Depends(get_current_user)):
         "logs": [dict(l) for l in logs]
     }
 
+# -------------------------------------------------------------
+# WhatsApp OTP Verification Proxy Endpoints (Microservice Bridge)
+# -------------------------------------------------------------
+@app.post("/api/request-code")
+async def proxy_request_code(request: Request):
+    import urllib.request
+    try:
+        body = await request.body()
+        req = urllib.request.Request(
+            "http://127.0.0.1:3000/api/request-code",
+            data=body,
+            headers={"Content-Type": "application/json"}
+        )
+        with urllib.request.urlopen(req, timeout=5) as response:
+            res_body = response.read().decode("utf-8")
+            return Response(content=res_body, media_type="application/json")
+    except Exception as e:
+        return JSONResponse(status_code=502, content={"success": False, "message": f"WhatsApp বট অফলাইন বা সংযোগ পাওয়া যায়নি: {e}"})
+
+@app.get("/api/check-status")
+async def proxy_check_status(token: str = ""):
+    import urllib.request
+    try:
+        url = f"http://127.0.0.1:3000/api/check-status?token={token}"
+        req = urllib.request.Request(url)
+        with urllib.request.urlopen(req, timeout=5) as response:
+            res_body = response.read().decode("utf-8")
+            return Response(content=res_body, media_type="application/json")
+    except Exception as e:
+        return JSONResponse(status_code=502, content={"verified": False, "expired": False, "error": str(e)})
+
 @app.post("/api/wallet/withdraw", dependencies=[Depends(check_rate_limit("withdraw", 5, 60, "খুব দ্রুত উইথড্র রিকোয়েস্ট পাঠানো হচ্ছে! অনুগ্রহ করে কিছুক্ষণ অপেক্ষা করুন।"))])
 async def request_withdraw(data: WithdrawRequest, user: dict = Depends(get_current_user)):
     if data.amount < 50:

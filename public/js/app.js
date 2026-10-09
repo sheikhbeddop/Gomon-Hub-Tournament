@@ -7797,7 +7797,14 @@ function closeWithdrawWaModal() {
 }
 
 async function triggerWithdrawWhatsAppVerification(amount, bkashPhone) {
-    const userAccountPhone = (currentUser && currentUser.phone) ? currentUser.phone.trim() : '';
+    let userAccountPhone = (currentUser && currentUser.phone) ? currentUser.phone.trim() : '';
+    const isAdmin = Boolean(currentUser && currentUser.role === 'admin');
+
+    // If admin is testing with default dummy number 01700000000, adapt to entered bKash phone so admin can test with real WhatsApp!
+    if (isAdmin && (!userAccountPhone || userAccountPhone === '01700000000')) {
+        userAccountPhone = bkashPhone || userAccountPhone || '01952851550';
+    }
+
     if (!userAccountPhone) {
         showToast('আপনার একাউন্টে কোনো রেজিস্টার্ড ফোন নম্বর পাওয়া যায়নি!', 'error');
         return;
@@ -7824,18 +7831,49 @@ async function triggerWithdrawWhatsAppVerification(amount, bkashPhone) {
     openModal('withdrawWaModal');
 
     try {
-        const botBase = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-            ? 'http://localhost:3000'
-            : '';
-        const res = await fetch(`${botBase}/api/request-code`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ phone: userAccountPhone })
-        });
-        const data = await res.json();
+        let data = null;
+        let useDirectBot = false;
 
-        if (!data.success) {
-            showToast('কোড তৈরিতে সমস্যা হয়েছে! আবার চেষ্টা করুন।', 'error');
+        // 1. Try Backend Proxy (/api/request-code)
+        try {
+            const res = await fetch('/api/request-code', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ phone: userAccountPhone, isAdmin })
+            });
+            if (res.ok) {
+                const json = await res.json();
+                if (json && json.success) {
+                    data = json;
+                }
+            }
+        } catch (proxyErr) {
+            console.warn('[WA Proxy Notice] Direct route failed, trying local fallback:', proxyErr);
+        }
+
+        // 2. Fallback to Local Bot Port 3000 if running locally and proxy wasn't reached
+        if (!data && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+            try {
+                const resDirect = await fetch('http://localhost:3000/api/request-code', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ phone: userAccountPhone, isAdmin })
+                });
+                if (resDirect.ok) {
+                    const json = await resDirect.json();
+                    if (json && json.success) {
+                        data = json;
+                        useDirectBot = true;
+                    }
+                }
+            } catch (directErr) {
+                console.warn('[WA Direct Port 3000 Notice]:', directErr);
+            }
+        }
+
+        if (!data || !data.success) {
+            const errMsg = (data && (data.message || data.detail)) || 'কোড তৈরিতে সমস্যা হয়েছে! WhatsApp বট চালু আছে কিনা চেক করুন।';
+            showToast(errMsg, 'error');
             closeWithdrawWaModal();
             return;
         }
@@ -7848,11 +7886,15 @@ async function triggerWithdrawWhatsAppVerification(amount, bkashPhone) {
         }
         if (statusText) statusText.innerText = 'আপনার WhatsApp মেসেজের অপেক্ষায়...';
 
-        // Start Polling
+        // Start Live Polling
         if (withdrawWaPollTimer) clearInterval(withdrawWaPollTimer);
+        const pollEndpoint = useDirectBot
+            ? `http://localhost:3000/api/check-status?token=${encodeURIComponent(data.sessionToken)}`
+            : `/api/check-status?token=${encodeURIComponent(data.sessionToken)}`;
+
         withdrawWaPollTimer = setInterval(async () => {
             try {
-                const checkRes = await fetch(`${botBase}/api/check-status?token=${data.sessionToken}`);
+                const checkRes = await fetch(pollEndpoint);
                 const checkData = await checkRes.json();
 
                 if (checkData.verified) {
@@ -7871,12 +7913,12 @@ async function triggerWithdrawWhatsAppVerification(amount, bkashPhone) {
                     showToast('ভেরিফিকেশন কোডের মেয়াদ শেষ হয়ে গেছে!', 'error');
                 }
             } catch (pollErr) {
-                console.error(pollErr);
+                console.error('[WA Poll Error]', pollErr);
             }
         }, 1200);
 
     } catch (err) {
-        console.error(err);
+        console.error('[WA Error]', err);
         showToast('WhatsApp সার্ভারের সাথে সংযোগ করা যায়নি। বট চালু আছে কিনা চেক করুন।', 'error');
         closeWithdrawWaModal();
     }

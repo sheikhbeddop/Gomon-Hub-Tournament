@@ -1,5 +1,6 @@
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, Browsers } = require('@whiskeysockets/baileys');
 const qrcode = require('qrcode-terminal');
+const QRCode = require('qrcode');
 const path = require('path');
 const fs = require('fs');
 const pino = require('pino');
@@ -34,6 +35,10 @@ if (fs.existsSync(configPath)) {
 const pendingSessions = {};
 
 let sock = null;
+let currentQr = null;
+let currentQrDataUrl = null;
+let isConnected = false;
+let currentPairingCode = null;
 
 async function startWhatsAppBot() {
     const sessionDir = path.join(__dirname, 'auth_session');
@@ -51,26 +56,38 @@ async function startWhatsAppBot() {
         auth: state,
         logger: pino({ level: 'silent' }),
         printQRInTerminal: false,
-        browser: ['GOMONHUB Bot', 'Chrome', '1.0.0']
+        browser: Browsers.ubuntu('Chrome')
     });
 
     sock.ev.on('creds.update', saveCreds);
 
-    sock.ev.on('connection.update', (update) => {
+    sock.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect, qr } = update;
 
         if (qr) {
-            console.log('\n📱 [QR CODE GENERATED] Please scan with WhatsApp:');
+            currentQr = qr;
+            isConnected = false;
+            try {
+                currentQrDataUrl = await QRCode.toDataURL(qr, { margin: 2, scale: 8 });
+            } catch (err) {
+                console.error('[QR ERROR]', err.message);
+            }
+            console.log('\n📱 [QR CODE GENERATED] Please scan with WhatsApp or open web portal /qr:');
             qrcode.generate(qr, { small: true });
         }
 
         if (connection === 'close') {
+            isConnected = false;
             const shouldReconnect = (lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut);
             console.log(`\n⚠️ Connection closed: ${lastDisconnect?.error?.message || 'Unknown'}. Reconnecting: ${shouldReconnect}`);
             if (shouldReconnect) {
                 setTimeout(startWhatsAppBot, 3000);
             }
         } else if (connection === 'open') {
+            isConnected = true;
+            currentQr = null;
+            currentQrDataUrl = null;
+            currentPairingCode = null;
             console.log('\n✅ [WHATSAPP CONNECTED] Bot is active & listening 24/7!\n');
         }
     });
@@ -241,6 +258,266 @@ const server = http.createServer((req, res) => {
             phone: sess.phone,
             senderPhone: sess.senderPhone || ''
         }));
+        return;
+    }
+
+    // API: Bot Connection Status & Live QR
+    if (parsedUrl.pathname === '/api/bot-status' && req.method === 'GET') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+            connected: isConnected,
+            hasQr: !!currentQrDataUrl,
+            qrImage: currentQrDataUrl || null,
+            pairingCode: currentPairingCode,
+            botPhone: config.bot_phone_number
+        }));
+        return;
+    }
+
+    // API: Request Pairing Code (Alternative to camera QR scan)
+    if (parsedUrl.pathname === '/api/request-pairing' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => { body += chunk; });
+        req.on('end', async () => {
+            try {
+                const data = JSON.parse(body || '{}');
+                let phone = (data.phone || config.bot_phone_number || '').replace(/\D/g, '');
+                if (!phone.startsWith('88') && phone.startsWith('01')) {
+                    phone = '88' + phone;
+                }
+                if (sock && !isConnected) {
+                    const code = await sock.requestPairingCode(phone);
+                    currentPairingCode = code;
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: true, pairingCode: code }));
+                } else {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({
+                        success: false,
+                        message: isConnected ? 'WhatsApp is already connected!' : 'Bot socket not ready yet. Please wait a few seconds.'
+                    }));
+                }
+            } catch (err) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, message: err.message }));
+            }
+        });
+        return;
+    }
+
+    // Dedicated QR Code & Pairing Web Interface
+    if (parsedUrl.pathname === '/qr') {
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end(`<!DOCTYPE html>
+<html lang="bn">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GOMONHUB - WhatsApp Bot Link & Pairing</title>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800;900&family=JetBrains+Mono:wght@700&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: radial-gradient(circle at 50% 0%, #0f172a 0%, #020617 100%);
+      font-family: 'Outfit', sans-serif;
+      color: #f8fafc;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .card {
+      background: rgba(15, 23, 42, 0.9);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(16px);
+      width: 100%;
+      max-width: 480px;
+      border-radius: 24px;
+      padding: 32px 24px;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+      text-align: center;
+    }
+    h1 { font-size: 1.5rem; font-weight: 800; margin-bottom: 8px; }
+    p.sub { color: #94a3b8; font-size: 0.9rem; margin-bottom: 20px; line-height: 1.4; }
+    .qr-container {
+      background: #ffffff;
+      padding: 16px;
+      border-radius: 16px;
+      display: inline-block;
+      margin: 10px 0 16px 0;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.4);
+    }
+    .qr-container img {
+      width: 240px;
+      height: 240px;
+      display: block;
+    }
+    .instructions {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 14px;
+      text-align: left;
+      font-size: 0.85rem;
+      color: #cbd5e1;
+      margin-top: 14px;
+      line-height: 1.6;
+    }
+    .instructions ol { padding-left: 20px; }
+    .instructions li { margin-bottom: 4px; }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      border-radius: 999px;
+      font-size: 0.82rem;
+      font-weight: 700;
+      margin-bottom: 14px;
+    }
+    .badge.waiting { background: rgba(234, 179, 8, 0.15); border: 1px solid rgba(234, 179, 8, 0.4); color: #facc15; }
+    .badge.connected { background: rgba(34, 197, 94, 0.15); border: 1px solid rgba(34, 197, 94, 0.4); color: #4ade80; }
+    .btn-action {
+      width: 100%;
+      padding: 13px;
+      background: linear-gradient(135deg, #2563eb, #1d4ed8);
+      color: #fff;
+      border: none;
+      border-radius: 12px;
+      font-size: 0.95rem;
+      font-weight: 700;
+      cursor: pointer;
+      margin-top: 12px;
+      transition: opacity 0.15s;
+    }
+    .btn-action:hover { opacity: 0.9; }
+    .pairing-box {
+      background: rgba(37, 99, 235, 0.1);
+      border: 1px dashed #3b82f6;
+      border-radius: 12px;
+      padding: 14px;
+      margin-top: 14px;
+    }
+    .pairing-code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 1.8rem;
+      font-weight: 900;
+      letter-spacing: 4px;
+      color: #60a5fa;
+      margin-top: 6px;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div id="statusBadge" class="badge waiting">
+      <span>●</span> অপেক্ষমাণ: ডিভাইস লিংক করুন
+    </div>
+
+    <!-- CONNECTED SCREEN -->
+    <div id="viewConnected" style="display: none;">
+      <div style="font-size: 3rem; margin-bottom: 10px;">✅</div>
+      <h1 style="color: #4ade80;">WhatsApp বট সংযুক্ত!</h1>
+      <p class="sub">বট এখন ২৪/৭ চালু আছে এবং উইথড্র ভেরিফিকেশন মেসেজ হ্যান্ডেল করতে প্রস্তুত।</p>
+      <div class="instructions" style="text-align: center;">
+        📱 <b>বট নম্বর:</b> <span style="color: #38bdf8; font-weight: 800;">${config.bot_phone_number}</span><br>
+        🚀 <b>সার্ভার স্ট্যাটাস:</b> ONLINE & READY
+      </div>
+    </div>
+
+    <!-- NOT CONNECTED SCREEN -->
+    <div id="viewScan">
+      <h1>WhatsApp কানেক্ট করুন</h1>
+      <p class="sub">আপনার <b>${config.bot_phone_number}</b> নম্বরের ফোন দিয়ে নিচের QR কোডটি স্ক্যান করুন:</p>
+
+      <div class="qr-container">
+        <img id="qrImage" src="" alt="WhatsApp QR Code">
+      </div>
+
+      <div class="instructions">
+        <ol>
+          <li>আপনার ফোনে WhatsApp ওপেন করুন।</li>
+          <li>উপরের ৩টি ডট বা <b>Settings</b>-এ যান।</li>
+          <li><b>Linked Devices</b> (লিংক করা ডিভাইস)-এ চাপ দিন।</li>
+          <li><b>Link a Device</b> চাপ দিয়ে উপরের QR কোডটি স্ক্যান করুন।</li>
+        </ol>
+      </div>
+
+      <div class="pairing-box">
+        <div style="font-size: 0.85rem; color: #94a3b8; font-weight: 600;">অথবা ক্যামেরা স্ক্যান ছাড়া কোড দিয়ে লিংক করুন:</div>
+        <button class="btn-action" onclick="getPairingCode()" id="btnPair">Pairing Code তৈরি করুন 🔑</button>
+        <div id="pairingCodeDisplay" class="pairing-code" style="display: none;">------</div>
+        <div id="pairingHelp" style="display: none; font-size: 0.78rem; color: #94a3b8; margin-top: 6px;">
+          ফোনে "Link with phone number instead" সিলেক্ট করে এই কোডটি লিখুন।
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    async function checkStatus() {
+      try {
+        const res = await fetch('/api/bot-status');
+        const data = await res.json();
+        if (data.connected) {
+          document.getElementById('viewScan').style.display = 'none';
+          document.getElementById('viewConnected').style.display = 'block';
+          const b = document.getElementById('statusBadge');
+          b.className = 'badge connected';
+          b.innerHTML = '● WhatsApp কানেক্টেড';
+        } else {
+          document.getElementById('viewScan').style.display = 'block';
+          document.getElementById('viewConnected').style.display = 'none';
+          if (data.qrImage) {
+            document.getElementById('qrImage').src = data.qrImage;
+          }
+          if (data.pairingCode) {
+            document.getElementById('pairingCodeDisplay').innerText = data.pairingCode;
+            document.getElementById('pairingCodeDisplay').style.display = 'block';
+            document.getElementById('pairingHelp').style.display = 'block';
+          }
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    async function getPairingCode() {
+      const btn = document.getElementById('btnPair');
+      btn.innerText = 'কোড তৈরি হচ্ছে...';
+      btn.disabled = true;
+      try {
+        const res = await fetch('/api/request-pairing', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone: '${config.bot_phone_number}' })
+        });
+        const data = await res.json();
+        if (data.success) {
+          document.getElementById('pairingCodeDisplay').innerText = data.pairingCode;
+          document.getElementById('pairingCodeDisplay').style.display = 'block';
+          document.getElementById('pairingHelp').style.display = 'block';
+          btn.innerText = 'নতুন কোড পান 🔄';
+          btn.disabled = false;
+        } else {
+          alert(data.message || 'Error');
+          btn.innerText = 'Pairing Code তৈরি করুন 🔑';
+          btn.disabled = false;
+        }
+      } catch (err) {
+        alert('এরর: ' + err.message);
+        btn.innerText = 'Pairing Code তৈরি করুন 🔑';
+        btn.disabled = false;
+      }
+    }
+
+    checkStatus();
+    setInterval(checkStatus, 2500);
+  </script>
+</body>
+</html>`);
         return;
     }
 
@@ -587,8 +864,10 @@ const server = http.createServer((req, res) => {
     }
 });
 
-server.listen(3000, () => {
-    console.log(`🚀 [WEB TEST PORTAL READY] Open in browser: http://localhost:3000`);
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, '0.0.0.0', () => {
+    console.log(`🚀 [WEB TEST PORTAL READY] Open in browser: http://localhost:${PORT}`);
+    console.log(`🔗 [QR LINK & PAIRING PAGE]: http://localhost:${PORT}/qr`);
 });
 
 startWhatsAppBot();

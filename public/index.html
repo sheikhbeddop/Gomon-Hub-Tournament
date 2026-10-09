@@ -2542,6 +2542,55 @@
         </div>
     </div>
 
+    <!-- MODAL: WITHDRAW WHATSAPP VERIFICATION (LOCKED ACCOUNT PHONE) -->
+    <div class="modal-overlay" id="withdrawWaModal" style="z-index: 10005;">
+        <div class="modal-box" style="max-width: 420px; text-align: center; border: 1.5px solid rgba(34, 197, 94, 0.4); box-shadow: 0 20px 40px rgba(0,0,0,0.45); border-radius: 16px;">
+            <div class="modal-header" style="justify-content: center; position: relative; padding: 14px 16px; border-bottom: 1px solid #e2e8f0;">
+                <h3 style="font-family: 'Rajdhani', sans-serif; font-size: 1.15rem; font-weight: 800; color: #16a34a; margin: 0; display: flex; align-items: center; gap: 6px;">
+                    <span>🛡️</span> ক্যাশআউট ভেরিফিকেশন (WhatsApp)
+                </h3>
+                <button type="button" class="btn-close" onclick="closeWithdrawWaModal()" style="position: absolute; right: 14px; top: 12px; font-size: 1.3rem;">&times;</button>
+            </div>
+            <div class="modal-body" style="padding: 16px 20px 22px 20px;">
+                <!-- Locked Account Phone Indicator -->
+                <div style="background: #f1f5f9; border: 1.5px solid #cbd5e1; border-radius: 10px; padding: 10px 14px; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center;">
+                    <div style="text-align: left;">
+                        <div style="font-size: 0.7rem; color: #64748b; font-weight: 800; text-transform: uppercase;">রেজিস্টার্ড অ্যাকাউন্ট নম্বর</div>
+                        <div id="withdrawWaLockedPhone" style="font-family: monospace; font-size: 1.05rem; font-weight: 800; color: #0f172a; margin-top: 1px;">01XXXXXXXXX</div>
+                    </div>
+                    <span style="background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; font-size: 0.72rem; font-weight: 800; padding: 3px 8px; border-radius: 6px; display: flex; align-items: center; gap: 4px;">
+                        🔒 LOCKED
+                    </span>
+                </div>
+
+                <p style="font-size: 0.8rem; color: #475569; line-height: 1.45; margin-bottom: 14px; text-align: left;">
+                    নিরাপত্তার স্বার্থে আপনার এই একাউন্টের নির্দিষ্ট WhatsApp থেকে নিচের কোডটি পাঠিয়ে ক্যাশআউট কনফার্ম করুন:
+                </p>
+
+                <!-- Code Box -->
+                <div style="background: rgba(34, 197, 94, 0.08); border: 2px dashed #22c55e; border-radius: 12px; padding: 12px; margin-bottom: 16px;">
+                    <div style="font-size: 0.7rem; color: #15803d; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;">ভেরিফিকেশন সিকিউর কোড</div>
+                    <div id="withdrawWaCode" style="font-family: monospace; font-size: 2.2rem; font-weight: 900; color: #15803d; letter-spacing: 6px; margin-top: 2px;">------</div>
+                </div>
+
+                <!-- Open WhatsApp Button -->
+                <a id="withdrawWaOpenBtn" href="#" target="_blank" class="btn"
+                   style="display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 12px; background: #25d366; color: #064e3b; font-weight: 900; font-size: 1rem; border-radius: 10px; text-decoration: none; box-shadow: 0 4px 12px rgba(37, 211, 102, 0.4); margin-bottom: 14px; box-sizing: border-box;">
+                    <span>📲 Open WhatsApp & Send Code</span>
+                </a>
+
+                <!-- Polling Status Indicator -->
+                <div id="withdrawWaStatusBox" style="display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 0.82rem; color: #64748b; font-weight: 600;">
+                    <div style="width: 14px; height: 14px; border: 2px solid #cbd5e1; border-top-color: #22c55e; border-radius: 50%; animation: spinWithdraw 0.8s linear infinite;"></div>
+                    <span id="withdrawWaStatusText">আপনার WhatsApp মেসেজের অপেক্ষায়...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    <style>
+        @keyframes spinWithdraw { to { transform: rotate(360deg); } }
+    </style>
+
     <!-- MODAL: VIDEO PROMOTION & EARN (Promote on YouTube/TikTok/Facebook/Instagram) -->
     <div class="modal-overlay" id="promotionModal">
         <div class="modal-box" style="max-width: 520px; max-height: 90vh; display: flex; flex-direction: column;">

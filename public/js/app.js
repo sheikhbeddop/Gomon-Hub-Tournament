@@ -8185,6 +8185,9 @@ function openModal(id) {
 }
 
 function closeModal(id, fromPopstate = false) {
+    if (id === 'appUpdateModal') {
+        return; // Mandatory update: cannot dismiss until updated and installed
+    }
     if (id === 'authModal' && !currentUser) {
         return; // Non-logged-in users cannot dismiss login modal to enter app
     }
@@ -8209,6 +8212,9 @@ function closeModal(id, fromPopstate = false) {
 
 window.onclick = (e) => {
     if (e.target.classList.contains('modal-overlay')) {
+        if (e.target.id === 'appUpdateModal') {
+            return; // Mandatory update: cannot dismiss by clicking background
+        }
         if (e.target.id === 'authModal' && !currentUser) {
             return; // Non-logged-in users cannot dismiss login modal by clicking background
         }
@@ -8292,49 +8298,64 @@ async function confirmAndInstallUpdate() {
     const percentEl = document.getElementById('updatePercent');
     const statusEl = document.getElementById('updateProgressStatus');
 
-    if (btn) btn.disabled = true;
+    if (btn) {
+        btn.disabled = true;
+        btn.style.opacity = '0.6';
+    }
     if (progressWrapper) progressWrapper.style.display = 'block';
 
     let p = 0;
-    const interval = setInterval(() => {
-        p += 25;
+    const interval = setInterval(async () => {
+        p += 20;
         if (p > 100) p = 100;
         if (progressFill) progressFill.style.width = p + '%';
         if (percentEl) percentEl.innerText = p + '%';
 
-        if (p === 50 && statusEl) {
-            statusEl.innerText = 'Preparing new update files...';
+        if (p === 40 && statusEl) {
+            statusEl.innerText = 'পুরনো ক্যাশ ও ফাইল সম্পূর্ণ মুছে ফেলা হচ্ছে...';
+        } else if (p === 80 && statusEl) {
+            statusEl.innerText = 'সার্ভার থেকে ফ্রেশ ফাইল ডাউনলোড হচ্ছে...';
         } else if (p === 100 && statusEl) {
-            statusEl.innerText = 'Update successful! Loading new interface...';
+            statusEl.innerText = 'আপডেট সফল! নতুন ইন্টারফেসে প্রবেশ করা হচ্ছে...';
             clearInterval(interval);
 
-            // SAVE NEW VERSION IN LOCALSTORAGE - STRICTLY PRESERVING ff_token & LOGIN CREDENTIALS!
-            localStorage.setItem('installed_app_version', pendingUpdateVersion);
+            // 1. SAVE NEW VERSION IN LOCALSTORAGE (Preserving login tokens)
+            if (pendingUpdateVersion) {
+                localStorage.setItem('installed_app_version', pendingUpdateVersion);
+            }
 
-            // 1. Purge all old CSS, JS and Image caches so full UI changes apply 100%
+            // 2. Complete Purge of all CacheStorage caches
             if ('caches' in window) {
-                caches.keys().then(names => {
-                    return Promise.all(names.map(name => caches.delete(name)));
-                });
+                try {
+                    const cacheKeys = await caches.keys();
+                    await Promise.all(cacheKeys.map(k => caches.delete(k)));
+                } catch (_) {}
             }
 
-            // 2. Post skipWaiting to Service Worker for instant activation
+            // 3. Purge & Unregister all Service Worker registrations
             if ('serviceWorker' in navigator) {
-                navigator.serviceWorker.getRegistrations().then(regs => {
-                    for (let reg of regs) {
-                        if (reg.waiting) {
-                            reg.waiting.postMessage({ action: 'skipWaiting' });
-                        }
+                try {
+                    const registrations = await navigator.serviceWorker.getRegistrations();
+                    for (const reg of registrations) {
+                        try {
+                            if (reg.active) reg.active.postMessage({ action: 'purgeAll' });
+                            if (reg.waiting) reg.waiting.postMessage({ action: 'skipWaiting' });
+                            await reg.unregister();
+                        } catch (_) {}
                     }
-                });
+                } catch (_) {}
             }
 
-            // 3. Cache-busting reload to render the 100% brand-new design immediately
+            // 4. Clear sessionStorage (stale UI states)
+            try { sessionStorage.clear(); } catch (_) {}
+
+            // 5. Force Hard Cache-Busted Navigation from Server
             setTimeout(() => {
-                window.location.href = window.location.pathname + '?v=' + encodeURIComponent(pendingUpdateVersion) + '_' + Date.now();
+                const freshUrl = window.location.origin + window.location.pathname + '?app_v=' + encodeURIComponent(pendingUpdateVersion || 'latest') + '&ts=' + Date.now();
+                window.location.replace(freshUrl);
             }, 600);
         }
-    }, 180);
+    }, 150);
 }
 
 window.addEventListener('online', () => {

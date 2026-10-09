@@ -41,6 +41,11 @@ self.addEventListener('message', (event) => {
     if (event.data && event.data.action === 'skipWaiting') {
         self.skipWaiting();
     }
+    if (event.data && event.data.action === 'purgeAll') {
+        caches.keys().then((names) => {
+            return Promise.all(names.map(name => caches.delete(name)));
+        }).then(() => self.skipWaiting());
+    }
 });
 
 // Fetch Handler: Network-First for Navigation/HTML, Cache-First for Static Assets, Network-Only for APIs & WebSockets
@@ -57,6 +62,20 @@ self.addEventListener('fetch', (event) => {
         url.pathname.startsWith('/ws') || 
         url.pathname === '/ping' ||
         !url.protocol.startsWith('http')) {
+        return;
+    }
+
+    // Force network fetch when update cache-busting params (ts or app_v) are present
+    if (url.searchParams.has('ts') || url.searchParams.has('app_v')) {
+        event.respondWith(
+            fetch(event.request).then((networkResponse) => {
+                if (networkResponse && networkResponse.status === 200) {
+                    const clone = networkResponse.clone();
+                    caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+                }
+                return networkResponse;
+            }).catch(() => caches.match(event.request))
+        );
         return;
     }
 

@@ -7780,6 +7780,18 @@ async function submitWithdrawForm(e) {
         return;
     }
 
+    // Check 12-hour WhatsApp verification window (12 hours = 43,200,000 ms)
+    const TWELVE_HOURS_MS = 12 * 60 * 60 * 1000;
+    const lastWaVerified = localStorage.getItem(`wa_verified_${currentUser.id}`);
+    const now = Date.now();
+
+    if (lastWaVerified && (now - parseInt(lastWaVerified, 10)) < TWELVE_HOURS_MS) {
+        // Already verified within the last 12 hours - bypass modal and submit directly!
+        pendingWithdrawState = { amount, bkash_number: phone };
+        await executeVerifiedWithdrawal();
+        return;
+    }
+
     // Trigger Locked-Phone WhatsApp Verification before submitting
     triggerWithdrawWhatsAppVerification(amount, phone);
 }
@@ -7937,6 +7949,9 @@ async function executeVerifiedWithdrawal() {
         if (!res.ok) throw new Error(data.detail || 'Withdrawal request failed');
 
         showToast(data.message || 'Withdrawal request submitted successfully!', 'success');
+        if (currentUser && currentUser.id) {
+            localStorage.setItem(`wa_verified_${currentUser.id}`, Date.now().toString());
+        }
         const withdrawForm = document.getElementById('withdrawForm');
         if (withdrawForm) withdrawForm.reset();
 

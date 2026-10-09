@@ -40,8 +40,37 @@ let currentQrDataUrl = null;
 let isConnected = false;
 let currentPairingCode = null;
 
+function getSessionKeyString() {
+    try {
+        const credsPath = path.join(__dirname, 'auth_session', 'creds.json');
+        if (fs.existsSync(credsPath)) {
+            const raw = fs.readFileSync(credsPath, 'utf8');
+            return Buffer.from(raw).toString('base64');
+        }
+    } catch (_) {}
+    return null;
+}
+
+function restoreSessionFromEnv() {
+    const sessionDir = path.join(__dirname, 'auth_session');
+    if (!fs.existsSync(sessionDir)) {
+        fs.mkdirSync(sessionDir, { recursive: true });
+    }
+    const credsPath = path.join(sessionDir, 'creds.json');
+    if (!fs.existsSync(credsPath) && process.env.WHATSAPP_SESSION_DATA) {
+        try {
+            const rawJson = Buffer.from(process.env.WHATSAPP_SESSION_DATA.trim(), 'base64').toString('utf8');
+            fs.writeFileSync(credsPath, rawJson, 'utf8');
+            console.log('\n🔑 [PERMANENT SESSION RESTORED] Loaded credentials from WHATSAPP_SESSION_DATA env variable!\n');
+        } catch (e) {
+            console.error('[SESSION RESTORE ERROR] Could not decode WHATSAPP_SESSION_DATA:', e.message);
+        }
+    }
+}
+
 async function startWhatsAppBot() {
     const sessionDir = path.join(__dirname, 'auth_session');
+    restoreSessionFromEnv();
     const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
     const { version, isLatest } = await fetchLatestBaileysVersion();
 
@@ -88,7 +117,11 @@ async function startWhatsAppBot() {
             currentQr = null;
             currentQrDataUrl = null;
             currentPairingCode = null;
+            const sk = getSessionKeyString();
             console.log('\n✅ [WHATSAPP CONNECTED] Bot is active & listening 24/7!\n');
+            if (sk) {
+                console.log(`🔑 [PERMANENT SESSION KEY]: ${sk}\n`);
+            }
         }
     });
 
@@ -174,7 +207,7 @@ async function startWhatsAppBot() {
 // -------------------------------------------------------------
 // Built-in Live Simulation Web Server (Port 3000)
 // -------------------------------------------------------------
-const server = http.createServer((req, res) => {
+const server = http.createServer(async (req, res) => {
     // CORS headers
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -250,14 +283,46 @@ const server = http.createServer((req, res) => {
 
     // API: Bot Connection Status & Live QR
     if (parsedUrl.pathname === '/api/bot-status' && req.method === 'GET') {
+        const sessionKey = getSessionKeyString();
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
             connected: isConnected,
             hasQr: !!currentQrDataUrl,
             qrImage: currentQrDataUrl || null,
             pairingCode: currentPairingCode,
+            sessionKey: isConnected ? sessionKey : null,
             botPhone: config.bot_phone_number
         }));
+        return;
+    }
+
+    // API: Logout / Reset Session (Change Number)
+    if (parsedUrl.pathname === '/api/bot-logout' && req.method === 'POST') {
+        try {
+            console.log('🔄 [LOGOUT REQUESTED] Clearing WhatsApp session for new number link...');
+            if (sock) {
+                try { await sock.logout(); } catch (_) { try { sock.end(); } catch (__) {} }
+            }
+            isConnected = false;
+            currentQr = null;
+            currentQrDataUrl = null;
+            currentPairingCode = null;
+
+            const sessionDir = path.join(__dirname, 'auth_session');
+            if (fs.existsSync(sessionDir)) {
+                fs.rmSync(sessionDir, { recursive: true, force: true });
+            }
+
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: true, message: 'Logged out. New QR code generating...' }));
+
+            setTimeout(() => {
+                startWhatsAppBot();
+            }, 1500);
+        } catch (err) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: false, message: err.message }));
+        }
         return;
     }
 
@@ -408,10 +473,30 @@ const server = http.createServer((req, res) => {
       <div style="font-size: 3rem; margin-bottom: 10px;">✅</div>
       <h1 style="color: #4ade80;">WhatsApp বট সংযুক্ত!</h1>
       <p class="sub">বট এখন ২৪/৭ চালু আছে এবং উইথড্র ভেরিফিকেশন মেসেজ হ্যান্ডেল করতে প্রস্তুত।</p>
-      <div class="instructions" style="text-align: center;">
+      <div class="instructions" style="text-align: center; margin-bottom: 16px;">
         📱 <b>বট নম্বর:</b> <span style="color: #38bdf8; font-weight: 800;">${config.bot_phone_number}</span><br>
-        🚀 <b>সার্ভার স্ট্যাটাস:</b> ONLINE & READY
+        🚀 <b>সার্ভার স্ট্যাটাস:</b> ONLINE & 24/7 ACTIVE
       </div>
+
+      <!-- PERMANENT AUTO-LOGIN KEY BOX -->
+      <div style="background: rgba(34, 197, 94, 0.08); border: 1.5px dashed #22c55e; border-radius: 14px; padding: 16px; text-align: left; margin-bottom: 16px;">
+        <div style="font-size: 0.85rem; color: #4ade80; font-weight: 800; display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+          <span>🔑</span> পার্মানেন্ট অটো-লগইন কি (Permanent Session Key)
+        </div>
+        <div style="font-size: 0.78rem; color: #94a3b8; line-height: 1.45; margin-bottom: 10px;">
+          সার্ভার রিস্টার্ট হলেও যেন আর কখনো স্ক্যান না করতে হয়, তার জন্য নিচের কি-টি কপি করে Render-এর Environment-এ <b>WHATSAPP_SESSION_DATA</b> নামে বসিয়ে দিন।
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <input type="text" id="sessionKeyBox" readonly style="flex: 1; background: #020617; border: 1px solid #334155; color: #38bdf8; font-family: monospace; font-size: 0.82rem; padding: 10px 12px; border-radius: 8px; outline: none;">
+          <button onclick="copySessionKey()" id="btnCopyKey" style="background: #22c55e; color: #052e16; font-weight: 800; font-size: 0.85rem; border: none; padding: 10px 16px; border-radius: 8px; cursor: pointer;">কপি 📋</button>
+        </div>
+        <div id="copyAlert" style="display: none; color: #4ade80; font-size: 0.8rem; font-weight: 700; margin-top: 6px;">✓ Session Key কপি করা হয়েছে!</div>
+      </div>
+
+      <!-- CHANGE NUMBER / LOGOUT BUTTON -->
+      <button onclick="changeNumberLogout()" id="btnLogout" style="width: 100%; padding: 12px; background: rgba(239, 68, 68, 0.12); border: 1.5px solid rgba(239, 68, 68, 0.4); color: #f87171; border-radius: 12px; font-size: 0.9rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
+        <span>🔄</span> নম্বর পরিবর্তন করুন (Change WhatsApp Number / Logout)
+      </button>
     </div>
 
     <!-- NOT CONNECTED SCREEN -->
@@ -454,6 +539,9 @@ const server = http.createServer((req, res) => {
           const b = document.getElementById('statusBadge');
           b.className = 'badge connected';
           b.innerHTML = '● WhatsApp কানেক্টেড';
+          if (data.sessionKey) {
+            document.getElementById('sessionKeyBox').value = data.sessionKey;
+          }
         } else {
           document.getElementById('viewScan').style.display = 'block';
           document.getElementById('viewConnected').style.display = 'none';
@@ -468,6 +556,38 @@ const server = http.createServer((req, res) => {
         }
       } catch (e) {
         console.error(e);
+      }
+    }
+
+    function copySessionKey() {
+      const box = document.getElementById('sessionKeyBox');
+      box.select();
+      navigator.clipboard.writeText(box.value).then(() => {
+        document.getElementById('copyAlert').style.display = 'block';
+        setTimeout(() => { document.getElementById('copyAlert').style.display = 'none'; }, 3000);
+      });
+    }
+
+    async function changeNumberLogout() {
+      if (!confirm('আপনি কি নিশ্চিত যে বর্তমান WhatsApp নম্বরটি ডিসকানেক্ট করে নতুন নম্বর দিয়ে স্ক্যান করতে চান?')) return;
+      const btn = document.getElementById('btnLogout');
+      btn.innerText = 'লগআউট হচ্ছে...';
+      btn.disabled = true;
+      try {
+        const res = await fetch('/api/bot-logout', { method: 'POST' });
+        const data = await res.json();
+        if (data.success) {
+          alert('সেশন ক্লিয়ার হয়েছে! এখন নতুন নম্বর দিয়ে স্ক্যান করতে পারবেন।');
+          location.reload();
+        } else {
+          alert('এরর: ' + data.message);
+          btn.innerText = '🔄 নম্বর পরিবর্তন করুন (Change WhatsApp Number / Logout)';
+          btn.disabled = false;
+        }
+      } catch (e) {
+        alert('সার্ভার এরর: ' + e.message);
+        btn.innerText = '🔄 নম্বর পরিবর্তন করুন (Change WhatsApp Number / Logout)';
+        btn.disabled = false;
       }
     }
 

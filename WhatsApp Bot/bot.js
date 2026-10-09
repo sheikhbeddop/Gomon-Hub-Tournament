@@ -133,24 +133,11 @@ async function startWhatsAppBot() {
 
             for (const [token, sess] of Object.entries(pendingSessions)) {
                 if (sess.code === code && now < sess.expiresAt) {
-                    const cleanSessPhone = (sess.phone || '').replace(/\D/g, '');
-                    const cleanSenderPhone = senderPhone.replace(/\D/g, '');
-
-                    // Match if clean phone matches or suffix matches (e.g., 017... vs 88017...)
-                    const isPhoneMatch = !cleanSessPhone ||
-                        cleanSessPhone === '01700000000' ||
-                        sess.isAdmin ||
-                        cleanSenderPhone.endsWith(cleanSessPhone) ||
-                        cleanSessPhone.endsWith(cleanSenderPhone);
-
-                    if (isPhoneMatch) {
-                        sess.verified = true;
-                        sess.senderPhone = senderPhone;
-                        matchedToken = token;
-                        break;
-                    } else {
-                        console.log(`⚠️ [PHONE NUMBER MISMATCH] Locked Account: ${cleanSessPhone} vs WhatsApp Sender: ${cleanSenderPhone}`);
-                    }
+                    sess.verified = true;
+                    sess.senderPhone = senderPhone;
+                    matchedToken = token;
+                    console.log(`🎉 [SESSION MATCHED] Code ${code} verified for user ${sess.phone || 'Player'} (Sender: ${senderPhone})`);
+                    break;
                 }
             }
 
@@ -218,7 +205,7 @@ const server = http.createServer((req, res) => {
                     isAdmin,
                     code,
                     verified: false,
-                    expiresAt: Date.now() + 300000 // 5 minutes
+                    expiresAt: Date.now() + 120000 // 2 minutes (120 seconds)
                 };
 
                 const cleanBotPhone = (config.bot_phone_number || '').replace(/\D/g, '');

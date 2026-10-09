@@ -1,0 +1,12 @@
+{
+  "bot_phone_number": "8801349966049",
+  "backend_webhook_url": "http://127.0.0.1:8000/api/auth/whatsapp/confirm",
+  "social_links": {
+    "youtube": "https://youtube.com/@gomonhub?si=eAtg7YmxaFhg18m1",
+    "facebook": "https://www.facebook.com/gomonhub/",
+    "whatsapp_group": ""
+  },
+  "messages": {
+    "success_verified": "✅ *আপনার GOMONHUB অ্যাকাউন্ট সফলভাবে ভেরিফাই হয়েছে!* 🎉\n\nটুর্নামেন্টের রুম আইডি, পাসওয়ার্ড ও লাইভ ম্যাচ আপডেট পেতে আমাদের সাথে যুক্ত থাকুন:\n\n📺 *YouTube (Subscribe):* {YOUTUBE_URL}\n🌐 *Facebook Page (Follow):* {FACEBOOK_URL}\n\n💡 এই নম্বরটি আপনার ফোনে সেভ (Save) করে রাখুন যাতে কোনো টুর্নামেন্ট আপডেট মিস না হয়। ধন্যবাদ! 🎮🔥"
+  }
+}

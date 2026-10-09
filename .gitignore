@@ -16,4 +16,11 @@ mongo_config.json
 .env
 secret.key
 vapid_keys.json
+devices.json
+lockouts.json
+reset_security.json
 
+# WhatsApp Bot sensitive session & node_modules
+WhatsApp Bot/node_modules/
+WhatsApp Bot/auth_session/
+node_modules/

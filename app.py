@@ -4255,13 +4255,14 @@ def get_wallet_history(user: dict = Depends(get_current_user)):
 async def proxy_request_code(request: Request):
     import urllib.request
     try:
+        bot_base = os.environ.get("WHATSAPP_BOT_URL", "http://127.0.0.1:3000").rstrip("/")
         body = await request.body()
         req = urllib.request.Request(
-            "http://127.0.0.1:3000/api/request-code",
+            f"{bot_base}/api/request-code",
             data=body,
             headers={"Content-Type": "application/json"}
         )
-        with urllib.request.urlopen(req, timeout=5) as response:
+        with urllib.request.urlopen(req, timeout=8) as response:
             res_body = response.read().decode("utf-8")
             return Response(content=res_body, media_type="application/json")
     except Exception as e:
@@ -4271,9 +4272,10 @@ async def proxy_request_code(request: Request):
 async def proxy_check_status(token: str = ""):
     import urllib.request
     try:
-        url = f"http://127.0.0.1:3000/api/check-status?token={token}"
+        bot_base = os.environ.get("WHATSAPP_BOT_URL", "http://127.0.0.1:3000").rstrip("/")
+        url = f"{bot_base}/api/check-status?token={token}"
         req = urllib.request.Request(url)
-        with urllib.request.urlopen(req, timeout=5) as response:
+        with urllib.request.urlopen(req, timeout=8) as response:
             res_body = response.read().decode("utf-8")
             return Response(content=res_body, media_type="application/json")
     except Exception as e:

@@ -7780,17 +7780,124 @@ async function submitWithdrawForm(e) {
         return;
     }
 
+    // Trigger Locked-Phone WhatsApp Verification before submitting
+    triggerWithdrawWhatsAppVerification(amount, phone);
+}
+
+let pendingWithdrawState = null;
+let withdrawWaPollTimer = null;
+
+function closeWithdrawWaModal() {
+    if (withdrawWaPollTimer) {
+        clearInterval(withdrawWaPollTimer);
+        withdrawWaPollTimer = null;
+    }
+    pendingWithdrawState = null;
+    closeModal('withdrawWaModal');
+}
+
+async function triggerWithdrawWhatsAppVerification(amount, bkashPhone) {
+    const userAccountPhone = (currentUser && currentUser.phone) ? currentUser.phone.trim() : '';
+    if (!userAccountPhone) {
+        showToast('আপনার একাউন্টে কোনো রেজিস্টার্ড ফোন নম্বর পাওয়া যায়নি!', 'error');
+        return;
+    }
+
+    pendingWithdrawState = { amount, bkash_number: bkashPhone };
+
+    // Set locked phone in modal
+    const lockedEl = document.getElementById('withdrawWaLockedPhone');
+    if (lockedEl) lockedEl.innerText = userAccountPhone;
+
+    const codeEl = document.getElementById('withdrawWaCode');
+    if (codeEl) codeEl.innerText = '------';
+
+    const btnWa = document.getElementById('withdrawWaOpenBtn');
+    if (btnWa) {
+        btnWa.style.pointerEvents = 'none';
+        btnWa.style.opacity = '0.6';
+    }
+
+    const statusText = document.getElementById('withdrawWaStatusText');
+    if (statusText) statusText.innerText = 'সিকিউর কোড তৈরি করা হচ্ছে...';
+
+    openModal('withdrawWaModal');
+
+    try {
+        const botBase = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+            ? 'http://localhost:3000'
+            : '';
+        const res = await fetch(`${botBase}/api/request-code`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ phone: userAccountPhone })
+        });
+        const data = await res.json();
+
+        if (!data.success) {
+            showToast('কোড তৈরিতে সমস্যা হয়েছে! আবার চেষ্টা করুন।', 'error');
+            closeWithdrawWaModal();
+            return;
+        }
+
+        if (codeEl) codeEl.innerText = data.code;
+        if (btnWa) {
+            btnWa.href = data.waUrl;
+            btnWa.style.pointerEvents = 'auto';
+            btnWa.style.opacity = '1';
+        }
+        if (statusText) statusText.innerText = 'আপনার WhatsApp মেসেজের অপেক্ষায়...';
+
+        // Start Polling
+        if (withdrawWaPollTimer) clearInterval(withdrawWaPollTimer);
+        withdrawWaPollTimer = setInterval(async () => {
+            try {
+                const checkRes = await fetch(`${botBase}/api/check-status?token=${data.sessionToken}`);
+                const checkData = await checkRes.json();
+
+                if (checkData.verified) {
+                    clearInterval(withdrawWaPollTimer);
+                    withdrawWaPollTimer = null;
+                    if (statusText) statusText.innerText = '✅ ভেরিফিকেশন সফল! ক্যাশআউট সাবমিট হচ্ছে...';
+
+                    setTimeout(async () => {
+                        closeWithdrawWaModal();
+                        await executeVerifiedWithdrawal();
+                    }, 1000);
+                } else if (checkData.expired) {
+                    clearInterval(withdrawWaPollTimer);
+                    withdrawWaPollTimer = null;
+                    if (statusText) statusText.innerText = '⚠️ কোডের মেয়াদ শেষ হয়ে গেছে!';
+                    showToast('ভেরিফিকেশন কোডের মেয়াদ শেষ হয়ে গেছে!', 'error');
+                }
+            } catch (pollErr) {
+                console.error(pollErr);
+            }
+        }, 1200);
+
+    } catch (err) {
+        console.error(err);
+        showToast('WhatsApp সার্ভারের সাথে সংযোগ করা যায়নি। বট চালু আছে কিনা চেক করুন।', 'error');
+        closeWithdrawWaModal();
+    }
+}
+
+async function executeVerifiedWithdrawal() {
+    if (!pendingWithdrawState) return;
+    const { amount, bkash_number } = pendingWithdrawState;
+
     try {
         const res = await fetchWithAuth('/api/wallet/withdraw', {
             method: 'POST',
-            body: JSON.stringify({ amount, bkash_number: phone })
+            body: JSON.stringify({ amount, bkash_number })
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.detail || 'Withdrawal request failed');
 
         showToast(data.message || 'Withdrawal request submitted successfully!', 'success');
-        document.getElementById('withdrawForm').reset();
-        
+        const withdrawForm = document.getElementById('withdrawForm');
+        if (withdrawForm) withdrawForm.reset();
+
         // Refresh balance
         if (data.new_balance != null) {
             currentUser.digits_balance = data.new_balance;
@@ -7798,8 +7905,11 @@ async function submitWithdrawForm(e) {
             renderUserProfile();
         }
         loadWithdrawHistory();
+        closeModal('withdrawModal');
     } catch (err) {
         showToast(err.message, 'error');
+    } finally {
+        pendingWithdrawState = null;
     }
 }
 

@@ -69,6 +69,54 @@ function restoreSessionFromEnv() {
     }
 }
 
+function getSmartFallbackReply(userMessage) {
+    const raw = (userMessage || '').trim().toLowerCase();
+    const isSalam = /(?:সালাম|assalamu|salam|slm|আসসালামু)/i.test(raw);
+    const asksLink = /(?:link|লিংক|ওয়েবসাইট|website|web link|ওয়েবসাইট)/i.test(raw);
+    const asksJoin = /(?:kivabe khelbo|কীভাবে খেলব|খেলব কীভাবে|খেলব কেমনে|join|রেজিস্টার|রেজিস্ট্রেশন|কাস্টম|ম্যাচ কীভাবে|নিবন্ধন)/i.test(raw);
+    const asksRoomId = /(?:room id|রুম আইডি|পাসওয়ার্ড|password|id pass|কখন পাব|ম্যাচ কখন|শুরু কখন)/i.test(raw);
+    const asksFee = /(?:কত টাকা|ফি কত|এন্ট্রি ফি|entry fee|match fee|কতো টাকার ম্যাচ|টাকা লাগবে)/i.test(raw);
+    const asksWithdraw = /(?:withdraw|উইথড্র|টাকা তুলব|ক্যাশআউট|উইথড্র কীভাবে|bkash|nagad|বিকাশ|নগদ)/i.test(raw);
+    const asksRules = /(?:rules|নিয়ম|হ্যাকার|হ্যাক|hack|cheat|ব্যান)/i.test(raw);
+    const isThanks = /(?:ধন্যবাদ|thanks|thx|tnx|shukriya|শুকরিয়া)/i.test(raw);
+    const isHowAreYou = /(?:কেমন আছেন|kemon achen|bhalo achen|ভালো আছেন)/i.test(raw);
+
+    if (asksLink) {
+        return `অবশ্যই ভাই! আমাদের অফিসিয়াল ওয়েবসাইট লিংক:\nOur tournament website 🖇️ https://rb.gy/feuqry`;
+    }
+    if (asksJoin) {
+        return (isSalam ? `ওয়ালাইকুম আসসালাম ভাই! ` : `আসসালামু আলাইকুম ভাই! `) +
+            `আমাদের ওয়েবসাইটে গিয়ে একাউন্ট খুলে ওয়ালেটে ব্যালেন্স অ্যাড করুন। এরপর পছন্দের টুর্নামেন্টে 'Join' বাটনে ক্লিক করে ইন-গেম নাম ও ইউআইডি দিলেই আপনার স্লট বুক হয়ে যাবে।\nOur tournament website 🖇️ https://rb.gy/feuqry`;
+    }
+    if (asksRoomId) {
+        return (isSalam ? `ওয়ালাইকুম আসসালাম ভাই! ` : `আসসালামু আলাইকুম ভাই! `) +
+            `ম্যাচ শুরু হওয়ার ঠিক ৫ থেকে ১০ মিনিট আগে ওয়েবসাইটের ওই ম্যাচের ভেতর সরাসরি কাস্টম রুম আইডি ও পাসওয়ার্ড দেখতে পাবেন। সময়মতো গেমে ঢুকে জয়েন করে নেবেন, শুভকামনা!`;
+    }
+    if (asksFee) {
+        return (isSalam ? `ওয়ালাইকুম আসসালাম ভাই! ` : `আসসালামু আলাইকুম ভাই! `) +
+            `আমাদের প্ল্যাটফর্মে নিয়মিত ফ্রি এবং ১০ টাকা, ২০ টাকা, ৩০ টাকা ও ৫০ টাকার বিভিন্ন ম্যাচ থাকে ভাই। প্রতিটি ম্যাচের প্রাইজমানি ও পার-কিল রিওয়ার্ড ওয়েবসাইটের ম্যাচ কার্ডে স্পষ্ট উল্লেখ থাকে।`;
+    }
+    if (asksWithdraw) {
+        return (isSalam ? `ওয়ালাইকুম আসসালাম ভাই! ` : `আসসালামু আলাইকুম ভাই! `) +
+            `ম্যাচ শেষে আপনার উইনিং ব্যালেন্স সরাসরি বিকাশ বা নগদে উইথড্র করতে পারবেন। ওয়ালেট সেকশনে রিকোয়েস্ট দিলেই দ্রুত সময়ের মধ্যে টাকা পৌঁছে যাবে ভাই।`;
+    }
+    if (asksRules) {
+        return (isSalam ? `ওয়ালাইকুম আসসালাম ভাই! ` : `আসসালামু আলাইকুম ভাই! `) +
+            `আমাদের প্ল্যাটফর্মে ১০০% ফেয়ার প্লে নিশ্চিত করা হয় ভাই। যেকোনো প্রকার হ্যাক, স্ক্রিপ্ট বা আনফেয়ার গেমপ্লে সম্পূর্ণ নিষিদ্ধ, ধরা পড়লে আইডি সরাসরি পার্মানেন্ট ব্যান করা হয়।`;
+    }
+    if (isThanks) {
+        return `আপনাকেও অনেক ধন্যবাদ ভাই! যেকোনো প্রয়োজনে নির্দ্বিধায় মেসেজ দিন, GOMON HUB টিম সবসময় পাশে আছে।`;
+    }
+    if (isHowAreYou) {
+        return (isSalam ? `ওয়ালাইকুম আসসালাম ভাই! ` : `আসসালামু আলাইকুম ভাই! `) +
+            `আলহামদুলিল্লাহ, আমরা ভালো আছি। আপনি কেমন আছেন? টুর্নামেন্ট নিয়ে কোনো তথ্যে সাহায্য লাগবে?`;
+    }
+    if (isSalam) {
+        return `ওয়ালাইকুম আসসালাম ভাই! GOMON HUB-এ আপনাকে স্বাগতম। বলুন, কীভাবে সাহায্য করতে পারি?`;
+    }
+    return `আসসালামু আলাইকুম ভাই! GOMON HUB সাপোর্ট টিম থেকে বলছি। আপনি কি টুর্নামেন্ট বা কোনো ম্যাচের ব্যাপারে জানতে চাচ্ছেন? কীভাবে সাহায্য করতে পারি বলুন।`;
+}
+
 // AI Customer Support Assistant Helper
 async function generateAiSupportReply(userMessage, senderPhone) {
     let knowledge = {};
@@ -79,8 +127,12 @@ async function generateAiSupportReply(userMessage, senderPhone) {
         }
     } catch (_) {}
 
-    const apiKey = process.env.GEMINI_API_KEY || config.gemini_api_key || 'AQ.Ab8RN6I-RtnTgCX9agSq1iwXhN4bMKdioLS6aL59F7lHS_P4Jg';
+    const apiKey = process.env.GEMINI_API_KEY || config.gemini_api_key || '';
     const model = process.env.GEMINI_MODEL || config.ai_model || 'gemini-3.5-flash-lite';
+
+    if (!apiKey) {
+        return getSmartFallbackReply(userMessage);
+    }
 
     const systemPrompt = `You are the official, friendly, human customer support agent for GOMON HUB Tournament platform in Bangladesh.
 Speak naturally, politely, and warmly in Bengali like a real human admin/agent (never say you are an AI or robot).
@@ -126,11 +178,11 @@ ${JSON.stringify(knowledge, null, 2)}`;
                     const reply = json.candidates?.[0]?.content?.parts?.[0]?.text;
                     if (reply) return resolve(reply.trim());
                 } catch (_) {}
-                resolve(`স্বাগতম GOMON HUB-এ! আমি GOMON HUB সাপোর্ট টিম থেকে আছি। আপনাকে কীভাবে সাহায্য করতে পারি বলুন?`);
+                resolve(getSmartFallbackReply(userMessage));
             });
         });
         req.on('error', () => {
-            resolve(`স্বাগতম GOMON HUB-এ! আমি GOMON HUB সাপোর্ট টিম থেকে আছি। আপনাকে কীভাবে সাহায্য করতে পারি বলুন?`);
+            resolve(getSmartFallbackReply(userMessage));
         });
         req.write(data);
         req.end();

@@ -85,36 +85,31 @@ function getSmartFallbackReply(userMessage) {
         return `অবশ্যই ভাই! আমাদের অফিসিয়াল ওয়েবসাইট লিংক:\nOur tournament website 🖇️ https://rb.gy/feuqry`;
     }
     if (asksJoin) {
-        return (isSalam ? `ওয়ালাইকুম আসসালাম ভাই! ` : `আসসালামু আলাইকুম ভাই! `) +
-            `আমাদের ওয়েবসাইটে গিয়ে একাউন্ট খুলে ওয়ালেটে ব্যালেন্স অ্যাড করুন। এরপর পছন্দের টুর্নামেন্টে 'Join' বাটনে ক্লিক করে ইন-গেম নাম ও ইউআইডি দিলেই আপনার স্লট বুক হয়ে যাবে।\nOur tournament website 🖇️ https://rb.gy/feuqry`;
+        return `আমাদের ওয়েবসাইটে গিয়ে একাউন্ট খুলে ওয়ালেটে ব্যালেন্স অ্যাড করুন ভাই। এরপর পছন্দের টুর্নামেন্টে 'Join' বাটনে ক্লিক করে ইন-গেম নাম ও ইউআইডি দিলেই আপনার স্লট বুক হয়ে যাবে।\nOur tournament website 🖇️ https://rb.gy/feuqry`;
     }
     if (asksRoomId) {
-        return (isSalam ? `ওয়ালাইকুম আসসালাম ভাই! ` : `আসসালামু আলাইকুম ভাই! `) +
-            `ম্যাচ শুরু হওয়ার ঠিক ৫ থেকে ১০ মিনিট আগে ওয়েবসাইটের ওই ম্যাচের ভেতর সরাসরি কাস্টম রুম আইডি ও পাসওয়ার্ড দেখতে পাবেন। সময়মতো গেমে ঢুকে জয়েন করে নেবেন, শুভকামনা!`;
+        return `ম্যাচ শুরু হওয়ার ঠিক ৫ থেকে ১০ মিনিট আগে ওয়েবসাইটের ওই ম্যাচের ভেতর সরাসরি কাস্টম রুম আইডি ও পাসওয়ার্ড দেখতে পাবেন ভাই। সময়মতো গেমে ঢুকে জয়েন করে নেবেন, শুভকামনা!`;
     }
     if (asksFee) {
-        return (isSalam ? `ওয়ালাইকুম আসসালাম ভাই! ` : `আসসালামু আলাইকুম ভাই! `) +
-            `আমাদের প্ল্যাটফর্মে নিয়মিত ফ্রি এবং ১০ টাকা, ২০ টাকা, ৩০ টাকা ও ৫০ টাকার বিভিন্ন ম্যাচ থাকে ভাই। প্রতিটি ম্যাচের প্রাইজমানি ও পার-কিল রিওয়ার্ড ওয়েবসাইটের ম্যাচ কার্ডে স্পষ্ট উল্লেখ থাকে।`;
+        return `আমাদের প্ল্যাটফর্মে নিয়মিত ফ্রি এবং ১০ টাকা, ২০ টাকা, ৩০ টাকা ও ৫০ টাকার বিভিন্ন ম্যাচ থাকে ভাই। প্রতিটি ম্যাচের প্রাইজমানি ও পার-কিল রিওয়ার্ড ওয়েবসাইটের ম্যাচ কার্ডে স্পষ্ট উল্লেখ থাকে।`;
     }
     if (asksWithdraw) {
-        return (isSalam ? `ওয়ালাইকুম আসসালাম ভাই! ` : `আসসালামু আলাইকুম ভাই! `) +
-            `ম্যাচ শেষে আপনার উইনিং ব্যালেন্স সরাসরি বিকাশ বা নগদে উইথড্র করতে পারবেন। ওয়ালেট সেকশনে রিকোয়েস্ট দিলেই দ্রুত সময়ের মধ্যে টাকা পৌঁছে যাবে ভাই।`;
+        return `ম্যাচ শেষে আপনার উইনিং ব্যালেন্স সরাসরি বিকাশ বা নগদে উইথড্র করতে পারবেন ভাই। ওয়ালেট সেকশনে রিকোয়েস্ট দিলেই দ্রুত সময়ের মধ্যে টাকা পৌঁছে যাবে।`;
     }
     if (asksRules) {
-        return (isSalam ? `ওয়ালাইকুম আসসালাম ভাই! ` : `আসসালামু আলাইকুম ভাই! `) +
-            `আমাদের প্ল্যাটফর্মে ১০০% ফেয়ার প্লে নিশ্চিত করা হয় ভাই। যেকোনো প্রকার হ্যাক, স্ক্রিপ্ট বা আনফেয়ার গেমপ্লে সম্পূর্ণ নিষিদ্ধ, ধরা পড়লে আইডি সরাসরি পার্মানেন্ট ব্যান করা হয়।`;
+        return `আমাদের প্ল্যাটফর্মে ১০০% ফেয়ার প্লে নিশ্চিত করা হয় ভাই। যেকোনো প্রকার হ্যাক, স্ক্রিপ্ট বা আনফেয়ার গেমপ্লে সম্পূর্ণ নিষিদ্ধ, ধরা পড়লে আইডি সরাসরি পার্মানেন্ট ব্যান করা হয়।`;
     }
     if (isThanks) {
         return `আপনাকেও অনেক ধন্যবাদ ভাই! যেকোনো প্রয়োজনে নির্দ্বিধায় মেসেজ দিন, GOMON HUB টিম সবসময় পাশে আছে।`;
     }
     if (isHowAreYou) {
-        return (isSalam ? `ওয়ালাইকুম আসসালাম ভাই! ` : `আসসালামু আলাইকুম ভাই! `) +
-            `আলহামদুলিল্লাহ, আমরা ভালো আছি। আপনি কেমন আছেন? টুর্নামেন্ট নিয়ে কোনো তথ্যে সাহায্য লাগবে?`;
+        return (isSalam ? `ওয়ালাইকুম আসসালাম ভাই! ` : `আলহামদুলিল্লাহ ভাই, `) +
+            `আমরা ভালো আছি। আপনি কেমন আছেন? টুর্নামেন্ট নিয়ে কোনো তথ্যে সাহায্য লাগবে?`;
     }
     if (isSalam) {
         return `ওয়ালাইকুম আসসালাম ভাই! GOMON HUB-এ আপনাকে স্বাগতম। বলুন, কীভাবে সাহায্য করতে পারি?`;
     }
-    return `আসসালামু আলাইকুম ভাই! GOMON HUB সাপোর্ট টিম থেকে বলছি। আপনি কি টুর্নামেন্ট বা কোনো ম্যাচের ব্যাপারে জানতে চাচ্ছেন? কীভাবে সাহায্য করতে পারি বলুন।`;
+    return `আসসালামু আলাইকুম ভাই! GOMON HUB সাপোর্ট টিম থেকে বলছি। কীভাবে সাহায্য করতে পারি বলুন।`;
 }
 
 // AI Customer Support Assistant Helper
@@ -139,9 +134,10 @@ Speak naturally, politely, and warmly in Bengali like a real human admin/agent (
 Keep replies concise, helpful, and directly to the point (1 to 3 sentences).
 
 CRITICAL SALAM RULES (STRICT CULTURAL PROTOCOL):
-- IF the user DID NOT give Salam (e.g. they only said "ভাই কেমন আছেন?", "Hi", "Hello", "kire"): YOU MUST initiate with Salam yourself first ("আসসালামু আলাইকুম ভাই! আলহামদুলিল্লাহ ভালো আছি...").
+- Salam is strictly for the INITIAL GREETING or when responding to a Salam. NEVER repeat Salam in ongoing questions!
 - ONLY IF the user explicitly said Salam ("assalamu alaikum", "সালাম", "slm"): Respond with "ওয়ালাইকুম আসসালাম ভাই!".
-- NEVER EVER say "ওয়ালাইকুম আসসালাম" unless the user explicitly gave Salam first!
+- IF the user opens with a greeting without Salam (like "Hi", "Hello"): You can say "আসসালামু আলাইকুম ভাই!".
+- For ongoing questions (e.g. asking about match fee, room ID, withdrawal, rules, or saying thank you): DO NOT add Salam! Just directly and politely answer their question. A real human NEVER repeats Salam in every sentence!
 
 CRITICAL RULES ABOUT WEBSITE LINK:
 - DO NOT provide or mention the website link in normal conversations, casual greetings, or general chit-chat.

@@ -84,8 +84,17 @@ async function generateAiSupportReply(userMessage, senderPhone) {
 
     const systemPrompt = `You are the official, friendly, human customer support agent for GOMON HUB Tournament platform in Bangladesh.
 Speak naturally, politely, and warmly in Bengali like a real human admin/agent (never say you are an AI or robot).
-Keep replies concise, helpful, and directly to the point (2 to 4 sentences).
-Always provide the official website when relevant: Our tournament website 🖇️ https://rb.gy/feuqry
+Keep replies concise, helpful, and directly to the point (1 to 3 sentences).
+
+CRITICAL SALAM RULES (STRICT CULTURAL PROTOCOL):
+- IF the user DID NOT give Salam (e.g. they only said "ভাই কেমন আছেন?", "Hi", "Hello", "kire"): YOU MUST initiate with Salam yourself first ("আসসালামু আলাইকুম ভাই! আলহামদুলিল্লাহ ভালো আছি...").
+- ONLY IF the user explicitly said Salam ("assalamu alaikum", "সালাম", "slm"): Respond with "ওয়ালাইকুম আসসালাম ভাই!".
+- NEVER EVER say "ওয়ালাইকুম আসসালাম" unless the user explicitly gave Salam first!
+
+CRITICAL RULES ABOUT WEBSITE LINK:
+- DO NOT provide or mention the website link in normal conversations, casual greetings, or general chit-chat.
+- ONLY provide the website link if the player explicitly asks for the website link (e.g., "ওয়েবসাইট লিংক দেন", "ওয়েবসাইটের লিংকটা দেন তো") or asks where to join/register: Our tournament website 🖇️ https://rb.gy/feuqry
+- Never spam the link unnecessarily in every message.
 
 Platform Information:
 ${JSON.stringify(knowledge, null, 2)}`;
@@ -117,11 +126,11 @@ ${JSON.stringify(knowledge, null, 2)}`;
                     const reply = json.candidates?.[0]?.content?.parts?.[0]?.text;
                     if (reply) return resolve(reply.trim());
                 } catch (_) {}
-                resolve(`স্বাগতম GOMON HUB-এ।\nআপনার স্কিলই আপনার পরিচয়। সেরাদের সাথে লড়াই করে তৈরি করুন নিজের অবস্থান।\n\nOur tournament website 🖇️ https://rb.gy/feuqry`);
+                resolve(`স্বাগতম GOMON HUB-এ! আমি GOMON HUB সাপোর্ট টিম থেকে আছি। আপনাকে কীভাবে সাহায্য করতে পারি বলুন?`);
             });
         });
         req.on('error', () => {
-            resolve(`স্বাগতম GOMON HUB-এ।\nআপনার স্কিলই আপনার পরিচয়। সেরাদের সাথে লড়াই করে তৈরি করুন নিজের অবস্থান।\n\nOur tournament website 🖇️ https://rb.gy/feuqry`);
+            resolve(`স্বাগতম GOMON HUB-এ! আমি GOMON HUB সাপোর্ট টিম থেকে আছি। আপনাকে কীভাবে সাহায্য করতে পারি বলুন?`);
         });
         req.write(data);
         req.end();

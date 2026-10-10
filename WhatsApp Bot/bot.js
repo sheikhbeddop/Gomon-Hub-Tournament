@@ -174,31 +174,35 @@ async function startWhatsAppBot() {
                 }
             }
 
-            // Build Social Media Promo Reply
-            let promoLinks = [];
-            if (config.social_links.youtube) {
-                promoLinks.push(`📺 *YouTube (Subscribe):* ${config.social_links.youtube}`);
-            }
-            if (config.social_links.facebook) {
-                promoLinks.push(`🌐 *Facebook Page (Follow):* ${config.social_links.facebook}`);
-            }
-
-            const replyText = `✅ *আপনার GOMONHUB অ্যাকাউন্ট সফলভাবে ভেরিফাই হয়েছে!* 🎉\n\n` +
-                `টুর্নামেন্টের রুম আইডি, পাসওয়ার্ড ও লাইভ ম্যাচ আপডেট পেতে আমাদের সাথে যুক্ত থাকুন:\n\n` +
-                promoLinks.join('\n') +
-                `\n\n💡 এই নম্বরটি আপনার ফোনে সেভ (Save) করে রাখুন যাতে কোনো আপডেট মিস না হয়। ধন্যবাদ! 🎮🔥`;
-
-            try {
-                await sock.sendMessage(senderJid, { text: replyText });
-                console.log(`🚀 [PROMO AUTO-REPLY SENT] To: ${senderPhone}`);
-            } catch (sendErr) {
-                console.error(`❌ [SEND ERROR] ${sendErr.message}`);
-            }
-
             if (matchedToken) {
+                const replyText = `✅ *ভেরিফিকেশন সফল হয়েছে!*\n\n` +
+                    `『 GOMON ARMY 』অফিসিয়াল সোশ্যাল লিংক:\n\n` +
+                    `• TikTok: https://www.tiktok.com/@gomon_hub\n` +
+                    `• Facebook: https://www.facebook.com/gomonhub\n` +
+                    `• Instagram: https://www.instagram.com/gomon_gamer\n` +
+                    `• Threads: https://www.threads.net/@gomon_hub\n` +
+                    `• YouTube: https://www.youtube.com/@gomonhub\n` +
+                    `• 2nd Channel: https://www.youtube.com/@mrgomonhub`;
+
+                try {
+                    await sock.sendMessage(senderJid, { text: replyText });
+                    console.log(`🚀 [SUCCESS CONFIRMATION SENT] To: ${senderPhone}`);
+                } catch (sendErr) {
+                    console.error(`❌ [SEND ERROR] ${sendErr.message}`);
+                }
                 console.log(`🎉 [WEB BROWSER AUTO-VERIFIED] Session ${matchedToken} is now verified! Screen updated.`);
             } else {
-                console.log(`ℹ️ [STANDALONE OTP] Matched generic test code.`);
+                // Invalid or Expired Code Alert
+                const invalidReplyText = `❌ *ভুল বা মেয়াদোত্তীর্ণ কোড!*\n\n` +
+                    `দুঃখিত! আপনার পাঠানো ভেরিফিকেশন কোডটি সঠিক নয় অথবা এর মেয়াদ (২ মিনিট) শেষ হয়ে গেছে।\n\n` +
+                    `💡 অনুগ্রহ করে ওয়েবসাইট থেকে ফ্রেশ নতুন কোড নিয়ে পুনরায় পাঠান। ধন্যবাদ! 🎮`;
+
+                try {
+                    await sock.sendMessage(senderJid, { text: invalidReplyText });
+                    console.log(`⚠️ [INVALID OTP ALERT SENT] To: ${senderPhone} (Code: ${code})`);
+                } catch (sendErr) {
+                    console.error(`❌ [SEND ERROR] ${sendErr.message}`);
+                }
             }
         }
     });

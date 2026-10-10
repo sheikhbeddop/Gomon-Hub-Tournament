@@ -7914,6 +7914,10 @@ async function triggerWithdrawWhatsAppVerification(amount, bkashPhone) {
                     withdrawWaPollTimer = null;
                     if (statusText) statusText.innerText = '✅ ভেরিফিকেশন সফল! ক্যাশআউট সাবমিট হচ্ছে...';
 
+                    if (currentUser && currentUser.id) {
+                        localStorage.setItem(`wa_verified_${currentUser.id}`, Date.now().toString());
+                    }
+
                     setTimeout(async () => {
                         closeWithdrawWaModal();
                         await executeVerifiedWithdrawal();

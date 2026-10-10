@@ -5,6 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const pino = require('pino');
 const http = require('http');
+const https = require('https');
 const crypto = require('crypto');
 
 // Load configuration
@@ -66,6 +67,65 @@ function restoreSessionFromEnv() {
             console.error('[SESSION RESTORE ERROR] Could not decode WHATSAPP_SESSION_DATA:', e.message);
         }
     }
+}
+
+// AI Customer Support Assistant Helper
+async function generateAiSupportReply(userMessage, senderPhone) {
+    let knowledge = {};
+    try {
+        const kPath = path.join(__dirname, 'ai_knowledge.json');
+        if (fs.existsSync(kPath)) {
+            knowledge = JSON.parse(fs.readFileSync(kPath, 'utf8'));
+        }
+    } catch (_) {}
+
+    const apiKey = process.env.GEMINI_API_KEY || config.gemini_api_key || 'AQ.Ab8RN6I-RtnTgCX9agSq1iwXhN4bMKdioLS6aL59F7lHS_P4Jg';
+    const model = process.env.GEMINI_MODEL || config.ai_model || 'gemini-3.5-flash-lite';
+
+    const systemPrompt = `You are the official, friendly, human customer support agent for GOMON HUB Tournament platform in Bangladesh.
+Speak naturally, politely, and warmly in Bengali like a real human admin/agent (never say you are an AI or robot).
+Keep replies concise, helpful, and directly to the point (2 to 4 sentences).
+Always provide the official website when relevant: Our tournament website 🖇️ https://rb.gy/feuqry
+
+Platform Information:
+${JSON.stringify(knowledge, null, 2)}`;
+
+    const data = JSON.stringify({
+        systemInstruction: {
+            parts: [{ text: systemPrompt }]
+        },
+        contents: [{
+            parts: [{ text: userMessage }]
+        }]
+    });
+
+    return new Promise((resolve) => {
+        const req = https.request({
+            hostname: 'generativelanguage.googleapis.com',
+            path: `/v1beta/models/${model}:generateContent?key=${apiKey}`,
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Content-Length': Buffer.byteLength(data)
+            }
+        }, (res) => {
+            let body = '';
+            res.on('data', chunk => body += chunk);
+            res.on('end', () => {
+                try {
+                    const json = JSON.parse(body);
+                    const reply = json.candidates?.[0]?.content?.parts?.[0]?.text;
+                    if (reply) return resolve(reply.trim());
+                } catch (_) {}
+                resolve(`স্বাগতম GOMON HUB-এ।\nআপনার স্কিলই আপনার পরিচয়। সেরাদের সাথে লড়াই করে তৈরি করুন নিজের অবস্থান।\n\nOur tournament website 🖇️ https://rb.gy/feuqry`);
+            });
+        });
+        req.on('error', () => {
+            resolve(`স্বাগতম GOMON HUB-এ।\nআপনার স্কিলই আপনার পরিচয়। সেরাদের সাথে লড়াই করে তৈরি করুন নিজের অবস্থান।\n\nOur tournament website 🖇️ https://rb.gy/feuqry`);
+        });
+        req.write(data);
+        req.end();
+    });
 }
 
 async function startWhatsAppBot() {
@@ -144,15 +204,6 @@ async function startWhatsAppBot() {
 
         if (!text) return;
 
-        // Quick Test handler
-        if (text.toLowerCase() === 'hi' || text.toLowerCase() === 'test') {
-            await sock.sendMessage(senderJid, {
-                text: `👋 হ্যালো! GOMONHUB WhatsApp বট একদম সচল ও অ্যাক্টিভ আছে! 🎮\n\nওয়েবসাইটে রিয়েল ভেরিফিকেশন টেস্ট করতে ব্রাউজারে যান:\n👉 *http://localhost:3000*`
-            });
-            console.log(`👋 [QUICK TEST REPLIED] To: ${senderPhone}`);
-            return;
-        }
-
         // Detect verification format: "VERIFY 849201" or just "849201"
         const otpMatch = text.match(/(?:VERIFY[\s:]*)?(\d{6})\b/i);
 
@@ -203,6 +254,19 @@ async function startWhatsAppBot() {
                 } catch (sendErr) {
                     console.error(`❌ [SEND ERROR] ${sendErr.message}`);
                 }
+            }
+        } else {
+            // General conversation, greetings & queries handled by AI Support Agent
+            console.log(`💬 [GENERAL MESSAGE RECEIVED] From: ${senderPhone} | Text: "${text}"`);
+            try {
+                const aiReply = await generateAiSupportReply(text, senderPhone);
+                await sock.sendMessage(senderJid, { text: aiReply });
+                console.log(`🤖 [AI SUPPORT REPLIED] To: ${senderPhone}`);
+            } catch (aiErr) {
+                console.error(`❌ [AI SUPPORT ERROR] ${aiErr.message}`);
+                await sock.sendMessage(senderJid, {
+                    text: `স্বাগতম GOMON HUB-এ।\nআপনার স্কিলই আপনার পরিচয়। সেরাদের সাথে লড়াই করে তৈরি করুন নিজের অবস্থান。\n\nOur tournament website 🖇️ https://rb.gy/feuqry`
+                });
             }
         }
     });

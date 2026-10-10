@@ -11,5 +11,7 @@
   },
   "messages": {
     "success_verified": "✅ *ভেরিফিকেশন সফল হয়েছে!*\n\n『 GOMON ARMY 』অফিসিয়াল সোশ্যাল লিংক:\n\n• TikTok: https://www.tiktok.com/@gomon_hub\n• Facebook: https://www.facebook.com/gomonhub\n• Instagram: https://www.instagram.com/gomon_gamer\n• Threads: https://www.threads.net/@gomon_hub\n• YouTube: https://www.youtube.com/@gomonhub\n• 2nd Channel: https://www.youtube.com/@mrgomonhub"
-  }
+  },
+  "gemini_api_key": "AQ.Ab8RN6I-RtnTgCX9agSq1iwXhN4bMKdioLS6aL59F7lHS_P4Jg",
+  "ai_model": "gemini-3.5-flash-lite"
 }

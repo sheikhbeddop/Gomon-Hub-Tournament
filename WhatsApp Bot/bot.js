@@ -230,8 +230,15 @@ async function generateAiSupportReply(userMessage, senderPhone, imageBase64 = nu
         }
     } catch (_) {}
 
-    const apiKey = process.env.GEMINI_API_KEY || config.gemini_api_key || '';
-    const preferredModel = process.env.GEMINI_MODEL || config.ai_model || 'gemini-3.8-flash';
+    let currentConfig = config;
+    try {
+        if (fs.existsSync(configPath)) {
+            currentConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+        }
+    } catch (_) {}
+
+    const apiKey = process.env.GEMINI_API_KEY || currentConfig.gemini_api_key || config.gemini_api_key || '';
+    const preferredModel = process.env.GEMINI_MODEL || currentConfig.ai_model || config.ai_model || 'gemini-3.8-flash';
     const fallbackModel = 'gemini-3.5-flash-lite';
 
     const mem = getChatMemory(senderPhone);
@@ -398,11 +405,19 @@ async function startWhatsAppBot() {
 
         if (connection === 'close') {
             isConnected = false;
-            const shouldReconnect = (lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut);
-            console.log(`\n⚠️ Connection closed: ${lastDisconnect?.error?.message || 'Unknown'}. Reconnecting: ${shouldReconnect}`);
-            if (shouldReconnect) {
-                setTimeout(startWhatsAppBot, 3000);
+            const statusCode = lastDisconnect?.error?.output?.statusCode;
+            const isLoggedOut = statusCode === DisconnectReason.loggedOut;
+            console.log(`\n⚠️ Connection closed: ${lastDisconnect?.error?.message || 'Unknown'} (status: ${statusCode}). Reconnecting: true`);
+            if (isLoggedOut) {
+                console.log('🔄 [SESSION EXPIRED/LOGGED OUT] Clearing old session credentials so a fresh QR Code can be generated...');
+                try {
+                    const sessionDir = path.join(__dirname, 'auth_session');
+                    if (fs.existsSync(sessionDir)) {
+                        fs.rmSync(sessionDir, { recursive: true, force: true });
+                    }
+                } catch (_) {}
             }
+            setTimeout(startWhatsAppBot, 3000);
         } else if (connection === 'open') {
             isConnected = true;
             currentQr = null;

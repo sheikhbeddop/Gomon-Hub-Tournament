@@ -1,4 +1,4 @@
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, Browsers } = require('@whiskeysockets/baileys');
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, Browsers, downloadMediaMessage } = require('@whiskeysockets/baileys');
 const qrcode = require('qrcode-terminal');
 const QRCode = require('qrcode');
 const path = require('path');
@@ -69,7 +69,10 @@ function restoreSessionFromEnv() {
     }
 }
 
-function getSmartFallbackReply(userMessage) {
+function getSmartFallbackReply(userMessage, hasImage = false) {
+    if (hasImage && !userMessage) {
+        return `আপনার স্ক্রিনশটটি পেয়েছি ভাই! এটি যদি কোনো পেমেন্ট বা সমস্যার ছবি হয়ে থাকে, দয়া করে একটু লিখে জানান আপনাকে কীভাবে সাহায্য করতে পারি।`;
+    }
     const raw = (userMessage || '').trim().toLowerCase();
     const isSalam = /(?:সালাম|assalamu|salam|slm|আসসালামু)/i.test(raw);
     const asksLink = /(?:link|লিংক|ওয়েবসাইট|website|web link|ওয়েবসাইট)/i.test(raw);
@@ -113,7 +116,7 @@ function getSmartFallbackReply(userMessage) {
 }
 
 // AI Customer Support Assistant Helper
-async function generateAiSupportReply(userMessage, senderPhone) {
+async function generateAiSupportReply(userMessage, senderPhone, imageBase64 = null, mimeType = 'image/jpeg') {
     let knowledge = {};
     try {
         const kPath = path.join(__dirname, 'ai_knowledge.json');
@@ -126,7 +129,7 @@ async function generateAiSupportReply(userMessage, senderPhone) {
     const model = process.env.GEMINI_MODEL || config.ai_model || 'gemini-3.5-flash-lite';
 
     if (!apiKey) {
-        return getSmartFallbackReply(userMessage);
+        return getSmartFallbackReply(userMessage, !!imageBase64);
     }
 
     const systemPrompt = `You are the official, friendly, human customer support agent for GOMON HUB Tournament platform in Bangladesh.
@@ -144,15 +147,34 @@ CRITICAL RULES ABOUT WEBSITE LINK:
 - ONLY provide the website link if the player explicitly asks for the website link (e.g., "ওয়েবসাইট লিংক দেন", "ওয়েবসাইটের লিংকটা দেন তো") or asks where to join/register: Our tournament website 🖇️ https://rb.gy/feuqry
 - Never spam the link unnecessarily in every message.
 
+SCREENSHOT & IMAGE READING GUIDELINES:
+- When the user sends a screenshot or image:
+  - If it is a payment receipt (bKash/Nagad), read the transaction ID and amount politely, and acknowledge it.
+  - If it is a Free Fire in-game profile, acknowledge their player name/UID and guide them.
+  - If it is an error or issue on website/app, analyze the screenshot and provide a clear, helpful solution.
+
 Platform Information:
 ${JSON.stringify(knowledge, null, 2)}`;
+
+    const parts = [];
+    if (imageBase64) {
+        parts.push({
+            inlineData: {
+                mimeType: mimeType || 'image/jpeg',
+                data: imageBase64
+            }
+        });
+    }
+    parts.push({
+        text: userMessage || 'এই স্ক্রিনশট বা ছবিটি দেখে আমাকে সাহায্য করুন ভাই।'
+    });
 
     const data = JSON.stringify({
         systemInstruction: {
             parts: [{ text: systemPrompt }]
         },
         contents: [{
-            parts: [{ text: userMessage }]
+            parts
         }]
     });
 
@@ -174,11 +196,11 @@ ${JSON.stringify(knowledge, null, 2)}`;
                     const reply = json.candidates?.[0]?.content?.parts?.[0]?.text;
                     if (reply) return resolve(reply.trim());
                 } catch (_) {}
-                resolve(getSmartFallbackReply(userMessage));
+                resolve(getSmartFallbackReply(userMessage, !!imageBase64));
             });
         });
         req.on('error', () => {
-            resolve(getSmartFallbackReply(userMessage));
+            resolve(getSmartFallbackReply(userMessage, !!imageBase64));
         });
         req.write(data);
         req.end();
@@ -252,14 +274,45 @@ async function startWhatsAppBot() {
         const senderJid = msg.key.remoteJid;
         const senderPhone = senderJid.replace(/@.*$/, '');
 
+        const imgMessage = msg.message.imageMessage ||
+            msg.message.viewOnceMessage?.message?.imageMessage ||
+            msg.message.viewOnceMessageV2?.message?.imageMessage ||
+            msg.message.ephemeralMessage?.message?.imageMessage;
+
+        const docImageMessage = (msg.message.documentMessage?.mimetype?.startsWith('image/'))
+            ? msg.message.documentMessage
+            : null;
+
+        const effectiveImg = imgMessage || docImageMessage;
+
         const text = (
             msg.message.conversation ||
             msg.message.extendedTextMessage?.text ||
-            msg.message.imageMessage?.caption ||
+            effectiveImg?.caption ||
             ''
         ).trim();
 
-        if (!text) return;
+        let imageBase64 = null;
+        let imageMime = effectiveImg?.mimetype || 'image/jpeg';
+
+        if (effectiveImg) {
+            try {
+                const buffer = await downloadMediaMessage(
+                    msg,
+                    'buffer',
+                    {},
+                    { logger: pino({ level: 'silent' }), reuploadRequest: sock.updateMediaMessage }
+                );
+                if (buffer && buffer.length > 0) {
+                    imageBase64 = buffer.toString('base64');
+                    console.log(`📸 [IMAGE RECEIVED & DOWNLOADED] From: ${senderPhone} | Size: ${(buffer.length / 1024).toFixed(1)} KB`);
+                }
+            } catch (mediaErr) {
+                console.error(`⚠️ [MEDIA DOWNLOAD ERROR] ${mediaErr.message}`);
+            }
+        }
+
+        if (!text && !imageBase64) return;
 
         // Detect verification format: "VERIFY 849201" or just "849201"
         const otpMatch = text.match(/(?:VERIFY[\s:]*)?(\d{6})\b/i);
@@ -314,9 +367,9 @@ async function startWhatsAppBot() {
             }
         } else {
             // General conversation, greetings & queries handled by AI Support Agent
-            console.log(`💬 [GENERAL MESSAGE RECEIVED] From: ${senderPhone} | Text: "${text}"`);
+            console.log(`💬 [MESSAGE RECEIVED] From: ${senderPhone} | Text: "${text}" | HasImage: ${!!imageBase64}`);
             try {
-                const aiReply = await generateAiSupportReply(text, senderPhone);
+                const aiReply = await generateAiSupportReply(text, senderPhone, imageBase64, imageMime);
                 await sock.sendMessage(senderJid, { text: aiReply });
                 console.log(`🤖 [AI SUPPORT REPLIED] To: ${senderPhone}`);
             } catch (aiErr) {

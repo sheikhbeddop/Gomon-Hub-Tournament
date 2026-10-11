@@ -340,6 +340,9 @@ async function loadPublicInfo() {
             adminWithdrawNumber = (data.admin_withdraw_number && !data.admin_withdraw_number.includes('লগইন')) ? data.admin_withdraw_number : '01952851550';
         }
         vapidPublicKey = data.vapid_public_key;
+        if (typeof checkNotificationPermission === 'function') {
+            try { checkNotificationPermission(); } catch (_) {}
+        }
 
         // Update all deposit numbers in UI
         document.querySelectorAll('.displayBkashNumber, [id="displayBkashNumber"]').forEach(el => {

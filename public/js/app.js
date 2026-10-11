@@ -9856,13 +9856,13 @@ async function loadAdminChallenges() {
             const isDisputed = (c.status === 'disputed');
             const rowBg = isDisputed ? '#fff1f2' : isNeedsAdminRoom ? '#eff6ff' : 'transparent';
 
-            let actionHtml = '';
+            let roomHtml = '-';
             if (c.status === 'in_progress') {
                 if (!c.room_id) {
-                    actionHtml = `
+                    roomHtml = `
                         <div style="display: flex; gap: 4px; align-items: center;">
-                            <input type="text" id="admChRoomId-${c.challenge_code}" placeholder="Room ID" style="width: 85px; padding: 4px 6px; font-size: 0.74rem; border: 1px solid #cbd5e1; border-radius: 4px;">
-                            <input type="text" id="admChRoomPass-${c.challenge_code}" placeholder="Pass" style="width: 55px; padding: 4px 6px; font-size: 0.74rem; border: 1px solid #cbd5e1; border-radius: 4px;">
+                            <input type="text" id="admChRoomId-${c.challenge_code}" placeholder="Room ID" style="width: 75px; padding: 4px 6px; font-size: 0.74rem; border: 1px solid #cbd5e1; border-radius: 4px;">
+                            <input type="text" id="admChRoomPass-${c.challenge_code}" placeholder="Pass" style="width: 50px; padding: 4px 6px; font-size: 0.74rem; border: 1px solid #cbd5e1; border-radius: 4px;">
                             <button type="button" class="btn btn-sm" onclick="adminSubmitChallengeRoom('${c.challenge_code}')"
                                 style="background: #2563eb; color: white; font-size: 0.72rem; padding: 5px 8px; border-radius: 4px; border: none; font-weight: 700; white-space: nowrap;">
                                 Release & Start
@@ -9870,31 +9870,36 @@ async function loadAdminChallenges() {
                         </div>
                     `;
                 } else {
-                    actionHtml = `
+                    roomHtml = `
                         <div style="display: flex; gap: 4px; align-items: center;">
-                            <span style="font-family: monospace; font-size: 0.74rem; color: #2563eb;">${c.room_id} / ${c.room_password || '-'}</span>
+                            <span style="font-family: monospace; font-size: 0.74rem; color: #2563eb; font-weight: 700;">${c.room_id} / ${c.room_password || '-'}</span>
                             <button type="button" class="btn btn-sm" onclick="document.getElementById('admChEditBox-${c.challenge_code}').style.display='flex'; this.style.display='none';"
                                 style="background: #64748b; color: white; font-size: 0.68rem; padding: 3px 6px; border-radius: 4px; border: none;">Edit</button>
                         </div>
                         <div id="admChEditBox-${c.challenge_code}" style="display: none; gap: 4px; margin-top: 4px;">
-                            <input type="text" id="admChRoomId-${c.challenge_code}" value="${c.room_id}" style="width: 85px; padding: 4px 6px; font-size: 0.74rem; border: 1px solid #cbd5e1; border-radius: 4px;">
-                            <input type="text" id="admChRoomPass-${c.challenge_code}" value="${c.room_password || ''}" style="width: 55px; padding: 4px 6px; font-size: 0.74rem; border: 1px solid #cbd5e1; border-radius: 4px;">
+                            <input type="text" id="admChRoomId-${c.challenge_code}" value="${c.room_id}" style="width: 75px; padding: 4px 6px; font-size: 0.74rem; border: 1px solid #cbd5e1; border-radius: 4px;">
+                            <input type="text" id="admChRoomPass-${c.challenge_code}" value="${c.room_password || ''}" style="width: 50px; padding: 4px 6px; font-size: 0.74rem; border: 1px solid #cbd5e1; border-radius: 4px;">
                             <button type="button" class="btn btn-sm" onclick="adminSubmitChallengeRoom('${c.challenge_code}')"
                                 style="background: #10b981; color: white; font-size: 0.72rem; padding: 4px 8px; border-radius: 4px; border: none; font-weight: 700;">Save</button>
                         </div>
                     `;
                 }
-            } else if (c.status === 'disputed') {
+            } else if (c.room_id) {
+                roomHtml = `<span style="font-family: monospace; font-size: 0.74rem; color: #64748b;">${c.room_id} / ${c.room_password || '-'}</span>`;
+            }
+
+            let actionHtml = '';
+            if (c.status === 'in_progress' || c.status === 'disputed') {
                 actionHtml = `
                     <div style="display: flex; flex-direction: column; gap: 4px;">
-                        <div style="display: flex; gap: 4px;">
-                            ${c.creator_screenshot ? `<a href="${c.creator_screenshot}" target="_blank" style="font-size: 0.70rem; color: #2563eb; text-decoration: underline;">Creator Proof</a>` : '<span style="font-size: 0.70rem; color: #94a3b8;">No Creator Proof</span>'}
-                            ${c.rival_screenshot ? `<a href="${c.rival_screenshot}" target="_blank" style="font-size: 0.70rem; color: #2563eb; text-decoration: underline;">Rival Proof</a>` : '<span style="font-size: 0.70rem; color: #94a3b8;">No Rival Proof</span>'}
+                        <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
+                            ${c.creator_screenshot ? `<a href="${c.creator_screenshot}" target="_blank" style="font-size: 0.70rem; color: #10b981; font-weight: 700; text-decoration: underline;">📸 Creator Proof</a>` : '<span style="font-size: 0.68rem; color: #94a3b8;">No Creator Proof</span>'}
+                            ${c.rival_screenshot ? `<a href="${c.rival_screenshot}" target="_blank" style="font-size: 0.70rem; color: #3b82f6; font-weight: 700; text-decoration: underline;">📸 Rival Proof</a>` : '<span style="font-size: 0.68rem; color: #94a3b8;">No Rival Proof</span>'}
                         </div>
-                        <div style="display: flex; gap: 4px;">
-                            <button type="button" class="btn btn-xs" onclick="adminResolveChallenge('${c.challenge_code}', 'creator')" style="background: #10b981; color: white; font-size: 0.68rem; padding: 3px 6px; border: none; border-radius: 4px;">Creator Won</button>
-                            <button type="button" class="btn btn-xs" onclick="adminResolveChallenge('${c.challenge_code}', 'rival')" style="background: #3b82f6; color: white; font-size: 0.68rem; padding: 3px 6px; border: none; border-radius: 4px;">Rival Won</button>
-                            <button type="button" class="btn btn-xs" onclick="adminResolveChallenge('${c.challenge_code}', 'refund')" style="background: #ef4444; color: white; font-size: 0.68rem; padding: 3px 6px; border: none; border-radius: 4px;">Refund</button>
+                        <div style="display: flex; gap: 4px; align-items: center; flex-wrap: wrap;">
+                            <button type="button" class="btn btn-xs" onclick="adminResolveChallenge('${c.challenge_code}', 'creator')" style="background: #10b981; color: white; font-size: 0.68rem; padding: 3px 6px; border: none; border-radius: 4px; font-weight: 700;" title="Declare Creator Winner">Creator Won</button>
+                            <button type="button" class="btn btn-xs" onclick="adminResolveChallenge('${c.challenge_code}', 'rival')" style="background: #3b82f6; color: white; font-size: 0.68rem; padding: 3px 6px; border: none; border-radius: 4px; font-weight: 700;" title="Declare Rival Winner">Rival Won</button>
+                            <button type="button" class="btn btn-xs" onclick="adminResolveChallenge('${c.challenge_code}', 'refund')" style="background: #ef4444; color: white; font-size: 0.68rem; padding: 3px 6px; border: none; border-radius: 4px; font-weight: 700;" title="Cancel and Refund Both">Refund</button>
                         </div>
                     </div>
                 `;
@@ -9930,7 +9935,10 @@ async function loadAdminChallenges() {
                             ${isNeedsAdminRoom ? 'Needs Admin Room' : c.status}
                         </span>
                     </td>
-                    <td colspan="2" style="padding: 8px;">
+                    <td style="padding: 8px;">
+                        ${roomHtml}
+                    </td>
+                    <td style="padding: 8px;">
                         ${actionHtml}
                     </td>
                 </tr>

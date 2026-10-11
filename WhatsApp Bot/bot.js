@@ -58,7 +58,7 @@ function restoreSessionFromEnv() {
         fs.mkdirSync(sessionDir, { recursive: true });
     }
     const credsPath = path.join(sessionDir, 'creds.json');
-    if (!fs.existsSync(credsPath) && process.env.WHATSAPP_SESSION_DATA) {
+    if (process.env.WHATSAPP_SESSION_DATA) {
         try {
             const rawJson = Buffer.from(process.env.WHATSAPP_SESSION_DATA.trim(), 'base64').toString('utf8');
             fs.writeFileSync(credsPath, rawJson, 'utf8');

@@ -69,50 +69,114 @@ function restoreSessionFromEnv() {
     }
 }
 
-function getSmartFallbackReply(userMessage, hasImage = false) {
-    if (hasImage && !userMessage) {
-        return `আপনার স্ক্রিনশটটি পেয়েছি ভাই! এটি যদি কোনো পেমেন্ট বা সমস্যার ছবি হয়ে থাকে, দয়া করে একটু লিখে জানান আপনাকে কীভাবে সাহায্য করতে পারি।`;
+// Active chat conversation memory per sender
+// senderPhone -> { lastActive: timestamp, greeted: boolean, history: [ { role: 'user' | 'model', parts: [{ text }] } ] }
+const chatMemories = {};
+
+function getChatMemory(senderPhone) {
+    const now = Date.now();
+    if (!chatMemories[senderPhone] || (now - chatMemories[senderPhone].lastActive > 30 * 60 * 1000)) {
+        chatMemories[senderPhone] = {
+            lastActive: now,
+            greeted: false,
+            history: []
+        };
     }
+    chatMemories[senderPhone].lastActive = now;
+    return chatMemories[senderPhone];
+}
+
+function getSmartFallbackReply(userMessage, hasImage = false, senderPhone = null) {
+    if (hasImage && !userMessage) {
+        return `স্ক্রিনশটটি পেয়েছি ভাই! এটি নিয়ে কী সমস্যা বা কী জানতে চান একটু লিখে জানান, দেখছি।`;
+    }
+    const mem = senderPhone ? getChatMemory(senderPhone) : null;
+    const alreadyGreeted = mem ? mem.greeted : false;
+
     const raw = (userMessage || '').trim().toLowerCase();
     const isSalam = /(?:সালাম|assalamu|salam|slm|আসসালামু)/i.test(raw);
-    const asksLink = /(?:link|লিংক|ওয়েবসাইট|website|web link|ওয়েবসাইট)/i.test(raw);
-    const asksJoin = /(?:kivabe khelbo|কীভাবে খেলব|খেলব কীভাবে|খেলব কেমনে|join|রেজিস্টার|রেজিস্ট্রেশন|কাস্টম|ম্যাচ কীভাবে|নিবন্ধন)/i.test(raw);
+    const asksFb = /(?:facebook|fb page|fb|ফেসবুক)/i.test(raw);
+    const asksYt = /(?:youtube|yt channel|yt|ইউটিউব|ইউটিউবের)/i.test(raw);
+    const asksTiktok = /(?:tiktok|টিকটক)/i.test(raw);
+    const asksIg = /(?:instagram|insta|ig|ইনস্টা|ইন্সটা)/i.test(raw);
+    const asksThreads = /(?:threads|থ্রেডস)/i.test(raw);
+    const asksAccount = /(?:account|একাউন্ট|অ্যাকাউন্ট|খুলব কীভাবে|আইডি খুলব|register|সাইন আপ)/i.test(raw);
+    const asksDeposit = /(?:deposit|ডিপোজিট|টাকা অ্যাড|ব্যালেন্স অ্যাড|টাকা ভরব|add money)/i.test(raw);
+    const asksApp = /(?:app|অ্যাপ|apk|ইনস্টল|ইন্সটল)/i.test(raw);
+    const asksLink = /(?:website|ওয়েবসাইট|ওয়েবসাইট|web link|সাইট লিংক|সাইট কোথায়|সাইট খুঁজে|কোথায় পাব)/i.test(raw) || (raw.includes('link') && !asksFb && !asksYt && !asksTiktok && !asksIg && !asksThreads);
+    const asksJoin = /(?:kivabe khelbo|কীভাবে খেলব|খেলব কীভাবে|খেলব কেমনে|join|কাস্টম|ম্যাচ কীভাবে|নিবন্ধন)/i.test(raw);
     const asksRoomId = /(?:room id|রুম আইডি|পাসওয়ার্ড|password|id pass|কখন পাব|ম্যাচ কখন|শুরু কখন)/i.test(raw);
     const asksFee = /(?:কত টাকা|ফি কত|এন্ট্রি ফি|entry fee|match fee|কতো টাকার ম্যাচ|টাকা লাগবে)/i.test(raw);
     const asksWithdraw = /(?:withdraw|উইথড্র|টাকা তুলব|ক্যাশআউট|উইথড্র কীভাবে|bkash|nagad|বিকাশ|নগদ)/i.test(raw);
-    const asksRules = /(?:rules|নিয়ম|হ্যাকার|হ্যাক|hack|cheat|ব্যান)/i.test(raw);
+    const asksRules = /(?:rules|নিয়ম|rules|চিট|ব্যান নীতি)/i.test(raw);
     const isThanks = /(?:ধন্যবাদ|thanks|thx|tnx|shukriya|শুকরিয়া)/i.test(raw);
-    const isHowAreYou = /(?:কেমন আছেন|kemon achen|bhalo achen|ভালো আছেন)/i.test(raw);
+    const isHowAreYou = /(?:কেমন আছেন|kemon achen|bhalo achen|ভালো আছেন|kmn aso|kemon aso)/i.test(raw);
+    const isDoing = /(?:ki koro|কী করো|কি করো|কি কর|ki korso)/i.test(raw);
+    const isSure = /(?:sure|সিওর|শিওর)/i.test(raw);
 
+    if (mem) mem.greeted = true;
+
+    if (asksFb) {
+        return `এই যে ভাই আমাদের অফিসিয়াল ফেসবুক পেজ:\nhttps://www.facebook.com/gomonhub`;
+    }
+    if (asksYt) {
+        return `এই যে ভাই আমাদের অফিসিয়াল ইউটিউব চ্যানেল:\nhttps://www.youtube.com/@gomonhub`;
+    }
+    if (asksTiktok) {
+        return `এই যে ভাই আমাদের অফিসিয়াল টিকটক অ্যাকাউন্ট:\nhttps://www.tiktok.com/@gomon_hub`;
+    }
+    if (asksIg) {
+        return `এই যে ভাই আমাদের অফিসিয়াল ইনস্টাগ্রাম আইডি:\nhttps://www.instagram.com/gomon_gamer`;
+    }
+    if (asksThreads) {
+        return `এই যে ভাই আমাদের থ্রেডস প্রোফাইল:\nhttps://www.threads.net/@gomon_hub`;
+    }
+    if (asksAccount) {
+        return `আমাদের ওয়েবসাইটে (https://rb.gy/feuqry) ঢুকে 'Register' অপশনে গিয়ে নাম, মোবাইল নম্বর ও পাসওয়ার্ড দিলেই ১ মিনিটে অ্যাকাউন্ট তৈরি হয়ে যাবে ভাই।`;
+    }
+    if (asksDeposit) {
+        return `সাইটের Wallet অপশনে গিয়ে 'Add Money'-তে ক্লিক করে বিকাশ বা নগদ নম্বরে সেন্ড মানি করে TrxID সাবমিট করলেই ব্যালেন্স যোগ হয়ে যাবে ভাই।`;
+    }
+    if (asksApp) {
+        return `আমাদের ওয়েবসাইটটি ফোনে ক্রোম ব্রাউজার দিয়ে ওপেন করে মেনু থেকে 'Add to Home screen' বা 'Install App' করলেই অ্যাপের মতো ব্যবহার করতে পারবেন ভাই।`;
+    }
     if (asksLink) {
         return `অবশ্যই ভাই! আমাদের অফিসিয়াল ওয়েবসাইট লিংক:\nOur tournament website 🖇️ https://rb.gy/feuqry`;
     }
     if (asksJoin) {
-        return `আমাদের ওয়েবসাইটে গিয়ে একাউন্ট খুলে ওয়ালেটে ব্যালেন্স অ্যাড করুন ভাই। এরপর পছন্দের টুর্নামেন্টে 'Join' বাটনে ক্লিক করে ইন-গেম নাম ও ইউআইডি দিলেই আপনার স্লট বুক হয়ে যাবে।\nOur tournament website 🖇️ https://rb.gy/feuqry`;
+        return `আমাদের ওয়েবসাইটে গিয়ে একাউন্ট খুলে ওয়ালেটে টাকা অ্যাড করে 'Join' বাটনে ক্লিক করে ইন-গেম নাম ও ইউআইডি দিয়ে স্লট বুক করে ফেলুন ভাই।\nOur tournament website 🖇️ https://rb.gy/feuqry`;
     }
     if (asksRoomId) {
-        return `ম্যাচ শুরু হওয়ার ঠিক ৫ থেকে ১০ মিনিট আগে ওয়েবসাইটের ওই ম্যাচের ভেতর সরাসরি কাস্টম রুম আইডি ও পাসওয়ার্ড দেখতে পাবেন ভাই। সময়মতো গেমে ঢুকে জয়েন করে নেবেন, শুভকামনা!`;
+        return `ম্যাচ শুরু হওয়ার ৫ থেকে ১০ মিনিট আগে ওয়েবসাইটের ওই ম্যাচের পেজে সরাসরি কাস্টম রুম আইডি ও পাসওয়ার্ড দেখা যাবে ভাই।`;
     }
     if (asksFee) {
-        return `আমাদের প্ল্যাটফর্মে নিয়মিত ফ্রি এবং ১০ টাকা, ২০ টাকা, ৩০ টাকা ও ৫০ টাকার বিভিন্ন ম্যাচ থাকে ভাই। প্রতিটি ম্যাচের প্রাইজমানি ও পার-কিল রিওয়ার্ড ওয়েবসাইটের ম্যাচ কার্ডে স্পষ্ট উল্লেখ থাকে।`;
+        return `আমাদের এখানে ফ্রি ম্যাচ ছাড়াও ১০, ২০, ৩০ ও ৫০ টাকার ম্যাচ থাকে ভাই। প্রতিটি ম্যাচের রিওয়ার্ড সাইটের ম্যাচ কার্ডে স্পষ্ট দেওয়া থাকে।`;
     }
     if (asksWithdraw) {
-        return `ম্যাচ শেষে আপনার উইনিং ব্যালেন্স সরাসরি বিকাশ বা নগদে উইথড্র করতে পারবেন ভাই। ওয়ালেট সেকশনে রিকোয়েস্ট দিলেই দ্রুত সময়ের মধ্যে টাকা পৌঁছে যাবে।`;
+        return `ম্যাচ শেষ হলে উইনিং ব্যালেন্স সরাসরি বিকাশ বা নগদে উইথড্র দেওয়া যায় ভাই। ওয়ালেট সেকশন থেকে রিকোয়েস্ট দিলেই টাকা চলে যাবে।`;
     }
     if (asksRules) {
-        return `আমাদের প্ল্যাটফর্মে ১০০% ফেয়ার প্লে নিশ্চিত করা হয় ভাই। যেকোনো প্রকার হ্যাক, স্ক্রিপ্ট বা আনফেয়ার গেমপ্লে সম্পূর্ণ নিষিদ্ধ, ধরা পড়লে আইডি সরাসরি পার্মানেন্ট ব্যান করা হয়।`;
+        return `আমাদের এখানে কোনো হ্যাক বা আনফেয়ার গেমপ্লে এলাউড না ভাই। ফেয়ার প্লে নিশ্চিত রাখতে আমরা সতর্ক থাকি।`;
     }
     if (isThanks) {
-        return `আপনাকেও অনেক ধন্যবাদ ভাই! যেকোনো প্রয়োজনে নির্দ্বিধায় মেসেজ দিন, GOMON HUB টিম সবসময় পাশে আছে।`;
+        return `ওয়েলকাম ভাই! যেকোনো প্রয়োজনে জানাবেন।`;
+    }
+    if (isDoing) {
+        return `এই তো ভাই সাপোর্ট চ্যাটে আছি। বলেন কোনো সমস্যা বা হেল্প লাগবে?`;
+    }
+    if (isSure) {
+        return `হ্যাঁ ভাই একদম সিওর! বলেন কী বিষয়?`;
     }
     if (isHowAreYou) {
-        return (isSalam ? `ওয়ালাইকুম আসসালাম ভাই! ` : `আলহামদুলিল্লাহ ভাই, `) +
-            `আমরা ভালো আছি। আপনি কেমন আছেন? টুর্নামেন্ট নিয়ে কোনো তথ্যে সাহায্য লাগবে?`;
+        return isSalam ? `ওয়ালাইকুম আসসালাম ভাই! আলহামদুলিল্লাহ ভালো আছি। আপনার কী অবস্থা?` : `আলহামদুলিল্লাহ ভাই ভালো আছি। আপনি কেমন আছেন?`;
     }
     if (isSalam) {
-        return `ওয়ালাইকুম আসসালাম ভাই! GOMON HUB-এ আপনাকে স্বাগতম। বলুন, কীভাবে সাহায্য করতে পারি?`;
+        return `ওয়ালাইকুম আসসালাম ভাই! বলেন কীভাবে হেল্প করতে পারি?`;
     }
-    return `আসসালামু আলাইকুম ভাই! GOMON HUB সাপোর্ট টিম থেকে বলছি। কীভাবে সাহায্য করতে পারি বলুন।`;
+    if (alreadyGreeted) {
+        return `জি ভাই বলেন, কীভাবে হেল্প করতে পারি?`;
+    }
+    return `জি ভাই, বলেন কী জানতে চান?`;
 }
 
 // AI Customer Support Assistant Helper
@@ -128,54 +192,68 @@ async function generateAiSupportReply(userMessage, senderPhone, imageBase64 = nu
     const apiKey = process.env.GEMINI_API_KEY || config.gemini_api_key || '';
     const model = process.env.GEMINI_MODEL || config.ai_model || 'gemini-3.5-flash-lite';
 
+    const mem = getChatMemory(senderPhone);
+
     if (!apiKey) {
-        return getSmartFallbackReply(userMessage, !!imageBase64);
+        const fallback = getSmartFallbackReply(userMessage, !!imageBase64, senderPhone);
+        mem.history.push({ role: 'user', parts: [{ text: userMessage || '[ছবি]' }] });
+        mem.history.push({ role: 'model', parts: [{ text: fallback }] });
+        mem.greeted = true;
+        return fallback;
     }
 
-    const systemPrompt = `You are the official, friendly, human customer support agent for GOMON HUB Tournament platform in Bangladesh.
-Speak naturally, politely, and warmly in Bengali like a real human admin/agent (never say you are an AI or robot).
-Keep replies concise, helpful, and directly to the point (1 to 3 sentences).
+    const systemPrompt = `You are a real human customer support admin for GOMON HUB Tournament on WhatsApp in Bangladesh. You are an actual Bangladeshi gamer guy chatting naturally with fellow gamers.
 
-CRITICAL SALAM RULES (STRICT CULTURAL PROTOCOL):
-- Salam is strictly for the INITIAL GREETING or when responding to a Salam. NEVER repeat Salam in ongoing questions!
-- ONLY IF the user explicitly said Salam ("assalamu alaikum", "সালাম", "slm"): Respond with "ওয়ালাইকুম আসসালাম ভাই!".
-- IF the user opens with a greeting without Salam (like "Hi", "Hello"): You can say "আসসালামু আলাইকুম ভাই!".
-- For ongoing questions (e.g. asking about match fee, room ID, withdrawal, rules, or saying thank you): DO NOT add Salam! Just directly and politely answer their question. A real human NEVER repeats Salam in every sentence!
+ABSOLUTE HUMAN RULES (NEVER BREAK THESE):
+1. NEVER speak like an AI, a chatbot, or a corporate robot!
+2. NEVER say "GOMON HUB সাপোর্ট টিমে আপনাকে স্বাগতম", "কীভাবে সাহায্য করতে পারি?", "আমাদের সাপোর্ট টিমে নক করুন" (YOU ARE THE SUPPORT ADMIN!).
+3. NEVER repeat Salam in an active ongoing chat! If you already exchanged Salam or if it's mid-conversation, DO NOT say Salam again! Only say "ওয়ালাইকুম আসসালাম" if the user explicitly says Salam in this current message.
+4. Keep replies short, natural, friendly, and straight to the point (1 to 2 lines maximum) just like a real person typing on WhatsApp.
+5. Answer casual remarks casually:
+   - "kmn aso" -> "আলহামদুলিল্লাহ ভাই ভালো, আপনার কী খবর?"
+   - "ki koro" -> "এই তো ভাই সাপোর্ট চ্যাটে আছি। কোনো হেল্প লাগবে?"
+   - "sure to?" -> "হ্যাঁ ভাই একদম সিওর! বলেন কী লাগবে?"
+6. Exact links & Guides (provide immediately whenever asked):
+   - Facebook page: https://www.facebook.com/gomonhub
+   - YouTube channel: https://www.youtube.com/@gomonhub (Mr GOMON / GOMON GAMER)
+   - 2nd YouTube: https://www.youtube.com/@mrgomonhub
+   - TikTok: https://www.tiktok.com/@gomon_hub
+   - Instagram (IG): https://www.instagram.com/gomon_gamer
+   - Threads: https://www.threads.net/@gomon_hub
+   - Tournament website / site link: Our tournament website 🖇️ https://rb.gy/feuqry
+   - Account opening: Guide them to visit https://rb.gy/feuqry and click 'Register' with name, phone, password.
+   - Deposit / Add Money: Guide them to go to Wallet -> Add Money -> send money via bKash/Nagad and submit TrxID.
+   - App install: Open site in Chrome mobile browser and click 'Install' or 'Add to Home Screen'.
+   - Never spam the website link in general chit-chat unless relevant.
+7. Screenshots & Images:
+   - If user sends a payment receipt (bKash/Nagad), read transaction ID and amount politely.
+   - If user sends Free Fire profile or game error, guide them like a gamer brother.
 
-CRITICAL RULES ABOUT WEBSITE LINK:
-- DO NOT provide or mention the website link in normal conversations, casual greetings, or general chit-chat.
-- ONLY provide the website link if the player explicitly asks for the website link (e.g., "ওয়েবসাইট লিংক দেন", "ওয়েবসাইটের লিংকটা দেন তো") or asks where to join/register: Our tournament website 🖇️ https://rb.gy/feuqry
-- Never spam the link unnecessarily in every message.
-
-SCREENSHOT & IMAGE READING GUIDELINES:
-- When the user sends a screenshot or image:
-  - If it is a payment receipt (bKash/Nagad), read the transaction ID and amount politely, and acknowledge it.
-  - If it is a Free Fire in-game profile, acknowledge their player name/UID and guide them.
-  - If it is an error or issue on website/app, analyze the screenshot and provide a clear, helpful solution.
-
-Platform Information:
+Platform Knowledge Base:
 ${JSON.stringify(knowledge, null, 2)}`;
 
-    const parts = [];
+    const currentParts = [];
     if (imageBase64) {
-        parts.push({
+        currentParts.push({
             inlineData: {
                 mimeType: mimeType || 'image/jpeg',
                 data: imageBase64
             }
         });
     }
-    parts.push({
+    currentParts.push({
         text: userMessage || 'এই স্ক্রিনশট বা ছবিটি দেখে আমাকে সাহায্য করুন ভাই।'
     });
+
+    // Multi-turn conversation contents (last 8 turns for tight context)
+    const historySlice = mem.history.slice(-8);
+    const contents = [...historySlice, { role: 'user', parts: currentParts }];
 
     const data = JSON.stringify({
         systemInstruction: {
             parts: [{ text: systemPrompt }]
         },
-        contents: [{
-            parts
-        }]
+        contents
     });
 
     return new Promise((resolve) => {
@@ -194,13 +272,30 @@ ${JSON.stringify(knowledge, null, 2)}`;
                 try {
                     const json = JSON.parse(body);
                     const reply = json.candidates?.[0]?.content?.parts?.[0]?.text;
-                    if (reply) return resolve(reply.trim());
+                    if (reply) {
+                        const cleanReply = reply.trim();
+                        mem.history.push({ role: 'user', parts: [{ text: userMessage || '[ছবি]' }] });
+                        mem.history.push({ role: 'model', parts: [{ text: cleanReply }] });
+                        mem.greeted = true;
+                        if (mem.history.length > 12) {
+                            mem.history = mem.history.slice(-10);
+                        }
+                        return resolve(cleanReply);
+                    }
                 } catch (_) {}
-                resolve(getSmartFallbackReply(userMessage, !!imageBase64));
+                const fallback = getSmartFallbackReply(userMessage, !!imageBase64, senderPhone);
+                mem.history.push({ role: 'user', parts: [{ text: userMessage || '[ছবি]' }] });
+                mem.history.push({ role: 'model', parts: [{ text: fallback }] });
+                mem.greeted = true;
+                resolve(fallback);
             });
         });
         req.on('error', () => {
-            resolve(getSmartFallbackReply(userMessage, !!imageBase64));
+            const fallback = getSmartFallbackReply(userMessage, !!imageBase64, senderPhone);
+            mem.history.push({ role: 'user', parts: [{ text: userMessage || '[ছবি]' }] });
+            mem.history.push({ role: 'model', parts: [{ text: fallback }] });
+            mem.greeted = true;
+            resolve(fallback);
         });
         req.write(data);
         req.end();

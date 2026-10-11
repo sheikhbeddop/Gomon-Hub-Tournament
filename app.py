@@ -6427,18 +6427,8 @@ async def admin_disable_totp(data: AdminTotpDisableRequest, admin: dict = Depend
 async def admin_broadcast_notice(data: AdminNoticeRequest, admin: dict = Depends(verify_admin)):
     title = data.title.strip()
     msg = data.message.strip()
-    full_notice = f"{title}: {msg}"
 
-    # 1. ALWAYS persist notice to settings table so new/reconnecting visitors immediately see it!
-    conn = get_db()
-    with conn:
-        conn.execute("""
-        INSERT INTO settings (key, value) VALUES ('notice', ?)
-        ON CONFLICT(key) DO UPDATE SET value = excluded.value
-        """, (full_notice,))
-    conn.close()
-
-    # 2. Instant Live Alert toast + sound to all active screens
+    # 1. Instant Live Alert toast + sound to all active screens
     await manager.broadcast({
         "type": "ADMIN_ANNOUNCEMENT",
         "title": title,
@@ -6446,12 +6436,7 @@ async def admin_broadcast_notice(data: AdminNoticeRequest, admin: dict = Depends
         "timestamp": datetime.now().strftime("%I:%M %p")
     })
 
-    # 3. Also update notice bar live on all phones
-    await manager.broadcast({
-        "type": "SETTINGS_UPDATED",
-        "notice": full_notice
-    })
-
+    # 2. Native Mobile Push Notification to all subscribed devices
     conn = get_db()
     subs = conn.execute("SELECT * FROM push_subscriptions").fetchall()
     conn.close()
@@ -6459,7 +6444,8 @@ async def admin_broadcast_notice(data: AdminNoticeRequest, admin: dict = Depends
     push_payload = json.dumps({
         "title": title,
         "body": msg,
-        "icon": "/static/img/icon.png",
+        "icon": "/gomon_hub_logo.png",
+        "badge": "/gomon_hub_logo.png",
         "url": "/"
     })
 

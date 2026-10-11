@@ -113,8 +113,13 @@ function getSmartFallbackReply(userMessage, hasImage = false, senderPhone = null
     const isHowAreYou = /(?:কেমন আছেন|kemon achen|bhalo achen|ভালো আছেন|kmn aso|kemon aso)/i.test(raw);
     const isDoing = /(?:ki koro|কী করো|কি করো|কি কর|ki korso)/i.test(raw);
     const isSure = /(?:sure|সিওর|শিওর)/i.test(raw);
+    const asksWho = /(?:tmi k|tumi k|tmi ke|tumi ke|porichoy|পরিচয়|who are you|tui k|apni k|k tmi|ke tumi|k tumi|tmi vai)/i.test(raw);
 
     if (mem) mem.greeted = true;
+
+    if (asksWho) {
+        return `আমি GOMON HUB টুর্নামেন্টের সাপোর্ট অ্যাডমিন ভাই! টুর্নামেন্ট, একাউন্ট, ডিপোজিট, উইথড্র বা যেকোনো প্রয়োজনে বলেন, হেল্প করছি।`;
+    }
 
     if (asksFb) {
         return `এই যে ভাই আমাদের অফিসিয়াল ফেসবুক পেজ:\nhttps://www.facebook.com/gomonhub`;
@@ -226,8 +231,8 @@ async function generateAiSupportReply(userMessage, senderPhone, imageBase64 = nu
     } catch (_) {}
 
     const apiKey = process.env.GEMINI_API_KEY || config.gemini_api_key || '';
-    const preferredModel = process.env.GEMINI_MODEL || config.ai_model || 'gemini-2.0-flash';
-    const fallbackModel = 'gemini-1.5-flash';
+    const preferredModel = process.env.GEMINI_MODEL || config.ai_model || 'gemini-3.8-flash';
+    const fallbackModel = 'gemini-3.5-flash-lite';
 
     const mem = getChatMemory(senderPhone);
 

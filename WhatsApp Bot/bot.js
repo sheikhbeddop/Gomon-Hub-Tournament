@@ -197,7 +197,7 @@ async function generateAiSupportReply(userMessage, senderPhone, imageBase64 = nu
     } catch (_) {}
 
     const apiKey = process.env.GEMINI_API_KEY || currentConfig.gemini_api_key || config.gemini_api_key || '';
-    const model = process.env.GEMINI_MODEL || currentConfig.ai_model || config.ai_model || 'gemini-3.8-flash';
+    const model = process.env.GEMINI_MODEL || currentConfig.ai_model || config.ai_model || 'gemini-3.5-flash-lite';
 
     const mem = getChatMemory(senderPhone);
 

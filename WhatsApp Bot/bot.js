@@ -113,13 +113,8 @@ function getSmartFallbackReply(userMessage, hasImage = false, senderPhone = null
     const isHowAreYou = /(?:কেমন আছেন|kemon achen|bhalo achen|ভালো আছেন|kmn aso|kemon aso)/i.test(raw);
     const isDoing = /(?:ki koro|কী করো|কি করো|কি কর|ki korso)/i.test(raw);
     const isSure = /(?:sure|সিওর|শিওর)/i.test(raw);
-    const asksWho = /(?:tmi k|tumi k|tmi ke|tumi ke|porichoy|পরিচয়|who are you|tui k|apni k|k tmi|ke tumi|k tumi|tmi vai)/i.test(raw);
 
     if (mem) mem.greeted = true;
-
-    if (asksWho) {
-        return `আমি GOMON HUB টুর্নামেন্টের সাপোর্ট অ্যাডমিন ভাই! টুর্নামেন্ট, একাউন্ট, ডিপোজিট, উইথড্র বা যেকোনো প্রয়োজনে বলেন, হেল্প করছি।`;
-    }
 
     if (asksFb) {
         return `এই যে ভাই আমাদের অফিসিয়াল ফেসবুক পেজ:\nhttps://www.facebook.com/gomonhub`;
@@ -184,43 +179,7 @@ function getSmartFallbackReply(userMessage, hasImage = false, senderPhone = null
     return `জি ভাই, বলেন কী জানতে চান?`;
 }
 
-// Helper to perform Gemini API request
-function requestGeminiApi(modelName, apiKey, payloadJson) {
-    return new Promise((resolve, reject) => {
-        const req = https.request({
-            hostname: 'generativelanguage.googleapis.com',
-            path: `/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Content-Length': Buffer.byteLength(payloadJson)
-            },
-            timeout: 15000
-        }, (res) => {
-            let body = '';
-            res.on('data', chunk => body += chunk);
-            res.on('end', () => {
-                if (res.statusCode >= 200 && res.statusCode < 300) {
-                    try {
-                        const json = JSON.parse(body);
-                        const reply = json.candidates?.[0]?.content?.parts?.[0]?.text;
-                        if (reply) return resolve(reply.trim());
-                    } catch (_) {}
-                }
-                reject(new Error(`HTTP ${res.statusCode}: ${body.slice(0, 120)}`));
-            });
-        });
-        req.on('error', reject);
-        req.on('timeout', () => {
-            req.destroy();
-            reject(new Error('Timeout'));
-        });
-        req.write(payloadJson);
-        req.end();
-    });
-}
-
-// AI Customer Support & Universal Intelligence Assistant Helper
+// AI Customer Support Assistant Helper
 async function generateAiSupportReply(userMessage, senderPhone, imageBase64 = null, mimeType = 'image/jpeg') {
     let knowledge = {};
     try {
@@ -238,8 +197,7 @@ async function generateAiSupportReply(userMessage, senderPhone, imageBase64 = nu
     } catch (_) {}
 
     const apiKey = process.env.GEMINI_API_KEY || currentConfig.gemini_api_key || config.gemini_api_key || '';
-    const preferredModel = process.env.GEMINI_MODEL || currentConfig.ai_model || config.ai_model || 'gemini-3.8-flash';
-    const fallbackModel = 'gemini-3.5-flash-lite';
+    const model = process.env.GEMINI_MODEL || currentConfig.ai_model || config.ai_model || 'gemini-3.8-flash';
 
     const mem = getChatMemory(senderPhone);
 
@@ -251,57 +209,32 @@ async function generateAiSupportReply(userMessage, senderPhone, imageBase64 = nu
         return fallback;
     }
 
-    const systemPrompt = `You are a real human admin and elder brother ("GOMON HUB Support & Gamer Brother") on WhatsApp in Bangladesh. You are an actual Bangladeshi gamer guy chatting naturally, warmly, intelligently, and authentically with fellow gamers and followers.
+    const systemPrompt = `You are a real human customer support admin for GOMON HUB Tournament on WhatsApp in Bangladesh. You are an actual Bangladeshi gamer guy chatting naturally with fellow gamers.
 
 ABSOLUTE HUMAN RULES (NEVER BREAK THESE):
-1. NEVER speak like an AI, a chatbot, or a corporate robot! Never say "আমি একটি এআই", "GOMON HUB সাপোর্ট টিমে আপনাকে স্বাগতম", "কীভাবে সাহায্য করতে পারি?", "আমাদের সাপোর্ট টিমে নক করুন" (YOU ARE THE SUPPORT ADMIN!).
-2. NEVER repeat Salam in an active ongoing chat! If you already exchanged Salam or if it's mid-conversation, DO NOT say Salam again! Only say "ওয়ালাইকুম আসসালাম" if the user explicitly says Salam in this current message.
-3. Keep conversation natural, authentic, and engaging. Speak in conversational Bangladeshi Bengali (mixing English gamer words naturally like "ভাই", "আরে ভাই", "কিল", "বুইয়া", "ড্যামেজ", "ম্যাচ", "স্ট্রাইক", ইত্যাদি).
-4. When someone asks a question needing explanation, explain clearly and intelligently in 2 to 4 sentences like a knowledgeable brother. When casual chit-chat, keep it short (1-2 sentences).
-
-UNIVERSAL KNOWLEDGE & INTELLIGENCE:
-You have vast, accurate knowledge on ANY topic:
-- YouTube & Social Media:
-  * YouTube Copyright & Community Guidelines Strikes: Explain accurately (e.g. standard copyright strikes expire in 90 days after completing Copyright School, warning strikes stay on channel, counter-notification / dispute process).
-  * TikTok, Facebook, Instagram policies, monetization, views, algorithms.
-- Gaming (Free Fire, PUBG, etc.):
-  * Rankings, Clash Squad, Battle Royale, settings, weapon stats, sensitivities, esports tactics.
-- Tech & Troubleshooting:
-  * Phone settings, network ping, RAM/storage cache, Chrome install/PWA.
-- Casual & Life Advice:
-  * Chat with empathy, humor, and intelligence. Never give vague or nonsensical evasive answers.
-
-MASTER SCREENSHOT & IMAGE REASONING (STRICT ZERO HALLUCINATION):
-Whenever user sends a screenshot or photo:
-1. FREE FIRE MATCH RESULTS / SCOREBOARDS:
-   - HOW TO IDENTIFY THE USER'S OWN ID:
-     * Look closely at the player rows. Every single teammate and opponent has an "Add Friend" (+) icon or report button on the right side, EXCEPT the user's own profile! The user's row has NO "Add Friend" icon!
-     * The user's row is highlighted/tinted with a distinct light blue/cyan background compared to others.
-     * Top banner often shows their personal result (e.g. "YOU SURPASSED X% OF PLAYERS AND GOT A [MEDAL]") which matches the medal badge on the player's rating.
-   - EXACT STATS EXTRACTION:
-     * Look at the top header to see Mode (SPECIAL CS-RANKED, CS-RANKED, BERMUDA, BATTLE ROYALE) and Match Outcome (VICTORY or DEFEAT, and the round scores like 4-1).
-     * Read the EXACT stats of that specific highlighted row: Player Name, K/D/A, Damage, Rating.
-   - STRICT ANTI-HALLUCINATION RULE:
-     * NEVER assume the user is the MVP or highest killer unless that highlighted row actually says so!
-     * If the user got 4 kills and someone else got 7 kills, recognize they got 4 kills!
-     * If the screenshot is too cropped or blurry to identify the row with certainty, NEVER guess! Politely ask: "ভাই আপনার ইন-গেম নাম কোনটা? আর ম্যাচটা কি জিতেছিলেন নাকি হেরেছিলেন?"
-2. PAYMENT RECEIPTS (bKash / Nagad / Rocket):
-   - Read the exact Transaction ID (TrxID), Amount (৳), and Date/Time. Guide them to paste the TrxID in the website's Wallet -> Add Money section.
-3. OTHER SCREENSHOTS:
-   - Carefully inspect the actual text/error message before replying.
-
-GOMON HUB PLATFORM GUIDANCE:
-- Exact Links:
-  * Tournament Website: Our tournament website 🖇️ https://rb.gy/feuqry
-  * Facebook: https://www.facebook.com/gomonhub
-  * YouTube: https://www.youtube.com/@gomonhub (Mr GOMON / GOMON GAMER)
-  * 2nd YouTube: https://www.youtube.com/@mrgomonhub
-  * TikTok: https://www.tiktok.com/@gomon_hub
-  * Instagram: https://www.instagram.com/gomon_gamer
-  * Threads: https://www.threads.net/@gomon_hub
-- Account: Visit https://rb.gy/feuqry -> Register with Name, Phone, Password.
-- Deposit: Wallet -> Add Money -> Send Money via bKash/Nagad and submit TrxID.
-- Matches: Wallet balance -> Join match -> Enter in-game name & UID. Room ID & password appear on match page 5-10 mins before match.
+1. NEVER speak like an AI, a chatbot, or a corporate robot!
+2. NEVER say "GOMON HUB সাপোর্ট টিমে আপনাকে স্বাগতম", "কীভাবে সাহায্য করতে পারি?", "আমাদের সাপোর্ট টিমে নক করুন" (YOU ARE THE SUPPORT ADMIN!).
+3. NEVER repeat Salam in an active ongoing chat! If you already exchanged Salam or if it's mid-conversation, DO NOT say Salam again! Only say "ওয়ালাইকুম আসসালাম" if the user explicitly says Salam in this current message.
+4. Keep replies short, natural, friendly, and straight to the point (1 to 2 lines maximum) just like a real person typing on WhatsApp.
+5. Answer casual remarks casually:
+   - "kmn aso" -> "আলহামদুলিল্লাহ ভাই ভালো, আপনার কী খবর?"
+   - "ki koro" -> "এই তো ভাই সাপোর্ট চ্যাটে আছি। কোনো হেল্প লাগবে?"
+   - "sure to?" -> "হ্যাঁ ভাই একদম সিওর! বলেন কী লাগবে?"
+6. Exact links & Guides (provide immediately whenever asked):
+   - Facebook page: https://www.facebook.com/gomonhub
+   - YouTube channel: https://www.youtube.com/@gomonhub (Mr GOMON / GOMON GAMER)
+   - 2nd YouTube: https://www.youtube.com/@mrgomonhub
+   - TikTok: https://www.tiktok.com/@gomon_hub
+   - Instagram (IG): https://www.instagram.com/gomon_gamer
+   - Threads: https://www.threads.net/@gomon_hub
+   - Tournament website / site link: Our tournament website 🖇️ https://rb.gy/feuqry
+   - Account opening: Guide them to visit https://rb.gy/feuqry and click 'Register' with name, phone, password.
+   - Deposit / Add Money: Guide them to go to Wallet -> Add Money -> send money via bKash/Nagad and submit TrxID.
+   - App install: Open site in Chrome mobile browser and click 'Install' or 'Add to Home Screen'.
+   - Never spam the website link in general chit-chat unless relevant.
+7. Screenshots & Images:
+   - If user sends a payment receipt (bKash/Nagad), read transaction ID and amount politely.
+   - If user sends Free Fire profile or game error, guide them like a gamer brother.
 
 Platform Knowledge Base:
 ${JSON.stringify(knowledge, null, 2)}`;
@@ -327,43 +260,54 @@ ${JSON.stringify(knowledge, null, 2)}`;
         systemInstruction: {
             parts: [{ text: systemPrompt }]
         },
-        contents,
-        generationConfig: {
-            temperature: 0.5,
-            topK: 40,
-            topP: 0.95,
-            maxOutputTokens: 500
-        }
+        contents
     });
 
-    let finalReply = null;
-    try {
-        finalReply = await requestGeminiApi(preferredModel, apiKey, data);
-    } catch (err) {
-        console.warn(`[GEMINI API] ${preferredModel} failed: ${err.message}. Retrying with ${fallbackModel}...`);
-        try {
-            finalReply = await requestGeminiApi(fallbackModel, apiKey, data);
-        } catch (e2) {
-            console.warn(`[GEMINI API FALLBACK FAILED] ${e2.message}`);
-        }
-    }
-
-    if (finalReply) {
-        const cleanReply = finalReply.trim();
-        mem.history.push({ role: 'user', parts: [{ text: userMessage || '[ছবি]' }] });
-        mem.history.push({ role: 'model', parts: [{ text: cleanReply }] });
-        mem.greeted = true;
-        if (mem.history.length > 12) {
-            mem.history = mem.history.slice(-10);
-        }
-        return cleanReply;
-    }
-
-    const fallback = getSmartFallbackReply(userMessage, !!imageBase64, senderPhone);
-    mem.history.push({ role: 'user', parts: [{ text: userMessage || '[ছবি]' }] });
-    mem.history.push({ role: 'model', parts: [{ text: fallback }] });
-    mem.greeted = true;
-    return fallback;
+    return new Promise((resolve) => {
+        const req = https.request({
+            hostname: 'generativelanguage.googleapis.com',
+            path: `/v1beta/models/${model}:generateContent?key=${apiKey}`,
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-goog-api-key': apiKey,
+                'Content-Length': Buffer.byteLength(data)
+            }
+        }, (res) => {
+            let body = '';
+            res.on('data', chunk => body += chunk);
+            res.on('end', () => {
+                try {
+                    const json = JSON.parse(body);
+                    const reply = json.candidates?.[0]?.content?.parts?.[0]?.text;
+                    if (reply) {
+                        const cleanReply = reply.trim();
+                        mem.history.push({ role: 'user', parts: [{ text: userMessage || '[ছবি]' }] });
+                        mem.history.push({ role: 'model', parts: [{ text: cleanReply }] });
+                        mem.greeted = true;
+                        if (mem.history.length > 12) {
+                            mem.history = mem.history.slice(-10);
+                        }
+                        return resolve(cleanReply);
+                    }
+                } catch (_) {}
+                const fallback = getSmartFallbackReply(userMessage, !!imageBase64, senderPhone);
+                mem.history.push({ role: 'user', parts: [{ text: userMessage || '[ছবি]' }] });
+                mem.history.push({ role: 'model', parts: [{ text: fallback }] });
+                mem.greeted = true;
+                resolve(fallback);
+            });
+        });
+        req.on('error', () => {
+            const fallback = getSmartFallbackReply(userMessage, !!imageBase64, senderPhone);
+            mem.history.push({ role: 'user', parts: [{ text: userMessage || '[ছবি]' }] });
+            mem.history.push({ role: 'model', parts: [{ text: fallback }] });
+            mem.greeted = true;
+            resolve(fallback);
+        });
+        req.write(data);
+        req.end();
+    });
 }
 
 async function startWhatsAppBot() {
@@ -405,19 +349,11 @@ async function startWhatsAppBot() {
 
         if (connection === 'close') {
             isConnected = false;
-            const statusCode = lastDisconnect?.error?.output?.statusCode;
-            const isLoggedOut = statusCode === DisconnectReason.loggedOut;
-            console.log(`\n⚠️ Connection closed: ${lastDisconnect?.error?.message || 'Unknown'} (status: ${statusCode}). Reconnecting: true`);
-            if (isLoggedOut) {
-                console.log('🔄 [SESSION EXPIRED/LOGGED OUT] Clearing old session credentials so a fresh QR Code can be generated...');
-                try {
-                    const sessionDir = path.join(__dirname, 'auth_session');
-                    if (fs.existsSync(sessionDir)) {
-                        fs.rmSync(sessionDir, { recursive: true, force: true });
-                    }
-                } catch (_) {}
+            const shouldReconnect = (lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut);
+            console.log(`\n⚠️ Connection closed: ${lastDisconnect?.error?.message || 'Unknown'}. Reconnecting: ${shouldReconnect}`);
+            if (shouldReconnect) {
+                setTimeout(startWhatsAppBot, 3000);
             }
-            setTimeout(startWhatsAppBot, 3000);
         } else if (connection === 'open') {
             isConnected = true;
             currentQr = null;

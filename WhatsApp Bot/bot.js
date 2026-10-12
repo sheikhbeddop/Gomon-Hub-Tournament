@@ -277,6 +277,9 @@ ${JSON.stringify(knowledge, null, 2)}`;
             let body = '';
             res.on('data', chunk => body += chunk);
             res.on('end', () => {
+                if (res.statusCode < 200 || res.statusCode >= 300) {
+                    console.warn(`⚠️ [GEMINI API ERROR HTTP ${res.statusCode}] ${body.slice(0, 180)}`);
+                }
                 try {
                     const json = JSON.parse(body);
                     const reply = json.candidates?.[0]?.content?.parts?.[0]?.text;
@@ -298,7 +301,8 @@ ${JSON.stringify(knowledge, null, 2)}`;
                 resolve(fallback);
             });
         });
-        req.on('error', () => {
+        req.on('error', (err) => {
+            console.error(`❌ [GEMINI NETWORK ERROR] ${err.message}`);
             const fallback = getSmartFallbackReply(userMessage, !!imageBase64, senderPhone);
             mem.history.push({ role: 'user', parts: [{ text: userMessage || '[ছবি]' }] });
             mem.history.push({ role: 'model', parts: [{ text: fallback }] });

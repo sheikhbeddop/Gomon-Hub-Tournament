@@ -118,8 +118,18 @@ function getSmartFallbackReply(userMessage, hasImage = false, senderPhone = null
     const isHowAreYou = /(?:কেমন আছেন|kemon achen|bhalo achen|ভালো আছেন|kmn aso|kemon aso)/i.test(raw);
     const isDoing = /(?:ki koro|কী করো|কি করো|কি কর|ki korso)/i.test(raw);
     const isSure = /(?:sure|সিওর|শিওর)/i.test(raw);
+    const asksWho = /(?:tmi k|tumi ke|apni ke|apni k|তুমি কে|আপনি কে|তমি ক|tmr porichoy|porichoy ki|পরিচয় কি|কে তুমি|ke tmi|ke tumi|কে আপনি|ke apni)/i.test(raw);
+    const isHalaBanter = /(?:hur hla|hala|হালা|হালার|ভাগ|kire|কি রে)/i.test(raw);
 
     if (mem) mem.greeted = true;
+
+    if (asksWho) {
+        return `আমি GOMON HUB-এর অফিসিয়াল সাপোর্ট অ্যাডমিন ভাই! টুর্নামেন্ট, ম্যাচ বা ওয়েবসাইট নিয়ে যেকোনো হেল্প লাগলে বলেন, বুঝিয়ে দিচ্ছি।`;
+    }
+
+    if (isHalaBanter) {
+        return `আরে ভাই কি হইছে? হালা বলেন কেন 😂 কোনো টুর্নামেন্ট বা ওয়েবসাইট নিয়ে সমস্যা হলে বলেন, সলভ করে দিচ্ছি!`;
+    }
 
     if (isAngry && asksAllSocial) {
         return `আরে ভাই রাগ করছেন কেন! এই যে আমাদের অফিসিয়াল সব প্ল্যাটফর্মের লিংক একসাথে:\n\n` +
@@ -210,13 +220,13 @@ function getSmartFallbackReply(userMessage, hasImage = false, senderPhone = null
     }
     if (alreadyGreeted) {
         const casualReplies = [
-            `জি ভাই শুনছি, বলেন?`,
-            `হ্যাঁ ভাই বলেন, কী বিষয়?`,
-            `জি ভাই, কী জানতে চান বলেন দেখছি!`
+            `জি ভাই বলেন, কী খবর?`,
+            `আছি ভাই, বলেন কোনো হেল্প লাগবে?`,
+            `হ্যাঁ ভাই বলেন, শুনতে পাচ্ছি।`
         ];
         return casualReplies[Math.floor(Math.random() * casualReplies.length)];
     }
-    return `জি ভাই, কী বিষয় নিয়ে কথা বলতে চান বলেন?`;
+    return `জি ভাই বলেন, কী অবস্থা?`;
 }
 
 function requestGeminiApi(modelName, data, apiKey, timeoutMs = 5000) {
@@ -258,6 +268,57 @@ function requestGeminiApi(modelName, data, apiKey, timeoutMs = 5000) {
     });
 }
 
+// Sanitizes and validates multi-turn conversation contents for Google Gemini API
+// Ensures strict alternation (user -> model -> user) and valid start/end roles
+function formatGeminiContents(history = [], currentParts = []) {
+    const raw = [];
+    if (Array.isArray(history)) {
+        for (const item of history) {
+            if (!item || !item.role || !Array.isArray(item.parts) || item.parts.length === 0) continue;
+            const validParts = item.parts.filter(p => p && (p.text || p.inlineData));
+            if (validParts.length > 0) {
+                raw.push({ role: item.role === 'model' ? 'model' : 'user', parts: validParts });
+            }
+        }
+    }
+
+    const validCurrent = (currentParts || []).filter(p => p && (p.text || p.inlineData));
+    if (validCurrent.length > 0) {
+        raw.push({ role: 'user', parts: validCurrent });
+    }
+
+    // Must start with 'user'
+    while (raw.length > 0 && raw[0].role !== 'user') {
+        raw.shift();
+    }
+
+    // Strictly alternate roles; merge consecutive same-role turns
+    const clean = [];
+    for (const turn of raw) {
+        if (clean.length === 0) {
+            clean.push(turn);
+        } else {
+            const last = clean[clean.length - 1];
+            if (last.role === turn.role) {
+                last.parts = last.parts.concat(turn.parts);
+            } else {
+                clean.push(turn);
+            }
+        }
+    }
+
+    // Must end with 'user'
+    while (clean.length > 0 && clean[clean.length - 1].role !== 'user') {
+        clean.pop();
+    }
+
+    if (clean.length === 0) {
+        clean.push({ role: 'user', parts: validCurrent.length > 0 ? validCurrent : [{ text: 'Hello' }] });
+    }
+
+    return clean;
+}
+
 // AI Customer Support Assistant Helper
 async function generateAiSupportReply(userMessage, senderPhone, imageBase64 = null, mimeType = 'image/jpeg') {
     let knowledge = {};
@@ -276,8 +337,9 @@ async function generateAiSupportReply(userMessage, senderPhone, imageBase64 = nu
     } catch (_) {}
 
     const apiKey = process.env.GEMINI_API_KEY || currentConfig.gemini_api_key || config.gemini_api_key || '';
-    const primaryModel = process.env.GEMINI_MODEL || currentConfig.ai_model || config.ai_model || 'gemini-1.5-flash-8b';
-    const fallbackModel = (primaryModel === 'gemini-1.5-flash-8b') ? 'gemini-1.5-flash' : 'gemini-1.5-flash-8b';
+    const primaryModel = process.env.GEMINI_MODEL || currentConfig.ai_model || config.ai_model || 'gemini-1.5-flash';
+    const secondaryModel = (primaryModel === 'gemini-1.5-flash') ? 'gemini-2.0-flash' : 'gemini-1.5-flash';
+    const tertiaryModel = 'gemini-1.5-flash-8b';
 
     const mem = getChatMemory(senderPhone);
 
@@ -296,10 +358,14 @@ ABSOLUTE HUMAN RULES (NEVER BREAK THESE):
 2. NEVER say "GOMON HUB সাপোর্ট টিমে আপনাকে স্বাগতম", "কীভাবে সাহায্য করতে পারি?", "আমাদের সাপোর্ট টিমে নক করুন" (YOU ARE THE SUPPORT ADMIN!).
 3. NEVER repeat Salam in an active ongoing chat! If you already exchanged Salam or if it's mid-conversation, DO NOT say Salam again! Only say "ওয়ালাইকুম আসসালাম" if the user explicitly says Salam in this current message.
 4. Keep replies short, natural, friendly, and straight to the point (1 to 2 lines maximum) just like a real person typing on WhatsApp.
-5. Answer casual remarks casually:
+5. Answer casual remarks & identity naturally:
    - "kmn aso" -> "আলহামদুলিল্লাহ ভাই ভালো, আপনার কী খবর?"
    - "ki koro" -> "এই তো ভাই সাপোর্ট চ্যাটে আছি। কোনো হেল্প লাগবে?"
    - "sure to?" -> "হ্যাঁ ভাই একদম সিওর! বলেন কী লাগবে?"
+   - Identity ("tmi k?", "tumi ke?", "tmr porichoy ki?", "কে আপনি?"):
+     Directly answer: "আমি GOMON HUB টুর্নামেন্টের অফিসিয়াল সাপোর্ট অ্যাডমিন ভাই! টুর্নামেন্ট, ম্যাচ বা ওয়েবসাইট নিয়ে যেকোনো হেল্প লাগলে বলেন।"
+   - Gamer banter & slang ("Hur hla", "hala", "kire", "bhai"):
+     Answer chill & friendly: "আরে ভাই কি হইছে? হালা বলেন কেন 😂 কোনো সমস্যা নাকি?"
 6. Exact links & Guides (provide immediately whenever asked):
    - ALL PLATFORMS / ALL SOCIAL LINKS (when asked for "sob platform", "all links", "social links", "aksathe", or multiple platforms like fb, yt, tiktok, ig):
      Provide ALL official links together in one clean list:
@@ -341,9 +407,9 @@ ${JSON.stringify(knowledge, null, 2)}`;
         text: userMessage || 'এই স্ক্রিনশট বা ছবিটি দেখে আমাকে সাহায্য করুন ভাই।'
     });
 
-    // Multi-turn conversation contents (last 8 turns for tight context)
+    // Sanitized multi-turn conversation contents
     const historySlice = mem.history.slice(-8);
-    const contents = [...historySlice, { role: 'user', parts: currentParts }];
+    const contents = formatGeminiContents(historySlice, currentParts);
 
     const data = JSON.stringify({
         systemInstruction: {
@@ -354,16 +420,22 @@ ${JSON.stringify(knowledge, null, 2)}`;
 
     let cleanReply = null;
 
-    // 1. Try Primary Ultra-Fast Model (gemini-1.5-flash-8b, 10s realistic timeout)
+    // 1. Try Primary Ultra-Fast Model (10s realistic timeout)
     try {
         cleanReply = await requestGeminiApi(primaryModel, data, apiKey, 10000);
     } catch (primaryErr) {
-        console.warn(`⚠️ [GEMINI PRIMARY BUSY/503 (${primaryModel})] ${primaryErr.message}. Instantly failing over to backup model (${fallbackModel})...`);
-        // 2. Try Secondary Failover Model (gemini-1.5-flash, 6s timeout)
+        console.warn(`⚠️ [GEMINI PRIMARY BUSY/503 (${primaryModel})] ${primaryErr.message}. Instantly failing over to secondary model (${secondaryModel})...`);
+        // 2. Try Secondary Failover Model (8s timeout)
         try {
-            cleanReply = await requestGeminiApi(fallbackModel, data, apiKey, 6000);
+            cleanReply = await requestGeminiApi(secondaryModel, data, apiKey, 8000);
         } catch (backupErr) {
-            console.warn(`⚠️ [GEMINI BACKUP ERROR (${fallbackModel})] ${backupErr.message}. Switching to smart instant fallback.`);
+            console.warn(`⚠️ [GEMINI SECONDARY BUSY (${secondaryModel})] ${backupErr.message}. Failing over to tertiary model (${tertiaryModel})...`);
+            // 3. Try Tertiary Failover Model (6s timeout)
+            try {
+                cleanReply = await requestGeminiApi(tertiaryModel, data, apiKey, 6000);
+            } catch (tertErr) {
+                console.warn(`⚠️ [GEMINI TERTIARY ERROR (${tertiaryModel})] ${tertErr.message}. Switching to smart instant fallback.`);
+            }
         }
     }
 
@@ -382,6 +454,28 @@ ${JSON.stringify(knowledge, null, 2)}`;
     mem.history.push({ role: 'model', parts: [{ text: fallback }] });
     mem.greeted = true;
     return fallback;
+}
+
+// Per-sender promise queue to strictly serialize rapid burst messages from the same user
+// Prevents concurrent requests colliding on Gemini free tier quota (HTTP 429) and race conditions in chat memory.
+const senderQueues = {};
+
+function queueMessageForSender(senderPhone, fn) {
+    if (!senderQueues[senderPhone]) {
+        senderQueues[senderPhone] = Promise.resolve();
+    }
+    const nextPromise = senderQueues[senderPhone]
+        .then(() => fn())
+        .catch(err => {
+            console.error(`❌ [QUEUE ERROR for ${senderPhone}]:`, err.message);
+        });
+    senderQueues[senderPhone] = nextPromise;
+    nextPromise.finally(() => {
+        if (senderQueues[senderPhone] === nextPromise) {
+            delete senderQueues[senderPhone];
+        }
+    });
+    return nextPromise;
 }
 
 async function startWhatsAppBot() {
@@ -558,13 +652,13 @@ async function startWhatsAppBot() {
         }
     }
 
-    // Listen to incoming messages (handles multiple simultaneous messages without dropping any)
+    // Listen to incoming messages (handles multiple users simultaneously and queues bursts per user)
     sock.ev.on('messages.upsert', async ({ messages }) => {
         if (!messages || messages.length === 0) return;
         for (const msg of messages) {
-            processSingleMessage(msg).catch(err => {
-                console.error('❌ [PROCESS MESSAGE ERROR]', err.message);
-            });
+            if (!msg || !msg.message || msg.key.fromMe || msg.key.remoteJid === 'status@broadcast') continue;
+            const senderPhone = (msg.key.remoteJid || '').replace(/@.*$/, '');
+            queueMessageForSender(senderPhone, () => processSingleMessage(msg));
         }
     });
 }

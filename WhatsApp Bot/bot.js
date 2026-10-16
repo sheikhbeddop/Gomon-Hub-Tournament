@@ -179,6 +179,44 @@ function getSmartFallbackReply(userMessage, hasImage = false, senderPhone = null
     return `জি ভাই, বলেন কী জানতে চান?`;
 }
 
+function requestGeminiApi(modelName, data, apiKey, timeoutMs = 5000) {
+    return new Promise((resolve, reject) => {
+        const req = https.request({
+            hostname: 'generativelanguage.googleapis.com',
+            path: `/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
+            method: 'POST',
+            timeout: timeoutMs,
+            headers: {
+                'Content-Type': 'application/json',
+                'x-goog-api-key': apiKey,
+                'Content-Length': Buffer.byteLength(data)
+            }
+        }, (res) => {
+            let body = '';
+            res.on('data', chunk => body += chunk);
+            res.on('end', () => {
+                if (res.statusCode >= 200 && res.statusCode < 300) {
+                    try {
+                        const json = JSON.parse(body);
+                        const reply = json.candidates?.[0]?.content?.parts?.[0]?.text;
+                        if (reply) return resolve(reply.trim());
+                    } catch (_) {}
+                    return reject(new Error('Invalid JSON from Gemini'));
+                } else {
+                    return reject(new Error(`HTTP ${res.statusCode}: ${body.slice(0, 140)}`));
+                }
+            });
+        });
+        req.on('timeout', () => {
+            req.destroy();
+            reject(new Error(`Timeout after ${timeoutMs}ms`));
+        });
+        req.on('error', err => reject(err));
+        req.write(data);
+        req.end();
+    });
+}
+
 // AI Customer Support Assistant Helper
 async function generateAiSupportReply(userMessage, senderPhone, imageBase64 = null, mimeType = 'image/jpeg') {
     let knowledge = {};
@@ -197,7 +235,8 @@ async function generateAiSupportReply(userMessage, senderPhone, imageBase64 = nu
     } catch (_) {}
 
     const apiKey = process.env.GEMINI_API_KEY || currentConfig.gemini_api_key || config.gemini_api_key || '';
-    const model = process.env.GEMINI_MODEL || currentConfig.ai_model || config.ai_model || 'gemini-1.5-flash';
+    const primaryModel = process.env.GEMINI_MODEL || currentConfig.ai_model || config.ai_model || 'gemini-1.5-flash-8b';
+    const fallbackModel = (primaryModel === 'gemini-1.5-flash-8b') ? 'gemini-2.0-flash' : 'gemini-1.5-flash-8b';
 
     const mem = getChatMemory(senderPhone);
 
@@ -263,73 +302,36 @@ ${JSON.stringify(knowledge, null, 2)}`;
         contents
     });
 
-    return new Promise((resolve) => {
-        let settled = false;
-        const safeResolve = (val) => {
-            if (!settled) {
-                settled = true;
-                resolve(val);
-            }
-        };
+    let cleanReply = null;
 
-        const req = https.request({
-            hostname: 'generativelanguage.googleapis.com',
-            path: `/v1beta/models/${model}:generateContent?key=${apiKey}`,
-            method: 'POST',
-            timeout: 8000,
-            headers: {
-                'Content-Type': 'application/json',
-                'x-goog-api-key': apiKey,
-                'Content-Length': Buffer.byteLength(data)
-            }
-        }, (res) => {
-            let body = '';
-            res.on('data', chunk => body += chunk);
-            res.on('end', () => {
-                if (res.statusCode < 200 || res.statusCode >= 300) {
-                    console.warn(`⚠️ [GEMINI API ERROR HTTP ${res.statusCode}] ${body.slice(0, 180)}`);
-                }
-                try {
-                    const json = JSON.parse(body);
-                    const reply = json.candidates?.[0]?.content?.parts?.[0]?.text;
-                    if (reply) {
-                        const cleanReply = reply.trim();
-                        mem.history.push({ role: 'user', parts: [{ text: userMessage || '[ছবি]' }] });
-                        mem.history.push({ role: 'model', parts: [{ text: cleanReply }] });
-                        mem.greeted = true;
-                        if (mem.history.length > 12) {
-                            mem.history = mem.history.slice(-10);
-                        }
-                        return safeResolve(cleanReply);
-                    }
-                } catch (_) {}
-                const fallback = getSmartFallbackReply(userMessage, !!imageBase64, senderPhone);
-                mem.history.push({ role: 'user', parts: [{ text: userMessage || '[ছবি]' }] });
-                mem.history.push({ role: 'model', parts: [{ text: fallback }] });
-                mem.greeted = true;
-                safeResolve(fallback);
-            });
-        });
-        req.on('timeout', () => {
-            req.destroy();
-            console.warn(`⚠️ [GEMINI TIMEOUT] API took >8s for ${senderPhone}. Instant smart fallback sent.`);
-            const fallback = getSmartFallbackReply(userMessage, !!imageBase64, senderPhone);
-            mem.history.push({ role: 'user', parts: [{ text: userMessage || '[ছবি]' }] });
-            mem.history.push({ role: 'model', parts: [{ text: fallback }] });
-            mem.greeted = true;
-            safeResolve(fallback);
-        });
-        req.on('error', (err) => {
-            console.error(`❌ [GEMINI NETWORK ERROR] ${err.message}`);
-            const fallback = getSmartFallbackReply(userMessage, !!imageBase64, senderPhone);
-            mem.history.push({ role: 'user', parts: [{ text: userMessage || '[ছবি]' }] });
-            mem.history.push({ role: 'model', parts: [{ text: fallback }] });
-            mem.greeted = true;
-            safeResolve(fallback);
-        });
-        req.write(data);
-        req.end();
-    });
+    // 1. Try Primary Ultra-Fast Model (gemini-1.5-flash-8b, 5s timeout)
+    try {
+        cleanReply = await requestGeminiApi(primaryModel, data, apiKey, 5000);
+    } catch (primaryErr) {
+        console.warn(`⚠️ [GEMINI PRIMARY BUSY/503 (${primaryModel})] ${primaryErr.message}. Instantly failing over to backup model (${fallbackModel})...`);
+        // 2. Try Secondary Failover Model (gemini-2.0-flash, 4s timeout)
+        try {
+            cleanReply = await requestGeminiApi(fallbackModel, data, apiKey, 4000);
+        } catch (backupErr) {
+            console.warn(`⚠️ [GEMINI BACKUP ERROR (${fallbackModel})] ${backupErr.message}. Switching to smart instant fallback.`);
+        }
+    }
+
+    if (cleanReply) {
+        mem.history.push({ role: 'user', parts: [{ text: userMessage || '[ছবি]' }] });
+        mem.history.push({ role: 'model', parts: [{ text: cleanReply }] });
+        mem.greeted = true;
+        if (mem.history.length > 12) {
+            mem.history = mem.history.slice(-10);
+        }
+        return cleanReply;
+    }
+
+    const fallback = getSmartFallbackReply(userMessage, !!imageBase64, senderPhone);
+    mem.history.push({ role: 'user', parts: [{ text: userMessage || '[ছবি]' }] });
+    mem.history.push({ role: 'model', parts: [{ text: fallback }] });
+    mem.greeted = true;
+    return fallback;
 }
 
 async function startWhatsAppBot() {

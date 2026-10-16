@@ -197,7 +197,7 @@ async function generateAiSupportReply(userMessage, senderPhone, imageBase64 = nu
     } catch (_) {}
 
     const apiKey = process.env.GEMINI_API_KEY || currentConfig.gemini_api_key || config.gemini_api_key || '';
-    const model = process.env.GEMINI_MODEL || currentConfig.ai_model || config.ai_model || 'gemini-3.5-flash-lite';
+    const model = process.env.GEMINI_MODEL || currentConfig.ai_model || config.ai_model || 'gemini-1.5-flash';
 
     const mem = getChatMemory(senderPhone);
 
@@ -264,10 +264,19 @@ ${JSON.stringify(knowledge, null, 2)}`;
     });
 
     return new Promise((resolve) => {
+        let settled = false;
+        const safeResolve = (val) => {
+            if (!settled) {
+                settled = true;
+                resolve(val);
+            }
+        };
+
         const req = https.request({
             hostname: 'generativelanguage.googleapis.com',
             path: `/v1beta/models/${model}:generateContent?key=${apiKey}`,
             method: 'POST',
+            timeout: 8000,
             headers: {
                 'Content-Type': 'application/json',
                 'x-goog-api-key': apiKey,
@@ -291,15 +300,24 @@ ${JSON.stringify(knowledge, null, 2)}`;
                         if (mem.history.length > 12) {
                             mem.history = mem.history.slice(-10);
                         }
-                        return resolve(cleanReply);
+                        return safeResolve(cleanReply);
                     }
                 } catch (_) {}
                 const fallback = getSmartFallbackReply(userMessage, !!imageBase64, senderPhone);
                 mem.history.push({ role: 'user', parts: [{ text: userMessage || '[ছবি]' }] });
                 mem.history.push({ role: 'model', parts: [{ text: fallback }] });
                 mem.greeted = true;
-                resolve(fallback);
+                safeResolve(fallback);
             });
+        });
+        req.on('timeout', () => {
+            req.destroy();
+            console.warn(`⚠️ [GEMINI TIMEOUT] API took >8s for ${senderPhone}. Instant smart fallback sent.`);
+            const fallback = getSmartFallbackReply(userMessage, !!imageBase64, senderPhone);
+            mem.history.push({ role: 'user', parts: [{ text: userMessage || '[ছবি]' }] });
+            mem.history.push({ role: 'model', parts: [{ text: fallback }] });
+            mem.greeted = true;
+            safeResolve(fallback);
         });
         req.on('error', (err) => {
             console.error(`❌ [GEMINI NETWORK ERROR] ${err.message}`);
@@ -307,7 +325,7 @@ ${JSON.stringify(knowledge, null, 2)}`;
             mem.history.push({ role: 'user', parts: [{ text: userMessage || '[ছবি]' }] });
             mem.history.push({ role: 'model', parts: [{ text: fallback }] });
             mem.greeted = true;
-            resolve(fallback);
+            safeResolve(fallback);
         });
         req.write(data);
         req.end();
@@ -371,12 +389,8 @@ async function startWhatsAppBot() {
         }
     });
 
-    // Listen to incoming messages
-    sock.ev.on('messages.upsert', async ({ messages }) => {
-        if (!messages || messages.length === 0) return;
-        const msg = messages[0];
-
-        if (!msg.message || msg.key.fromMe || msg.key.remoteJid === 'status@broadcast') return;
+    async function processSingleMessage(msg) {
+        if (!msg || !msg.message || msg.key.fromMe || msg.key.remoteJid === 'status@broadcast') return;
 
         const senderJid = msg.key.remoteJid;
         const senderPhone = senderJid.replace(/@.*$/, '');
@@ -476,6 +490,8 @@ async function startWhatsAppBot() {
             // General conversation, greetings & queries handled by AI Support Agent
             console.log(`💬 [MESSAGE RECEIVED] From: ${senderPhone} | Text: "${text}" | HasImage: ${!!imageBase64}`);
             try {
+                // Instantly notify user with typing presence so they know bot is online & responding
+                sock.sendPresenceUpdate('composing', senderJid).catch(() => {});
                 const aiReply = await generateAiSupportReply(text, senderPhone, imageBase64, imageMime);
                 await sock.sendMessage(senderJid, { text: aiReply });
                 console.log(`🤖 [AI SUPPORT REPLIED] To: ${senderPhone}`);
@@ -484,7 +500,19 @@ async function startWhatsAppBot() {
                 await sock.sendMessage(senderJid, {
                     text: `স্বাগতম GOMON HUB-এ।\nআপনার স্কিলই আপনার পরিচয়। সেরাদের সাথে লড়াই করে তৈরি করুন নিজের অবস্থান。\n\nOur tournament website 🖇️ https://rb.gy/feuqry`
                 });
+            } finally {
+                sock.sendPresenceUpdate('paused', senderJid).catch(() => {});
             }
+        }
+    }
+
+    // Listen to incoming messages (handles multiple simultaneous messages without dropping any)
+    sock.ev.on('messages.upsert', async ({ messages }) => {
+        if (!messages || messages.length === 0) return;
+        for (const msg of messages) {
+            processSingleMessage(msg).catch(err => {
+                console.error('❌ [PROCESS MESSAGE ERROR]', err.message);
+            });
         }
     });
 }

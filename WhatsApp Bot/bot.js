@@ -113,7 +113,7 @@ function getSmartFallbackReply(userMessage, hasImage = false, senderPhone = null
     const asksRoomId = /(?:room id|রুম আইডি|পাসওয়ার্ড|password|id pass|কখন পাব|ম্যাচ কখন|শুরু কখন)/i.test(raw);
     const asksFee = /(?:কত টাকা|ফি কত|এন্ট্রি ফি|entry fee|match fee|কতো টাকার ম্যাচ|টাকা লাগবে)/i.test(raw);
     const asksWithdraw = /(?:withdraw|উইথড্র|টাকা তুলব|ক্যাশআউট|উইথড্র কীভাবে|bkash|nagad|বিকাশ|নগদ)/i.test(raw);
-    const asksRules = /(?:rules|নিয়ম|rules|চিট|ব্যান নীতি)/i.test(raw);
+    const asksRules = /(?:rules|নিয়ম|চিট|ব্যান নীতি)/i.test(raw);
     const isThanks = /(?:ধন্যবাদ|thanks|thx|tnx|shukriya|শুকরিয়া)/i.test(raw);
     const isHowAreYou = /(?:কেমন আছেন|kemon achen|bhalo achen|ভালো আছেন|kmn aso|kemon aso)/i.test(raw);
     const isDoing = /(?:ki koro|কী করো|কি করো|কি কর|ki korso)/i.test(raw);
@@ -243,6 +243,7 @@ function requestGeminiApi(modelName, data, apiKey, timeoutMs = 5000) {
                     } catch (_) {}
                     return reject(new Error('Invalid JSON from Gemini'));
                 } else {
+                    console.warn(`⚠️ [GEMINI API ERROR HTTP ${res.statusCode} (${modelName})] ${body.slice(0, 180)}`);
                     return reject(new Error(`HTTP ${res.statusCode}: ${body.slice(0, 140)}`));
                 }
             });
@@ -348,17 +349,7 @@ ${JSON.stringify(knowledge, null, 2)}`;
         systemInstruction: {
             parts: [{ text: systemPrompt }]
         },
-        contents,
-        generationConfig: {
-            temperature: 0.7,
-            maxOutputTokens: 250
-        },
-        safetySettings: [
-            { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
-            { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
-            { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
-            { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
-        ]
+        contents
     });
 
     let cleanReply = null;

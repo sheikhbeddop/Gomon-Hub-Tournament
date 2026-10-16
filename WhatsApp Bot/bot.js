@@ -100,10 +100,15 @@ function getSmartFallbackReply(userMessage, hasImage = false, senderPhone = null
     const asksTiktok = /(?:tiktok|টিকটক)/i.test(raw);
     const asksIg = /(?:instagram|insta|ig|ইনস্টা|ইন্সটা)/i.test(raw);
     const asksThreads = /(?:threads|থ্রেডস)/i.test(raw);
+
+    const platformMentionsCount = [asksFb, asksYt, asksTiktok, asksIg, asksThreads].filter(Boolean).length;
+    const asksAllSocial = /(?:sob|shob|সব|all).*(?:platform|link|লিংক|প্ল্যাটফর্ম|সোশ্যাল|social|media|গূলা|গুলা|গুলো)|(?:social|সোশ্যাল).*(?:link|লিংক)|(?:aksathe|একসাথে).*(?:link|লিংক|দিতে|দেও|দাও|problem)|(?:link|লিংক).*(?:aksathe|একসাথে)|(?:platform|প্ল্যাটফর্ম)/i.test(raw) || (platformMentionsCount >= 2);
+    const isAngry = /(?:bainchod|mc|bc|madarchod|khankir|chutiya|বাইনচোদ|খানকির|চুদি|শালা|হারামি)/i.test(raw);
+
     const asksAccount = /(?:account|একাউন্ট|অ্যাকাউন্ট|খুলব কীভাবে|আইডি খুলব|register|সাইন আপ)/i.test(raw);
     const asksDeposit = /(?:deposit|ডিপোজিট|টাকা অ্যাড|ব্যালেন্স অ্যাড|টাকা ভরব|add money)/i.test(raw);
     const asksApp = /(?:app|অ্যাপ|apk|ইনস্টল|ইন্সটল)/i.test(raw);
-    const asksLink = /(?:website|ওয়েবসাইট|ওয়েবসাইট|web link|সাইট লিংক|সাইট কোথায়|সাইট খুঁজে|কোথায় পাব)/i.test(raw) || (raw.includes('link') && !asksFb && !asksYt && !asksTiktok && !asksIg && !asksThreads);
+    const asksLink = /(?:website|ওয়েবসাইট|ওয়েবসাইট|web link|সাইট লিংক|সাইট কোথায়|সাইট খুঁজে|কোথায় পাব)/i.test(raw) || (raw.includes('link') && !asksAllSocial && !asksFb && !asksYt && !asksTiktok && !asksIg && !asksThreads);
     const asksJoin = /(?:kivabe khelbo|কীভাবে খেলব|খেলব কীভাবে|খেলব কেমনে|join|কাস্টম|ম্যাচ কীভাবে|নিবন্ধন)/i.test(raw);
     const asksRoomId = /(?:room id|রুম আইডি|পাসওয়ার্ড|password|id pass|কখন পাব|ম্যাচ কখন|শুরু কখন)/i.test(raw);
     const asksFee = /(?:কত টাকা|ফি কত|এন্ট্রি ফি|entry fee|match fee|কতো টাকার ম্যাচ|টাকা লাগবে)/i.test(raw);
@@ -115,6 +120,32 @@ function getSmartFallbackReply(userMessage, hasImage = false, senderPhone = null
     const isSure = /(?:sure|সিওর|শিওর)/i.test(raw);
 
     if (mem) mem.greeted = true;
+
+    if (isAngry && asksAllSocial) {
+        return `আরে ভাই রাগ করছেন কেন! এই যে আমাদের অফিসিয়াল সব প্ল্যাটফর্মের লিংক একসাথে:\n\n` +
+            `🌐 Website: https://rb.gy/feuqry\n` +
+            `📺 YouTube: https://www.youtube.com/@gomonhub\n` +
+            `📺 2nd Channel: https://www.youtube.com/@mrgomonhub\n` +
+            `🌐 Facebook: https://www.facebook.com/gomonhub\n` +
+            `🎵 TikTok: https://www.tiktok.com/@gomon_hub\n` +
+            `📸 Instagram: https://www.instagram.com/gomon_gamer\n` +
+            `🧵 Threads: https://www.threads.net/@gomon_hub`;
+    }
+
+    if (asksAllSocial) {
+        return `এই যে ভাই আমাদের অফিসিয়াল সব প্ল্যাটফর্ম ও সোশ্যাল মিডিয়ার লিংক একসাথে:\n\n` +
+            `🌐 Website: https://rb.gy/feuqry\n` +
+            `📺 YouTube: https://www.youtube.com/@gomonhub\n` +
+            `📺 2nd Channel: https://www.youtube.com/@mrgomonhub\n` +
+            `🌐 Facebook: https://www.facebook.com/gomonhub\n` +
+            `🎵 TikTok: https://www.tiktok.com/@gomon_hub\n` +
+            `📸 Instagram: https://www.instagram.com/gomon_gamer\n` +
+            `🧵 Threads: https://www.threads.net/@gomon_hub`;
+    }
+
+    if (isAngry) {
+        return `আরে ভাই রাগ করছেন কেন! বলেন কী সমস্যা বা কী দরকার, আমি এখনই সমাধান করে দিচ্ছি ভাই।`;
+    }
 
     if (asksFb) {
         return `এই যে ভাই আমাদের অফিসিয়াল ফেসবুক পেজ:\nhttps://www.facebook.com/gomonhub`;
@@ -171,12 +202,21 @@ function getSmartFallbackReply(userMessage, hasImage = false, senderPhone = null
         return isSalam ? `ওয়ালাইকুম আসসালাম ভাই! আলহামদুলিল্লাহ ভালো আছি। আপনার কী অবস্থা?` : `আলহামদুলিল্লাহ ভাই ভালো আছি। আপনি কেমন আছেন?`;
     }
     if (isSalam) {
-        return `ওয়ালাইকুম আসসালাম ভাই! বলেন কীভাবে হেল্প করতে পারি?`;
+        return `ওয়ালাইকুম আসসালাম ভাই! কোনো বিষয়ে হেল্প লাগলে বলেন।`;
+    }
+    const isInsisting = /(?:bolo|বলো|বল|please|প্লিজ|বলেন|bolte|kivave|কীভাবে|কিভাবে)/i.test(raw);
+    if (isInsisting) {
+        return `আরে ভাই সত্যি বলতে এটা নিয়ে আমার জানা নাই 😂 টুর্নামেন্ট, ম্যাচ বা ওয়েবসাইট নিয়ে কিছু জানার থাকলে বলেন দেখছি!`;
     }
     if (alreadyGreeted) {
-        return `জি ভাই বলেন, কীভাবে হেল্প করতে পারি?`;
+        const casualReplies = [
+            `জি ভাই শুনছি, বলেন?`,
+            `হ্যাঁ ভাই বলেন, কী বিষয়?`,
+            `জি ভাই, কী জানতে চান বলেন দেখছি!`
+        ];
+        return casualReplies[Math.floor(Math.random() * casualReplies.length)];
     }
-    return `জি ভাই, বলেন কী জানতে চান?`;
+    return `জি ভাই, কী বিষয় নিয়ে কথা বলতে চান বলেন?`;
 }
 
 function requestGeminiApi(modelName, data, apiKey, timeoutMs = 5000) {
@@ -236,7 +276,7 @@ async function generateAiSupportReply(userMessage, senderPhone, imageBase64 = nu
 
     const apiKey = process.env.GEMINI_API_KEY || currentConfig.gemini_api_key || config.gemini_api_key || '';
     const primaryModel = process.env.GEMINI_MODEL || currentConfig.ai_model || config.ai_model || 'gemini-1.5-flash-8b';
-    const fallbackModel = (primaryModel === 'gemini-1.5-flash-8b') ? 'gemini-2.0-flash' : 'gemini-1.5-flash-8b';
+    const fallbackModel = (primaryModel === 'gemini-1.5-flash-8b') ? 'gemini-1.5-flash' : 'gemini-1.5-flash-8b';
 
     const mem = getChatMemory(senderPhone);
 
@@ -260,6 +300,15 @@ ABSOLUTE HUMAN RULES (NEVER BREAK THESE):
    - "ki koro" -> "এই তো ভাই সাপোর্ট চ্যাটে আছি। কোনো হেল্প লাগবে?"
    - "sure to?" -> "হ্যাঁ ভাই একদম সিওর! বলেন কী লাগবে?"
 6. Exact links & Guides (provide immediately whenever asked):
+   - ALL PLATFORMS / ALL SOCIAL LINKS (when asked for "sob platform", "all links", "social links", "aksathe", or multiple platforms like fb, yt, tiktok, ig):
+     Provide ALL official links together in one clean list:
+     • Website: https://rb.gy/feuqry
+     • YouTube: https://www.youtube.com/@gomonhub
+     • 2nd Channel: https://www.youtube.com/@mrgomonhub
+     • Facebook: https://www.facebook.com/gomonhub
+     • TikTok: https://www.tiktok.com/@gomon_hub
+     • Instagram: https://www.instagram.com/gomon_gamer
+     • Threads: https://www.threads.net/@gomon_hub
    - Facebook page: https://www.facebook.com/gomonhub
    - YouTube channel: https://www.youtube.com/@gomonhub (Mr GOMON / GOMON GAMER)
    - 2nd YouTube: https://www.youtube.com/@mrgomonhub
@@ -299,19 +348,29 @@ ${JSON.stringify(knowledge, null, 2)}`;
         systemInstruction: {
             parts: [{ text: systemPrompt }]
         },
-        contents
+        contents,
+        generationConfig: {
+            temperature: 0.7,
+            maxOutputTokens: 250
+        },
+        safetySettings: [
+            { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
+            { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
+            { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
+            { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
+        ]
     });
 
     let cleanReply = null;
 
-    // 1. Try Primary Ultra-Fast Model (gemini-1.5-flash-8b, 5s timeout)
+    // 1. Try Primary Ultra-Fast Model (gemini-1.5-flash-8b, 10s realistic timeout)
     try {
-        cleanReply = await requestGeminiApi(primaryModel, data, apiKey, 5000);
+        cleanReply = await requestGeminiApi(primaryModel, data, apiKey, 10000);
     } catch (primaryErr) {
         console.warn(`⚠️ [GEMINI PRIMARY BUSY/503 (${primaryModel})] ${primaryErr.message}. Instantly failing over to backup model (${fallbackModel})...`);
-        // 2. Try Secondary Failover Model (gemini-2.0-flash, 4s timeout)
+        // 2. Try Secondary Failover Model (gemini-1.5-flash, 6s timeout)
         try {
-            cleanReply = await requestGeminiApi(fallbackModel, data, apiKey, 4000);
+            cleanReply = await requestGeminiApi(fallbackModel, data, apiKey, 6000);
         } catch (backupErr) {
             console.warn(`⚠️ [GEMINI BACKUP ERROR (${fallbackModel})] ${backupErr.message}. Switching to smart instant fallback.`);
         }

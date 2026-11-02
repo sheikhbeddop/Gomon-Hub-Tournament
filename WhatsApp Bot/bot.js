@@ -104,6 +104,7 @@ function getSmartFallbackReply(userMessage, hasImage = false, senderPhone = null
     const platformMentionsCount = [asksFb, asksYt, asksTiktok, asksIg, asksThreads].filter(Boolean).length;
     const asksAllSocial = /(?:sob|shob|সব|all).*(?:platform|link|লিংক|প্ল্যাটফর্ম|সোশ্যাল|social|media|গূলা|গুলা|গুলো)|(?:social|সোশ্যাল).*(?:link|লিংক)|(?:aksathe|একসাথে).*(?:link|লিংক|দিতে|দেও|দাও|problem)|(?:link|লিংক).*(?:aksathe|একসাথে)|(?:platform|প্ল্যাটফর্ম)/i.test(raw) || (platformMentionsCount >= 2);
     const isAngry = /(?:bainchod|mc|bc|madarchod|khankir|chutiya|বাইনচোদ|খানকির|চুদি|শালা|হারামি)/i.test(raw);
+    const isScamAccusation = /(?:scam|scammer|স্ক্যাম|স্ক্যামার|fraud|প্রতারক|ভুয়া|ভুয়া|fake|চিটার|চোর|fack|baje org|org valo na|valo na|trust|bisshas|বিশ্বাস)/i.test(raw);
 
     const asksAccount = /(?:account|একাউন্ট|অ্যাকাউন্ট|খুলব কীভাবে|আইডি খুলব|register|সাইন আপ)/i.test(raw);
     const asksDeposit = /(?:deposit|ডিপোজিট|টাকা অ্যাড|ব্যালেন্স অ্যাড|টাকা ভরব|add money)/i.test(raw);
@@ -129,6 +130,10 @@ function getSmartFallbackReply(userMessage, hasImage = false, senderPhone = null
 
     if (isHalaBanter) {
         return `আরে ভাই কি হইছে? হালা বলেন কেন 😂 কোনো টুর্নামেন্ট বা ওয়েবসাইট নিয়ে সমস্যা হলে বলেন, সলভ করে দিচ্ছি!`;
+    }
+
+    if (isScamAccusation) {
+        return `আরে না ভাই! GOMON HUB হলো ইউটিউবার Mr GOMON (@gomonhub)-এর অফিসিয়াল ও ১০০% বিশ্বস্ত গেমিং প্ল্যাটফর্ম। আমাদের ইউটিউব ও ফেসবুক পেজ ঘুরে দেখতে পারেন, শত শত প্লেয়ার নিয়মিত টুর্নামেন্ট খেলে সাথে সাথে উইথড্র পাচ্ছে। কোনো ফেক বা স্ক্যামের সুযোগ নেই ভাই ❤️`;
     }
 
     if (isAngry && asksAllSocial) {
@@ -222,9 +227,17 @@ function getSmartFallbackReply(userMessage, hasImage = false, senderPhone = null
         const casualReplies = [
             `জি ভাই বলেন, কী খবর?`,
             `আছি ভাই, বলেন কোনো হেল্প লাগবে?`,
-            `হ্যাঁ ভাই বলেন, শুনতে পাচ্ছি।`
+            `হ্যাঁ ভাই বলেন, শুনতে পাচ্ছি।`,
+            `বলেন ভাই, কীভাবে সাহায্য করতে পারি?`,
+            `জি ভাই, কী বিষয় বলুন?`
         ];
-        return casualReplies[Math.floor(Math.random() * casualReplies.length)];
+        let chosen = casualReplies[Math.floor(Math.random() * casualReplies.length)];
+        if (mem && mem.lastFallback && casualReplies.length > 1) {
+            const nonRepeated = casualReplies.filter(r => r !== mem.lastFallback);
+            chosen = nonRepeated[Math.floor(Math.random() * nonRepeated.length)];
+        }
+        if (mem) mem.lastFallback = chosen;
+        return chosen;
     }
     return `জি ভাই বলেন, কী অবস্থা?`;
 }
@@ -254,13 +267,17 @@ function requestGeminiApi(modelName, data, apiKey, timeoutMs = 5000) {
                     return reject(new Error('Invalid JSON from Gemini'));
                 } else {
                     console.warn(`⚠️ [GEMINI API ERROR HTTP ${res.statusCode} (${modelName})] ${body.slice(0, 180)}`);
-                    return reject(new Error(`HTTP ${res.statusCode}: ${body.slice(0, 140)}`));
+                    const apiErr = new Error(`HTTP ${res.statusCode}: ${body.slice(0, 140)}`);
+                    apiErr.statusCode = res.statusCode;
+                    return reject(apiErr);
                 }
             });
         });
         req.on('timeout', () => {
             req.destroy();
-            reject(new Error(`Timeout after ${timeoutMs}ms`));
+            const timeoutErr = new Error(`Timeout after ${timeoutMs}ms`);
+            timeoutErr.statusCode = 408;
+            reject(timeoutErr);
         });
         req.on('error', err => reject(err));
         req.write(data);
@@ -319,6 +336,51 @@ function formatGeminiContents(history = [], currentParts = []) {
     return clean;
 }
 
+// -------------------------------------------------------------
+// Dynamic Multi-Key Pool & Round-Robin Load Balancer for Gemini
+// -------------------------------------------------------------
+let keyPoolIndex = 0;
+const keyCooldowns = {}; // apiKey -> cooldownUntilTimestamp
+
+function getGeminiApiKeyPool() {
+    let currentConfig = config;
+    try {
+        if (fs.existsSync(configPath)) {
+            currentConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+        }
+    } catch (_) {}
+
+    const raw = process.env.GEMINI_API_KEYS || process.env.GEMINI_API_KEY || currentConfig.gemini_api_keys || currentConfig.gemini_api_key || config.gemini_api_keys || config.gemini_api_key || '';
+
+    let rawKeys = [];
+    if (Array.isArray(raw)) {
+        rawKeys = raw;
+    } else if (typeof raw === 'string') {
+        rawKeys = raw.split(',');
+    }
+
+    return Array.from(new Set(rawKeys.map(k => (typeof k === 'string' ? k.trim() : '')).filter(Boolean)));
+}
+
+function getOrderedCandidateKeys() {
+    const pool = getGeminiApiKeyPool();
+    if (pool.length === 0) return [];
+
+    const now = Date.now();
+    const startIdx = keyPoolIndex % pool.length;
+    keyPoolIndex = (keyPoolIndex + 1) % pool.length;
+
+    const ordered = [];
+    for (let i = 0; i < pool.length; i++) {
+        ordered.push(pool[(startIdx + i) % pool.length]);
+    }
+
+    const available = ordered.filter(k => !keyCooldowns[k] || keyCooldowns[k] <= now);
+    const coolingDown = ordered.filter(k => keyCooldowns[k] && keyCooldowns[k] > now);
+
+    return available.length > 0 ? available.concat(coolingDown) : coolingDown;
+}
+
 // AI Customer Support Assistant Helper
 async function generateAiSupportReply(userMessage, senderPhone, imageBase64 = null, mimeType = 'image/jpeg') {
     let knowledge = {};
@@ -336,14 +398,15 @@ async function generateAiSupportReply(userMessage, senderPhone, imageBase64 = nu
         }
     } catch (_) {}
 
-    const apiKey = process.env.GEMINI_API_KEY || currentConfig.gemini_api_key || config.gemini_api_key || '';
+    const candidateKeys = getOrderedCandidateKeys();
     const primaryModel = process.env.GEMINI_MODEL || currentConfig.ai_model || config.ai_model || 'gemini-1.5-flash';
     const secondaryModel = (primaryModel === 'gemini-1.5-flash') ? 'gemini-2.0-flash' : 'gemini-1.5-flash';
     const tertiaryModel = 'gemini-1.5-flash-8b';
 
     const mem = getChatMemory(senderPhone);
 
-    if (!apiKey) {
+    if (candidateKeys.length === 0) {
+        console.warn(`⚠️ [GEMINI] No API keys configured in GEMINI_API_KEYS or config.json. Using fallback.`);
         const fallback = getSmartFallbackReply(userMessage, !!imageBase64, senderPhone);
         mem.history.push({ role: 'user', parts: [{ text: userMessage || '[ছবি]' }] });
         mem.history.push({ role: 'model', parts: [{ text: fallback }] });
@@ -366,6 +429,8 @@ ABSOLUTE HUMAN RULES (NEVER BREAK THESE):
      Directly answer: "আমি GOMON HUB টুর্নামেন্টের অফিসিয়াল সাপোর্ট অ্যাডমিন ভাই! টুর্নামেন্ট, ম্যাচ বা ওয়েবসাইট নিয়ে যেকোনো হেল্প লাগলে বলেন।"
    - Gamer banter & slang ("Hur hla", "hala", "kire", "bhai"):
      Answer chill & friendly: "আরে ভাই কি হইছে? হালা বলেন কেন 😂 কোনো সমস্যা নাকি?"
+   - Accusations & Doubts ("scammer", "fake", "tmr org valo na", "trust korina", "try korbo na", "fack"):
+     Answer calm, friendly & reassuring: "আরে না ভাই! GOMON HUB হলো ইউটিউবার Mr GOMON (@gomonhub)-এর অফিসিয়াল ও ট্রাস্টেড প্ল্যাটফর্ম। আমাদের ইউটিউব/ফেসবুক দেখেন, শত শত প্লেয়ার রেগুলার ম্যাচ খেলে ইনস্ট্যান্ট উইথড্র পাচ্ছে। কোনো সন্দেহ থাকলে সাইট ঘুরে দেখতে পারেন ভাই ❤️"
 6. Exact links & Guides (provide immediately whenever asked):
    - ALL PLATFORMS / ALL SOCIAL LINKS (when asked for "sob platform", "all links", "social links", "aksathe", or multiple platforms like fb, yt, tiktok, ig):
      Provide ALL official links together in one clean list:
@@ -415,26 +480,56 @@ ${JSON.stringify(knowledge, null, 2)}`;
         systemInstruction: {
             parts: [{ text: systemPrompt }]
         },
-        contents
+        contents,
+        safetySettings: [
+            { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+            { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+            { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+            { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' }
+        ]
     });
 
     let cleanReply = null;
 
-    // 1. Try Primary Ultra-Fast Model (10s realistic timeout)
-    try {
-        cleanReply = await requestGeminiApi(primaryModel, data, apiKey, 10000);
-    } catch (primaryErr) {
-        console.warn(`⚠️ [GEMINI PRIMARY BUSY/503 (${primaryModel})] ${primaryErr.message}. Instantly failing over to secondary model (${secondaryModel})...`);
-        // 2. Try Secondary Failover Model (8s timeout)
+    // Failover loop across candidate API keys
+    for (let i = 0; i < candidateKeys.length; i++) {
+        const activeKey = candidateKeys[i];
+        const maskedKey = activeKey.length > 8 ? `${activeKey.slice(0, 4)}...${activeKey.slice(-4)}` : 'KEY';
+
         try {
-            cleanReply = await requestGeminiApi(secondaryModel, data, apiKey, 8000);
-        } catch (backupErr) {
-            console.warn(`⚠️ [GEMINI SECONDARY BUSY (${secondaryModel})] ${backupErr.message}. Failing over to tertiary model (${tertiaryModel})...`);
-            // 3. Try Tertiary Failover Model (6s timeout)
+            // 1. Try Primary Model (10s realistic timeout)
+            cleanReply = await requestGeminiApi(primaryModel, data, activeKey, 10000);
+            if (cleanReply) break;
+        } catch (primaryErr) {
+            if (primaryErr.statusCode === 429) {
+                console.warn(`⚠️ [GEMINI 429 RATE LIMIT on Key ${maskedKey}] Putting key on 60s cooldown. Auto-failing over to next key in pool...`);
+                keyCooldowns[activeKey] = Date.now() + 60000;
+                continue;
+            }
+
+            console.warn(`⚠️ [GEMINI PRIMARY ERROR (${primaryModel}) Key ${maskedKey}] ${primaryErr.message}. Trying secondary model...`);
             try {
-                cleanReply = await requestGeminiApi(tertiaryModel, data, apiKey, 6000);
-            } catch (tertErr) {
-                console.warn(`⚠️ [GEMINI TERTIARY ERROR (${tertiaryModel})] ${tertErr.message}. Switching to smart instant fallback.`);
+                // 2. Try Secondary Model (8s timeout)
+                cleanReply = await requestGeminiApi(secondaryModel, data, activeKey, 8000);
+                if (cleanReply) break;
+            } catch (secErr) {
+                if (secErr.statusCode === 429) {
+                    console.warn(`⚠️ [GEMINI 429 RATE LIMIT (Sec) on Key ${maskedKey}] Putting key on 60s cooldown. Auto-failing over to next key...`);
+                    keyCooldowns[activeKey] = Date.now() + 60000;
+                    continue;
+                }
+
+                console.warn(`⚠️ [GEMINI SECONDARY ERROR (${secondaryModel}) Key ${maskedKey}] ${secErr.message}. Trying tertiary model...`);
+                try {
+                    // 3. Try Tertiary Model (6s timeout)
+                    cleanReply = await requestGeminiApi(tertiaryModel, data, activeKey, 6000);
+                    if (cleanReply) break;
+                } catch (tertErr) {
+                    if (tertErr.statusCode === 429) {
+                        keyCooldowns[activeKey] = Date.now() + 60000;
+                    }
+                    console.warn(`⚠️ [GEMINI TERTIARY ERROR (${tertiaryModel}) Key ${maskedKey}] ${tertErr.message}.`);
+                }
             }
         }
     }
@@ -528,7 +623,9 @@ async function startWhatsAppBot() {
             currentQrDataUrl = null;
             currentPairingCode = null;
             const sk = getSessionKeyString();
+            const initialKeys = getGeminiApiKeyPool();
             console.log('\n✅ [WHATSAPP CONNECTED] Bot is active & listening 24/7!\n');
+            console.log(`🔑 [GEMINI KEY POOL] ${initialKeys.length} active key(s) detected and ready for load balancing.`);
             if (sk) {
                 console.log(`🔑 [PERMANENT SESSION KEY]: ${sk}\n`);
             }

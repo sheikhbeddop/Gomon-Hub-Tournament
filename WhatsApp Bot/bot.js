@@ -35,6 +35,33 @@ if (fs.existsSync(configPath)) {
 // sessionToken -> { phone, code, verified: false, expiresAt, senderPhone }
 const pendingSessions = {};
 
+// Active client project proposals waiting for Admin Approval
+// clientPhone -> { clientJid, clientPhone, project, budget, details, createdAt }
+const pendingClientDeals = {};
+let latestPendingDealPhone = null;
+
+// Dynamic Admin Configuration from Render Environment or config.json
+function getAdminConfig() {
+    let currentConfig = config;
+    try {
+        if (fs.existsSync(configPath)) {
+            currentConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+        }
+    } catch (_) {}
+
+    let rawPhone = (process.env.ADMIN_PHONE || currentConfig.admin_phone || config.admin_phone || '').trim();
+    let cleanPhone = rawPhone.replace(/\D/g, '');
+    if (cleanPhone.startsWith('01') && cleanPhone.length === 11) {
+        cleanPhone = '88' + cleanPhone;
+    }
+    const email = (process.env.ADMIN_EMAIL || currentConfig.admin_email || config.admin_email || 'gomonhub@gmail.com').trim();
+
+    return {
+        phone: cleanPhone,
+        email: email
+    };
+}
+
 let sock = null;
 let currentQr = null;
 let currentQrDataUrl = null;
@@ -123,6 +150,23 @@ function getSmartFallbackReply(userMessage, hasImage = false, senderPhone = null
     const isHalaBanter = /(?:hur hla|hala|হালা|হালার|ভাগ|kire|কি রে)/i.test(raw);
 
     if (mem) mem.greeted = true;
+
+    const adminCfg = getAdminConfig();
+    const asksCreator = /(?:ke banise|ke banayche|developer|developer ke|k banise|k banayse|tumi k banise|tumi ke banise|কে বানাইছে|কে বানাইসে|ডেভেলপার)/i.test(raw);
+    const asksDirectGomon = /(?:gomon.*(?:sathe|kotha|contact|number|phone)|direct.*(?:jogajog|kotha|contact)|admin.*(?:number|phone|sathe)|onr number|unr number|গোমন.*(?:নম্বর|কথা|নাম্বার|যোগাযোগ)|সরাসরি.*কথা)/i.test(raw);
+    const asksDevService = /(?:website banate|bot banate|site banate|app banate|khoroch koto|kivabe banabo|order dite|ওয়েবসাইট বানাতে|বট বানাতে|বানিয়ে দেবেন|বানাতে চাই)/i.test(raw);
+
+    if (asksDirectGomon) {
+        return `গোমন ভাইয়ের পার্সোনাল নম্বর সরাসরি শেয়ার করার নিয়ম নেই ভাই। তবে ওনার সাথে সরাসরি যোগাযোগের অফিশিয়াল ইমেইল হলো: ${adminCfg.email}। আপনি এই ইমেইলে সরাসরি মেইল পাঠাতে পারেন অথবা এই আইডি দিয়ে Google Chat-এ মেসেজ দিয়ে রাখতে পারেন, উনি ফ্রি হওয়ামাত্রই সেখানে সরাসরি রিপ্লাই দেবেন! অথবা আপনার ফোন নম্বর এখানে দিয়ে রাখলে গোমন ভাই নিজেই সরাসরি কল করবেন ভাই।`;
+    }
+
+    if (asksCreator) {
+        return `এই GOMON HUB টুর্নামেন্ট ওয়েবসাইট এবং আমাকে (এই ২৪/৭ হোয়াটসঅ্যাপ বট)—সবকিছুই আমাদের Mr GOMON ভাই নিজে কোডিং করে ডেভেলপ করেছেন! উনি একজন প্রফেশনাল ফুল-স্ট্যাক ডেভেলপার। আপনিও যদি নিজের কোনো টুর্নামেন্ট বা বিজনেসের জন্য এমন ওয়েবসাইট বা বট বানাতে চান, গোমন ভাইয়ের সাথে যোগাযোগ করতে পারেন ভাই!`;
+    }
+
+    if (asksDevService) {
+        return `জি ভাই! গোমন ভাই একদম প্রফেশনাল টুর্নামেন্ট ওয়েবসাইট (অটো বিকাশ/নগদ পেমেন্ট ও উইথড্রসহ) এবং ফুল অটোমেটেড হোয়াটসঅ্যাপ বট বানিয়ে দেন। আপনার প্রজেক্টের রিকোয়ারমেন্ট, কী কী ফিচার লাগবে এবং আপনার আনুমানিক বাজেট কত একটু লিখে জানান ভাই, আমি গোমন ভাইয়ের কাছে পাঠিয়ে দিচ্ছি!`;
+    }
 
     if (asksWho) {
         return `আমি GOMON HUB-এর অফিসিয়াল সাপোর্ট অ্যাডমিন ভাই! টুর্নামেন্ট, ম্যাচ বা ওয়েবসাইট নিয়ে যেকোনো হেল্প লাগলে বলেন, বুঝিয়ে দিচ্ছি।`;
@@ -476,6 +520,25 @@ ABSOLUTE HUMAN RULES (NEVER BREAK THESE):
 7. Screenshots, Images & Voice Notes:
    - If user sends an audio voice note: Listen carefully to what they said in Bengali. Respond with a helpful, friendly Bengali text solution directly answering their query.
    - If user sends a screenshot of the website, bKash/Nagad receipt, or game screen, inspect what screen they are on or what error they face. Tell them the exact next step directly like a helpful gamer brother.
+8. Developer Identity, Direct Contact & Client Lead Handling:
+   - Developer Branding: Mr GOMON (@gomonhub) is a professional Full-Stack Web & WhatsApp Bot Developer. This tournament website (https://rb.gy/feuqry) and this 24/7 AI WhatsApp bot were custom-developed and coded by Mr GOMON himself!
+   - If anyone compliments the website/bot or asks who built it, proudly mention that Mr GOMON developed it.
+   - If someone asks to make a website (tournament site, gaming app, e-commerce) or a 24/7 WhatsApp bot:
+     Act as a sharp, courteous sales representative! Ask for:
+     a) Type of website / bot needed.
+     b) Key features (e.g. automatic bKash/Nagad payment gateway, withdrawal verification system, custom room scheduler).
+     c) Their estimated budget and timeline.
+     - NEVER promise an exact price or fixed deadline yourself! Explain: "কাজের জটিলতা ও ফিচারের ওপর ভিত্তি করে গোমন ভাই চূড়ান্ত বাজেট ও ডেলিভারি সময় কনফার্ম করবেন।"
+   - DIRECT CONTACT & STRICT PRIVACY (ABSOLUTE RULE):
+     - NEVER reveal or share Mr GOMON's personal phone number with ANYONE under any circumstances!
+     - If anyone (player or client) asks for direct contact or personal number with Mr GOMON:
+       Provide the official email: "${adminCfg.email}".
+       Explain politely: "গোমন ভাইয়ের পার্সোনাল নম্বর সরাসরি শেয়ার করার নিয়ম নেই ভাই। তবে ওনার সাথে সরাসরি যোগাযোগের অফিশিয়াল ইমেইল হলো: ${adminCfg.email}। আপনি এই ইমেইলে সরাসরি মেইল পাঠাতে পারেন অথবা এই আইডি দিয়ে Google Chat (Hangouts)-এ মেসেজ দিয়ে রাখতে পারেন, উনি ফ্রি হওয়ামাত্রই সেখানে সরাসরি রিপ্লাই দেবেন! অথবা আপনার ফোন নম্বর এখানে দিয়ে রাখলে গোমন ভাই নিজেই সরাসরি কল বা মেসেজ দেবেন ভাই।"
+   - LEAD DEAL CONFIRMATION MARKER:
+     When a client clearly provides a budget and wants to proceed (e.g. "আমি ২ হাজার টাকায় বট বানাতে চাই", "৫ হাজারে হবে? আমি রাজি"):
+     Acknowledge politely: "জি ভাই বুঝতে পেরেছি! আমি এখনই সরাসরি গোমন ভাইয়ের কাছে আপনার অফারটি পাঠিয়ে কনফার্মেশন চাইছি। উনি হ্যাঁ বা না বললেই আমি আপনাকে সাথে সাথে জানিয়ে দিচ্ছি, ১-২ মিনিট অপেক্ষা করুন ভাই! ⏳"
+     And append this exact marker at the very end of your response:
+     [DEAL_PROPOSAL: {"project": "<project type>", "budget": "<proposed budget>", "details": "<brief requirement>"}]
 
 Platform Knowledge Base:
 ${JSON.stringify(knowledge, null, 2)}`;
@@ -657,6 +720,54 @@ async function startWhatsAppBot() {
         }
     });
 
+    async function deliverAiReply(rawReply, targetJid, targetPhone) {
+        const adminCfg = getAdminConfig();
+        const dealMatch = (rawReply || '').match(/\[DEAL_PROPOSAL:\s*(\{.*?\})\s*\]/);
+        let finalReply = rawReply || '';
+
+        if (dealMatch) {
+            finalReply = (rawReply || '').replace(/\[DEAL_PROPOSAL:\s*\{.*?\}\s*\]/, '').trim();
+            try {
+                const dealData = JSON.parse(dealMatch[1]);
+                if (adminCfg.phone && sock) {
+                    const cleanAdminNum = adminCfg.phone.replace(/\D/g, '');
+                    const adminJid = cleanAdminNum + '@s.whatsapp.net';
+                    pendingClientDeals[targetPhone] = {
+                        clientJid: targetJid,
+                        clientPhone: targetPhone,
+                        project: dealData.project || 'Website / Bot',
+                        budget: dealData.budget || 'আলোচনা সাপেক্ষ',
+                        details: dealData.details || 'বিস্তারিত চাহিদা',
+                        createdAt: Date.now()
+                    };
+                    latestPendingDealPhone = targetPhone;
+
+                    const adminAlert = `🔔 *[নতুন প্রজেক্ট রিকোয়েস্ট]* 🔔\n` +
+                        `--------------------------------------------\n` +
+                        `👤 *ক্লায়েন্ট:* ${targetPhone}\n` +
+                        `💼 *প্রজেক্ট:* ${dealData.project || 'কাস্টম কাজ'}\n` +
+                        `💰 *অফার বাজেট:* ${dealData.budget || 'আলোচনা সাপেক্ষ'}\n` +
+                        `📋 *চাহিদা:* ${dealData.details || 'বিস্তারিত চাহিদা'}\n` +
+                        `--------------------------------------------\n` +
+                        `গোমন ভাই, এই ক্লায়েন্টকে কি *"হ্যাঁ"* বলব নাকি *"না"*?\n\n` +
+                        `👉 *রিপ্লাই দিতে শুধু লিখুন:*\n` +
+                        `   • *হ্যাঁ* (বা YES)\n` +
+                        `   • *না* (বা NO)\n` +
+                        `   • অথবা কাস্টম দাম চাইলে: *২৫০০ টাকা*`;
+
+                    sock.sendMessage(adminJid, { text: adminAlert }).catch(e => console.error('[ADMIN ALERT ERROR]', e.message));
+                    console.log(`🚀 [DEAL ALERT SENT TO ADMIN] Admin: ${adminCfg.phone} | Client: ${targetPhone}`);
+                }
+            } catch (e) {
+                console.error('[DEAL PARSE ERROR]', e.message);
+            }
+        }
+
+        // Natural human typing delay (1.2 to 2.0s) to avoid robotic WhatsApp spam flagging
+        await new Promise(r => setTimeout(r, 1200 + Math.floor(Math.random() * 800)));
+        await sock.sendMessage(targetJid, { text: finalReply });
+    }
+
     async function processSingleMessage(msg) {
         if (!msg || !msg.message || msg.key.fromMe || msg.key.remoteJid === 'status@broadcast') return;
 
@@ -691,6 +802,45 @@ async function startWhatsAppBot() {
             effectiveImg?.caption ||
             ''
         ).trim();
+
+        // -------------------------------------------------------------
+        // INTERACTIVE ADMIN APPROVAL HANDLER ("হ্যাঁ / না" BRIDGE)
+        // -------------------------------------------------------------
+        const adminCfg = getAdminConfig();
+        const cleanSender = senderPhone.replace(/\D/g, '');
+        const cleanAdmin = (adminCfg.phone || '').replace(/\D/g, '');
+        const isAdminSender = Boolean(cleanAdmin && (cleanSender === cleanAdmin || cleanSender.endsWith(cleanAdmin) || cleanAdmin.endsWith(cleanSender)));
+
+        if (isAdminSender && text) {
+            const rawAdmin = text.trim().toLowerCase();
+            const isNo = /^(?:না|na|no|হবে না|parbona|বাতিল|reject|বাতিল করো)(?:[\s!,.]|$)/i.test(rawAdmin);
+            const isYes = !isNo && /^(?:হ্যাঁ|hea|hae|yes|ha|ho|হবে|রাজি|ok|agree|accept|করো)(?:[\s!,.]|$)/i.test(rawAdmin);
+            const priceMatch = rawAdmin.match(/(?:([০-৯\d]+)\s*(?:টাকা|tk|bdt)?)/i);
+
+            if (latestPendingDealPhone && pendingClientDeals[latestPendingDealPhone]) {
+                const deal = pendingClientDeals[latestPendingDealPhone];
+                if (isYes) {
+                    const clientMsg = `✅ *দারুণ খবর ভাই!*\n\nগোমন ভাইয়ের সাথে কথা বললাম, উনি আপনার প্রস্তাবে রাজি হয়েছেন। আমরা আপনার কাজটি শুরু করতে প্রস্তুত! 🚀\n\nপ্রজেক্টের প্রয়োজনীয় তথ্য কনফার্ম করার জন্য গোমন ভাই খুব দ্রুতই আপনার সাথে সরাসরি যোগাযোগ করছেন ভাই। সাথে থাকার জন্য ধন্যবাদ! ❤️`;
+                    await sock.sendMessage(deal.clientJid, { text: clientMsg });
+                    await sock.sendMessage(senderJid, { text: `✓ [কনফার্মড] ক্লায়েন্ট (${deal.clientPhone})-কে "হ্যাঁ" জানিয়ে দেওয়া হয়েছে!` });
+                    delete pendingClientDeals[latestPendingDealPhone];
+                    latestPendingDealPhone = null;
+                    return;
+                } else if (isNo) {
+                    const clientMsg = `❌ *দুঃখিত ভাই!*\n\nগোমন ভাইয়ের সাথে কথা বললাম, এই বাজেটে এই প্রজেক্টটি আমাদের পক্ষে করা সম্ভব হচ্ছে না। আন্তরিকভাবে দুঃখিত ভাই! ভবিষ্যতে কোনো প্রয়োজন হলে অবশ্যই জানাবেন। ❤️`;
+                    await sock.sendMessage(deal.clientJid, { text: clientMsg });
+                    await sock.sendMessage(senderJid, { text: `✓ [বাতিল] ক্লায়েন্ট (${deal.clientPhone})-কে "না" জানিয়ে দেওয়া হয়েছে!` });
+                    delete pendingClientDeals[latestPendingDealPhone];
+                    latestPendingDealPhone = null;
+                    return;
+                } else if (priceMatch && !isYes && !isNo) {
+                    const clientMsg = `ভাই গোমন ভাইয়ের সাথে কথা হলো, উনি জানালেন আপনার সম্পূর্ণ কাজটির জন্য ন্যূনতম *${text.trim()}* বাজেট লাগবে।\n\nআপনি কি এই বাজেটে কাজটি করাতে প্রস্তুত আছেন ভাই? জানালে আমরা শুরু করতে পারি! 🎮`;
+                    await sock.sendMessage(deal.clientJid, { text: clientMsg });
+                    await sock.sendMessage(senderJid, { text: `✓ [কাউন্টার অফার] ক্লায়েন্ট (${deal.clientPhone})-কে আপনার বাজেট (${text.trim()}) পাঠিয়ে দেওয়া হয়েছে!` });
+                    return;
+                }
+            }
+        }
 
         let mediaBase64 = null;
         let mediaMime = null;
@@ -807,9 +957,7 @@ async function startWhatsAppBot() {
                     try {
                         sock.sendPresenceUpdate('composing', senderJid).catch(() => {});
                         const aiReply = await generateAiSupportReply(text, senderPhone, mediaBase64, mediaMime, isAudio);
-                        // Human typing simulation (1.2 - 1.8s)
-                        await new Promise(r => setTimeout(r, 1200 + Math.floor(Math.random() * 600)));
-                        await sock.sendMessage(senderJid, { text: aiReply });
+                        await deliverAiReply(aiReply, senderJid, senderPhone);
                     } catch (err) {
                         console.error(`❌ [AI FALLBACK ERROR] ${err.message}`);
                     } finally {
@@ -824,9 +972,7 @@ async function startWhatsAppBot() {
                 // Instantly notify user with typing presence so they know bot is online & responding
                 sock.sendPresenceUpdate('composing', senderJid).catch(() => {});
                 const aiReply = await generateAiSupportReply(text, senderPhone, mediaBase64, mediaMime, isAudio);
-                // Natural human typing delay (1.2 to 2 seconds) to avoid WhatsApp automated ban
-                await new Promise(r => setTimeout(r, 1200 + Math.floor(Math.random() * 800)));
-                await sock.sendMessage(senderJid, { text: aiReply });
+                await deliverAiReply(aiReply, senderJid, senderPhone);
                 console.log(`🤖 [AI SUPPORT REPLIED] To: ${senderPhone}`);
             } catch (aiErr) {
                 console.error(`❌ [AI SUPPORT ERROR] ${aiErr.message}`);

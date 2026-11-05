@@ -458,6 +458,7 @@ function getOrderedCandidateKeys() {
 
 // AI Customer Support Assistant Helper with Instant Multi-Model & Multi-Key Failover (< 0.2s)
 async function generateAiSupportReply(userMessage, senderPhone, mediaBase64 = null, mimeType = null, isAudio = false) {
+    const adminCfg = getAdminConfig();
     let knowledge = {};
     try {
         const kPath = path.join(__dirname, 'ai_knowledge.json');

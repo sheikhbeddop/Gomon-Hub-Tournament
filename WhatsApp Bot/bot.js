@@ -40,6 +40,51 @@ const pendingSessions = {};
 const pendingClientDeals = {};
 let latestPendingDealPhone = null;
 
+// -------------------------------------------------------------
+// Remote Admin Control State (On / Off / Status) & Uptime Tracker
+// -------------------------------------------------------------
+const botStartTime = Date.now();
+const botStateFilePath = path.join(__dirname, 'bot_state.json');
+
+function getBotState() {
+    try {
+        if (fs.existsSync(botStateFilePath)) {
+            return JSON.parse(fs.readFileSync(botStateFilePath, 'utf8'));
+        }
+    } catch (_) {}
+    return { isPaused: false, pausedAt: null, pausedBy: null };
+}
+
+function setBotPaused(paused, byWho = 'Admin') {
+    const newState = {
+        isPaused: Boolean(paused),
+        pausedAt: paused ? new Date().toISOString() : null,
+        pausedBy: byWho
+    };
+    try {
+        fs.writeFileSync(botStateFilePath, JSON.stringify(newState, null, 2), 'utf8');
+    } catch (err) {
+        console.error('Failed to write bot_state.json:', err.message);
+    }
+    return newState;
+}
+
+function getBotUptimeString() {
+    const totalSec = Math.floor((Date.now() - botStartTime) / 1000);
+    const d = Math.floor(totalSec / 86400);
+    const h = Math.floor((totalSec % 86400) / 3600);
+    const m = Math.floor((totalSec % 3600) / 60);
+    const s = totalSec % 60;
+    const parts = [];
+    if (d > 0) parts.push(`${d} দিন`);
+    if (h > 0) parts.push(`${h} ঘণ্টা`);
+    if (m > 0) parts.push(`${m} মিনিট`);
+    if (parts.length === 0 || (d === 0 && h === 0)) {
+        parts.push(`${s} সেকেন্ড`);
+    }
+    return parts.join(' ');
+}
+
 // Dynamic Admin Configuration from Render Environment or config.json
 function getAdminConfig() {
     let currentConfig = config;
@@ -768,10 +813,17 @@ async function startWhatsAppBot() {
     }
 
     async function processSingleMessage(msg) {
-        if (!msg || !msg.message || msg.key.fromMe || msg.key.remoteJid === 'status@broadcast') return;
+        if (!msg || !msg.message || msg.key.remoteJid === 'status@broadcast') return;
 
         const senderJid = msg.key.remoteJid;
         const senderPhone = senderJid.replace(/@.*$/, '');
+        const cleanSender = senderPhone.replace(/\D/g, '');
+
+        const botNum = (sock?.user?.id || '').split(':')[0].replace(/\D/g, '');
+        const isSelfChat = msg.key.fromMe && botNum && (cleanSender === botNum || cleanSender.endsWith(botNum) || botNum.endsWith(cleanSender));
+
+        // Skip messages sent by me unless it is a direct self-chat (Note to Self)
+        if (msg.key.fromMe && !isSelfChat) return;
 
         const imgMessage = msg.message.imageMessage ||
             msg.message.viewOnceMessage?.message?.imageMessage ||
@@ -803,14 +855,56 @@ async function startWhatsAppBot() {
         ).trim();
 
         // -------------------------------------------------------------
-        // INTERACTIVE ADMIN APPROVAL HANDLER ("হ্যাঁ / না" BRIDGE)
+        // REMOTE ADMIN CONTROL (ON / OFF / STATUS) & DEAL APPROVAL BRIDGE
         // -------------------------------------------------------------
         const adminCfg = getAdminConfig();
-        const cleanSender = senderPhone.replace(/\D/g, '');
         const cleanAdmin = (adminCfg.phone || '').replace(/\D/g, '');
-        const isAdminSender = Boolean(cleanAdmin && (cleanSender === cleanAdmin || cleanSender.endsWith(cleanAdmin) || cleanAdmin.endsWith(cleanSender)));
+        const isAdminPhone = cleanAdmin && (cleanSender === cleanAdmin || cleanSender.endsWith(cleanAdmin) || cleanAdmin.endsWith(cleanSender));
+        const isAuthorizedAdmin = isSelfChat || isAdminPhone;
 
-        if (isAdminSender && text) {
+        if (isAuthorizedAdmin && text) {
+            const cleanCmd = text.trim();
+            const isStatusCmd = /^(?:!status|\/status|status|bot\s+status)$/i.test(cleanCmd);
+            const isOffCmd = /^(?:!off|\/off|bot\s+off|off)$/i.test(cleanCmd);
+            const isOnCmd = /^(?:!on|\/on|bot\s+on|on)$/i.test(cleanCmd);
+
+            if (isOffCmd) {
+                setBotPaused(true, cleanSender);
+                console.log(`🔴 [BOT REMOTE CONTROL] Bot PAUSED by Admin (${cleanSender})`);
+                await sock.sendMessage(senderJid, {
+                    text: `🔴 *[BOT PAUSED - অফ করা হয়েছে]*\n━━━━━━━━━━━━━━━━━━━━\nবট সফলভাবে বন্ধ করা হয়েছে ভাই!\nএখন থেকে কোনো সাধারণ প্লেয়ারের মেসেজের রিপ্লাই দেওয়া হবে না (বট সম্পূর্ণ সাইলেন্ট থাকবে)।\n\n👉 পুনরায় চালু করতে লিখুন: *bot on* বা *!on*`
+                });
+                return;
+            }
+
+            if (isOnCmd) {
+                setBotPaused(false, cleanSender);
+                console.log(`🟢 [BOT REMOTE CONTROL] Bot ACTIVATED by Admin (${cleanSender})`);
+                await sock.sendMessage(senderJid, {
+                    text: `🟢 *[BOT ACTIVE - চালু করা হয়েছে]*\n━━━━━━━━━━━━━━━━━━━━\nবট সফলভাবে চালু করা হয়েছে ভাই!\nএখন থেকে সাধারণ প্লেয়ারদের ২৪/৭ AI সাপোর্ট ও উইথড্র ভেরিফিকেশন পুরোদমে সচল।\n\n👉 লাইভ স্ট্যাটাস দেখতে লিখুন: *status* বা *!status*`
+                });
+                return;
+            }
+
+            if (isStatusCmd) {
+                const state = getBotState();
+                const activeKeys = getGeminiApiKeyPool().length;
+                const uptime = getBotUptimeString();
+                const statusCard = `📊 *GOMON HUB BOT STATUS DASHBOARD*
+━━━━━━━━━━━━━━━━━━━━
+• সিস্টেম অবস্থা: ${state.isPaused ? '🔴 সাময়িক বন্ধ (PAUSED / MUTED)' : '🟢 সম্পূর্ণ সচল (ONLINE / ACTIVE)'}
+• সার্ভার আপটাইম: ⏱️ ${uptime}
+• Gemini API Keys: 🔑 ${activeKeys}টি সক্রিয় (Load Balanced)
+• প্রাইমারি AI মডেল: 🧠 ${TEXT_MODEL_CASCADE[0] || 'gemini-3.5-flash-lite'}
+• WhatsApp কানেকশন: 📶 সচল ও সংযুক্ত (Baileys 24/7)
+• অনুমোদিত কন্ট্রোল নম্বর: 📱 ${cleanAdmin || cleanSender}
+━━━━━━━━━━━━━━━━━━━━
+${state.isPaused ? '👉 বট চালু করতে লিখুন: *bot on* বা *!on*' : '👉 বট বন্ধ করতে লিখুন: *bot off* বা *!off*'}`;
+
+                await sock.sendMessage(senderJid, { text: statusCard });
+                return;
+            }
+
             const rawAdmin = text.trim().toLowerCase();
             const isNo = /^(?:না|na|no|হবে না|parbona|বাতিল|reject|বাতিল করো)(?:[\s!,.]|$)/i.test(rawAdmin);
             const isYes = !isNo && /^(?:হ্যাঁ|hea|hae|yes|ha|ho|হবে|রাজি|ok|agree|accept|করো)(?:[\s!,.]|$)/i.test(rawAdmin);
@@ -839,6 +933,15 @@ async function startWhatsAppBot() {
                     return;
                 }
             }
+        }
+
+        // -------------------------------------------------------------
+        // GENERAL USER PAUSE GUARD (SILENT MODE)
+        // -------------------------------------------------------------
+        const currentBotState = getBotState();
+        if (currentBotState.isPaused && !isAuthorizedAdmin) {
+            console.log(`⏸️ [BOT PAUSED] Silent ignore from ${senderPhone}: "${text.slice(0, 30)}"`);
+            return; // 100% silent, no reply sent
         }
 
         let mediaBase64 = null;
@@ -988,7 +1091,15 @@ async function startWhatsAppBot() {
     sock.ev.on('messages.upsert', async ({ messages }) => {
         if (!messages || messages.length === 0) return;
         for (const msg of messages) {
-            if (!msg || !msg.message || msg.key.fromMe || msg.key.remoteJid === 'status@broadcast') continue;
+            if (!msg || !msg.message || msg.key.remoteJid === 'status@broadcast') continue;
+
+            const botNum = (sock?.user?.id || '').split(':')[0].replace(/\D/g, '');
+            const remoteNum = (msg.key.remoteJid || '').replace(/\D/g, '');
+            const isSelfChat = msg.key.fromMe && botNum && (remoteNum === botNum || remoteNum.endsWith(botNum) || botNum.endsWith(remoteNum));
+
+            // Never process outgoing messages sent to customers; only allow direct notes to self
+            if (msg.key.fromMe && !isSelfChat) continue;
+
             const senderPhone = (msg.key.remoteJid || '').replace(/@.*$/, '');
             queueMessageForSender(senderPhone, () => processSingleMessage(msg));
         }

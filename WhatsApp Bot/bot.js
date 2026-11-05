@@ -581,14 +581,15 @@ ${JSON.stringify(knowledge, null, 2)}`;
 
     // -------------------------------------------------------------
     // INSTANT MATRIX FAILOVER (< 0.2s):
-    // Tries round-robin Keys across the multi-model cascade
+    // Prioritizes top models across all round-robin keys first,
+    // then cascades to fallback models if all keys fail on that tier.
     // -------------------------------------------------------------
-    keyLoop: for (let k = 0; k < candidateKeys.length; k++) {
-        const activeKey = candidateKeys[k];
-        const maskedKey = activeKey.length > 8 ? `${activeKey.slice(0, 4)}...${activeKey.slice(-4)}` : 'KEY';
+    modelLoop: for (let m = 0; m < modelsToTry.length; m++) {
+        const activeModel = modelsToTry[m];
 
-        for (let m = 0; m < modelsToTry.length; m++) {
-            const activeModel = modelsToTry[m];
+        for (let k = 0; k < candidateKeys.length; k++) {
+            const activeKey = candidateKeys[k];
+            const maskedKey = activeKey.length > 8 ? `${activeKey.slice(0, 4)}...${activeKey.slice(-4)}` : 'KEY';
             const cooldownTag = `${activeKey}:${activeModel}`;
 
             if (keyModelCooldowns[cooldownTag] && keyModelCooldowns[cooldownTag] > now) {
@@ -599,19 +600,19 @@ ${JSON.stringify(knowledge, null, 2)}`;
                 // Realistic fast timeout (6.5s) for instant response
                 cleanReply = await requestGeminiApi(activeModel, payload, activeKey, 6500);
                 if (cleanReply) {
-                    break keyLoop;
+                    break modelLoop;
                 }
             } catch (apiErr) {
                 if (apiErr.statusCode === 429) {
-                    console.warn(`⚡ [RATE LIMIT 429] Key ${maskedKey} on ${activeModel}. Instant switch (<0.1s)...`);
+                    console.warn(`⚡ [RATE LIMIT 429] Key ${maskedKey} on ${activeModel}. Instant key switch (<0.1s)...`);
                     keyModelCooldowns[cooldownTag] = Date.now() + 60000; // 60s cooldown for this key+model
-                    continue; // Instantly jumps to next model or next key in under 1ms
+                    continue; // Instantly jumps to next active key in under 1ms
                 } else if (apiErr.statusCode === 404) {
                     // Model name not yet active on this tier, cooldown for 1 hour so we don't re-query it
                     keyModelCooldowns[cooldownTag] = Date.now() + 3600000;
                     continue;
                 } else {
-                    console.warn(`⚠️ [API FAIL (${activeModel}) Key ${maskedKey}] ${apiErr.message}. Switching...`);
+                    console.warn(`⚠️ [API FAIL (${activeModel}) Key ${maskedKey}] ${apiErr.message}. Switching key...`);
                     continue;
                 }
             }

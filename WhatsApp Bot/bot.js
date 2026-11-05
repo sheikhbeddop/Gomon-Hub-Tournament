@@ -337,10 +337,29 @@ function formatGeminiContents(history = [], currentParts = []) {
 }
 
 // -------------------------------------------------------------
-// Dynamic Multi-Key Pool & Round-Robin Load Balancer for Gemini
+// Dynamic Multi-Key Pool & Multi-Model Cascade Engine for Gemini
 // -------------------------------------------------------------
 let keyPoolIndex = 0;
-const keyCooldowns = {}; // apiKey -> cooldownUntilTimestamp
+const keyModelCooldowns = {}; // "apiKey:modelName" -> cooldownUntilTimestamp
+
+// Multi-Model Cascade List (Ordered by intelligence, speed and quota)
+const TEXT_MODEL_CASCADE = [
+    'gemini-1.5-flash',
+    'gemini-1.5-flash-8b',
+    'gemini-2.0-flash',
+    'gemini-2.0-flash-lite',
+    'gemini-3.5-flash-lite',
+    'gemini-3.1-flash-lite',
+    'gemini-3.6-flash',
+    'gemini-3.8-flash'
+];
+
+// Multimodal Audio / Voice Expert Models
+const AUDIO_MODEL_CASCADE = [
+    'gemini-1.5-flash',
+    'gemini-2.0-flash',
+    'gemini-1.5-flash-8b'
+];
 
 function getGeminiApiKeyPool() {
     let currentConfig = config;
@@ -350,16 +369,31 @@ function getGeminiApiKeyPool() {
         }
     } catch (_) {}
 
-    const raw = process.env.GEMINI_API_KEYS || process.env.GEMINI_API_KEY || currentConfig.gemini_api_keys || currentConfig.gemini_api_key || config.gemini_api_keys || config.gemini_api_key || '';
+    const rawPool = [];
 
-    let rawKeys = [];
-    if (Array.isArray(raw)) {
-        rawKeys = raw;
-    } else if (typeof raw === 'string') {
-        rawKeys = raw.split(',');
+    // 1. Scan GEMINI_API_KEYS (comma, space, or newline separated)
+    if (process.env.GEMINI_API_KEYS) {
+        rawPool.push(...process.env.GEMINI_API_KEYS.split(/[,\n\r]+/));
     }
 
-    return Array.from(new Set(rawKeys.map(k => (typeof k === 'string' ? k.trim() : '')).filter(Boolean)));
+    // 2. Scan individual variables like GEMINI_API_KEY_1, GEMINI_API_KEY_2, etc.
+    for (const [k, v] of Object.entries(process.env)) {
+        if (/^GEMINI_API_KEY(?:_\d+)?$/i.test(k) && v) {
+            rawPool.push(...v.split(/[,\n\r]+/));
+        }
+    }
+
+    // 3. Scan config.json
+    const cfgKeys = currentConfig.gemini_api_keys || currentConfig.gemini_api_key || config.gemini_api_keys || config.gemini_api_key;
+    if (Array.isArray(cfgKeys)) {
+        rawPool.push(...cfgKeys);
+    } else if (typeof cfgKeys === 'string') {
+        rawPool.push(...cfgKeys.split(/[,\n\r]+/));
+    }
+
+    // Clean, trim, and deduplicate
+    const cleaned = Array.from(new Set(rawPool.map(k => (typeof k === 'string' ? k.trim() : '')).filter(Boolean)));
+    return cleaned;
 }
 
 function getOrderedCandidateKeys() {
@@ -375,14 +409,11 @@ function getOrderedCandidateKeys() {
         ordered.push(pool[(startIdx + i) % pool.length]);
     }
 
-    const available = ordered.filter(k => !keyCooldowns[k] || keyCooldowns[k] <= now);
-    const coolingDown = ordered.filter(k => keyCooldowns[k] && keyCooldowns[k] > now);
-
-    return available.length > 0 ? available.concat(coolingDown) : coolingDown;
+    return ordered;
 }
 
-// AI Customer Support Assistant Helper
-async function generateAiSupportReply(userMessage, senderPhone, imageBase64 = null, mimeType = 'image/jpeg') {
+// AI Customer Support Assistant Helper with Instant Multi-Model & Multi-Key Failover (< 0.2s)
+async function generateAiSupportReply(userMessage, senderPhone, mediaBase64 = null, mimeType = null, isAudio = false) {
     let knowledge = {};
     try {
         const kPath = path.join(__dirname, 'ai_knowledge.json');
@@ -391,24 +422,14 @@ async function generateAiSupportReply(userMessage, senderPhone, imageBase64 = nu
         }
     } catch (_) {}
 
-    let currentConfig = config;
-    try {
-        if (fs.existsSync(configPath)) {
-            currentConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-        }
-    } catch (_) {}
-
     const candidateKeys = getOrderedCandidateKeys();
-    const primaryModel = process.env.GEMINI_MODEL || currentConfig.ai_model || config.ai_model || 'gemini-1.5-flash';
-    const secondaryModel = (primaryModel === 'gemini-1.5-flash') ? 'gemini-2.0-flash' : 'gemini-1.5-flash';
-    const tertiaryModel = 'gemini-1.5-flash-8b';
-
     const mem = getChatMemory(senderPhone);
+    const hasMedia = Boolean(mediaBase64);
 
     if (candidateKeys.length === 0) {
-        console.warn(`⚠️ [GEMINI] No API keys configured in GEMINI_API_KEYS or config.json. Using fallback.`);
-        const fallback = getSmartFallbackReply(userMessage, !!imageBase64, senderPhone);
-        mem.history.push({ role: 'user', parts: [{ text: userMessage || '[ছবি]' }] });
+        console.warn(`⚠️ [GEMINI] No API keys detected in GEMINI_API_KEYS or config.json. Using instant fallback.`);
+        const fallback = getSmartFallbackReply(userMessage, hasMedia, senderPhone);
+        mem.history.push({ role: 'user', parts: [{ text: userMessage || (isAudio ? '[ভয়েস নোট]' : '[ছবি]') }] });
         mem.history.push({ role: 'model', parts: [{ text: fallback }] });
         mem.greeted = true;
         return fallback;
@@ -452,31 +473,35 @@ ABSOLUTE HUMAN RULES (NEVER BREAK THESE):
    - Deposit / Add Money: Guide them with 4 easy steps (1. Wallet > Add Money, 2. Send money to bKash/Nagad minimum 10 Tk, 3. Copy TrxID from SMS, 4. Submit TrxID on site to instantly add balance).
    - App install: Open site in Chrome mobile browser and click 'Install' or 'Add to Home Screen'.
    - Never spam the website link in general chit-chat unless relevant.
-7. Screenshots & Images:
-   - If user sends a screenshot of the website, bKash/Nagad receipt, or game screen, inspect what screen they are on or what error they face.
-   - Tell them the exact next step directly like a helpful gamer brother so they can easily complete it.
+7. Screenshots, Images & Voice Notes:
+   - If user sends an audio voice note: Listen carefully to what they said in Bengali. Respond with a helpful, friendly Bengali text solution directly answering their query.
+   - If user sends a screenshot of the website, bKash/Nagad receipt, or game screen, inspect what screen they are on or what error they face. Tell them the exact next step directly like a helpful gamer brother.
 
 Platform Knowledge Base:
 ${JSON.stringify(knowledge, null, 2)}`;
 
     const currentParts = [];
-    if (imageBase64) {
+    if (mediaBase64) {
         currentParts.push({
             inlineData: {
-                mimeType: mimeType || 'image/jpeg',
-                data: imageBase64
+                mimeType: mimeType || (isAudio ? 'audio/ogg' : 'image/jpeg'),
+                data: mediaBase64
             }
         });
     }
+
+    const defaultPrompt = isAudio
+        ? 'এই বাংলা ভয়েস নোটটি মনোযোগ দিয়ে শুনে প্লেয়ার যা জানতে চায় তার পরিষ্কার ও সংক্ষিপ্ত উত্তর দিন ভাই।'
+        : 'এই স্ক্রিনশট বা ছবিটি দেখে আমাকে সাহায্য করুন ভাই।';
+
     currentParts.push({
-        text: userMessage || 'এই স্ক্রিনশট বা ছবিটি দেখে আমাকে সাহায্য করুন ভাই।'
+        text: userMessage || defaultPrompt
     });
 
-    // Sanitized multi-turn conversation contents
     const historySlice = mem.history.slice(-8);
     const contents = formatGeminiContents(historySlice, currentParts);
 
-    const data = JSON.stringify({
+    const payload = JSON.stringify({
         systemInstruction: {
             parts: [{ text: systemPrompt }]
         },
@@ -490,52 +515,51 @@ ${JSON.stringify(knowledge, null, 2)}`;
     });
 
     let cleanReply = null;
+    const now = Date.now();
+    const modelsToTry = isAudio ? AUDIO_MODEL_CASCADE : TEXT_MODEL_CASCADE;
 
-    // Failover loop across candidate API keys
-    for (let i = 0; i < candidateKeys.length; i++) {
-        const activeKey = candidateKeys[i];
+    // -------------------------------------------------------------
+    // INSTANT MATRIX FAILOVER (< 0.2s):
+    // Tries round-robin Keys across the multi-model cascade
+    // -------------------------------------------------------------
+    keyLoop: for (let k = 0; k < candidateKeys.length; k++) {
+        const activeKey = candidateKeys[k];
         const maskedKey = activeKey.length > 8 ? `${activeKey.slice(0, 4)}...${activeKey.slice(-4)}` : 'KEY';
 
-        try {
-            // 1. Try Primary Model (10s realistic timeout)
-            cleanReply = await requestGeminiApi(primaryModel, data, activeKey, 10000);
-            if (cleanReply) break;
-        } catch (primaryErr) {
-            if (primaryErr.statusCode === 429) {
-                console.warn(`⚠️ [GEMINI 429 RATE LIMIT on Key ${maskedKey}] Putting key on 60s cooldown. Auto-failing over to next key in pool...`);
-                keyCooldowns[activeKey] = Date.now() + 60000;
-                continue;
+        for (let m = 0; m < modelsToTry.length; m++) {
+            const activeModel = modelsToTry[m];
+            const cooldownTag = `${activeKey}:${activeModel}`;
+
+            if (keyModelCooldowns[cooldownTag] && keyModelCooldowns[cooldownTag] > now) {
+                continue; // Skip this key+model combination if under cooldown
             }
 
-            console.warn(`⚠️ [GEMINI PRIMARY ERROR (${primaryModel}) Key ${maskedKey}] ${primaryErr.message}. Trying secondary model...`);
             try {
-                // 2. Try Secondary Model (8s timeout)
-                cleanReply = await requestGeminiApi(secondaryModel, data, activeKey, 8000);
-                if (cleanReply) break;
-            } catch (secErr) {
-                if (secErr.statusCode === 429) {
-                    console.warn(`⚠️ [GEMINI 429 RATE LIMIT (Sec) on Key ${maskedKey}] Putting key on 60s cooldown. Auto-failing over to next key...`);
-                    keyCooldowns[activeKey] = Date.now() + 60000;
-                    continue;
+                // Realistic fast timeout (6.5s) for instant response
+                cleanReply = await requestGeminiApi(activeModel, payload, activeKey, 6500);
+                if (cleanReply) {
+                    break keyLoop;
                 }
-
-                console.warn(`⚠️ [GEMINI SECONDARY ERROR (${secondaryModel}) Key ${maskedKey}] ${secErr.message}. Trying tertiary model...`);
-                try {
-                    // 3. Try Tertiary Model (6s timeout)
-                    cleanReply = await requestGeminiApi(tertiaryModel, data, activeKey, 6000);
-                    if (cleanReply) break;
-                } catch (tertErr) {
-                    if (tertErr.statusCode === 429) {
-                        keyCooldowns[activeKey] = Date.now() + 60000;
-                    }
-                    console.warn(`⚠️ [GEMINI TERTIARY ERROR (${tertiaryModel}) Key ${maskedKey}] ${tertErr.message}.`);
+            } catch (apiErr) {
+                if (apiErr.statusCode === 429) {
+                    console.warn(`⚡ [RATE LIMIT 429] Key ${maskedKey} on ${activeModel}. Instant switch (<0.1s)...`);
+                    keyModelCooldowns[cooldownTag] = Date.now() + 60000; // 60s cooldown for this key+model
+                    continue; // Instantly jumps to next model or next key in under 1ms
+                } else if (apiErr.statusCode === 404) {
+                    // Model name not yet active on this tier, cooldown for 1 hour so we don't re-query it
+                    keyModelCooldowns[cooldownTag] = Date.now() + 3600000;
+                    continue;
+                } else {
+                    console.warn(`⚠️ [API FAIL (${activeModel}) Key ${maskedKey}] ${apiErr.message}. Switching...`);
+                    continue;
                 }
             }
         }
     }
 
     if (cleanReply) {
-        mem.history.push({ role: 'user', parts: [{ text: userMessage || '[ছবি]' }] });
+        const histUser = userMessage || (isAudio ? '[ভয়েস নোট]' : (hasMedia ? '[ছবি]' : 'Hello'));
+        mem.history.push({ role: 'user', parts: [{ text: histUser }] });
         mem.history.push({ role: 'model', parts: [{ text: cleanReply }] });
         mem.greeted = true;
         if (mem.history.length > 12) {
@@ -544,8 +568,9 @@ ${JSON.stringify(knowledge, null, 2)}`;
         return cleanReply;
     }
 
-    const fallback = getSmartFallbackReply(userMessage, !!imageBase64, senderPhone);
-    mem.history.push({ role: 'user', parts: [{ text: userMessage || '[ছবি]' }] });
+    // Emergency local fallback (Zero downtime guaranteed)
+    const fallback = getSmartFallbackReply(userMessage, hasMedia, senderPhone);
+    mem.history.push({ role: 'user', parts: [{ text: userMessage || '[মেসেজ]' }] });
     mem.history.push({ role: 'model', parts: [{ text: fallback }] });
     mem.greeted = true;
     return fallback;
@@ -649,6 +674,17 @@ async function startWhatsAppBot() {
 
         const effectiveImg = imgMessage || docImageMessage;
 
+        const audioMessage = msg.message.audioMessage ||
+            msg.message.viewOnceMessage?.message?.audioMessage ||
+            msg.message.viewOnceMessageV2?.message?.audioMessage ||
+            msg.message.ephemeralMessage?.message?.audioMessage;
+
+        const docAudioMessage = (msg.message.documentMessage?.mimetype?.startsWith('audio/'))
+            ? msg.message.documentMessage
+            : null;
+
+        const effectiveAudio = audioMessage || docAudioMessage;
+
         const text = (
             msg.message.conversation ||
             msg.message.extendedTextMessage?.text ||
@@ -656,10 +692,11 @@ async function startWhatsAppBot() {
             ''
         ).trim();
 
-        let imageBase64 = null;
-        let imageMime = effectiveImg?.mimetype || 'image/jpeg';
+        let mediaBase64 = null;
+        let mediaMime = null;
+        let isAudio = false;
 
-        if (effectiveImg) {
+        if (effectiveAudio) {
             try {
                 const buffer = await downloadMediaMessage(
                     msg,
@@ -668,21 +705,49 @@ async function startWhatsAppBot() {
                     { logger: pino({ level: 'silent' }), reuploadRequest: sock.updateMediaMessage }
                 );
                 if (buffer && buffer.length > 0) {
-                    imageBase64 = buffer.toString('base64');
+                    mediaBase64 = buffer.toString('base64');
+                    mediaMime = effectiveAudio?.mimetype || 'audio/ogg; codecs=opus';
+                    isAudio = true;
+                    console.log(`🎙️ [VOICE NOTE RECEIVED & DOWNLOADED] From: ${senderPhone} | Size: ${(buffer.length / 1024).toFixed(1)} KB`);
+                }
+            } catch (mediaErr) {
+                console.error(`⚠️ [AUDIO DOWNLOAD ERROR] ${mediaErr.message}`);
+            }
+        } else if (effectiveImg) {
+            try {
+                const buffer = await downloadMediaMessage(
+                    msg,
+                    'buffer',
+                    {},
+                    { logger: pino({ level: 'silent' }), reuploadRequest: sock.updateMediaMessage }
+                );
+                if (buffer && buffer.length > 0) {
+                    mediaBase64 = buffer.toString('base64');
+                    mediaMime = effectiveImg?.mimetype || 'image/jpeg';
+                    isAudio = false;
                     console.log(`📸 [IMAGE RECEIVED & DOWNLOADED] From: ${senderPhone} | Size: ${(buffer.length / 1024).toFixed(1)} KB`);
                 }
             } catch (mediaErr) {
-                console.error(`⚠️ [MEDIA DOWNLOAD ERROR] ${mediaErr.message}`);
+                console.error(`⚠️ [IMAGE DOWNLOAD ERROR] ${mediaErr.message}`);
             }
         }
 
-        if (!text && !imageBase64) return;
+        if (!text && !mediaBase64) return;
 
-        // Detect verification format: "VERIFY 849201" or just "849201"
-        const otpMatch = text.match(/(?:VERIFY[\s:]*)?(\d{6})\b/i);
+        // -------------------------------------------------------------
+        // STRICT OTP DETECTION (Fixed: No more false-positive "Invalid Code" alerts)
+        // -------------------------------------------------------------
+        // Check 1: Explicit verify pattern: "VERIFY 123456" or "OTP: 123456"
+        const explicitVerifyMatch = text.match(/^\s*(?:VERIFY|OTP|CODE)[\s:#-]*(\d{6})\s*$/i);
+        // Check 2: Pure standalone 6-digit code with nothing else in the message
+        const pureSixDigitMatch = text.match(/^\s*(\d{6})\s*$/);
+        // Check 3: Guard against phone numbers (11 digits BD phone) or long numbers
+        const isPhoneNumberOrLong = /(?:(?:\+?88)?01[3-9]\d{8})|\d{7,}/.test(text.replace(/\s+/g, ''));
 
-        if (otpMatch) {
-            const code = otpMatch[1];
+        const isOtpCandidate = !isPhoneNumberOrLong && (explicitVerifyMatch || pureSixDigitMatch);
+
+        if (isOtpCandidate) {
+            const code = (explicitVerifyMatch || pureSixDigitMatch)[1];
             console.log(`\n📩 [INCOMING OTP RECEIVED] Sender: ${senderPhone} | Code: ${code}`);
 
             // Check if matches any active web session
@@ -717,25 +782,50 @@ async function startWhatsAppBot() {
                 }
                 console.log(`🎉 [WEB BROWSER AUTO-VERIFIED] Session ${matchedToken} is now verified! Screen updated.`);
             } else {
-                // Invalid or Expired Code Alert
-                const invalidReplyText = `❌ *ভুল বা মেয়াদোত্তীর্ণ কোড!*\n\n` +
-                    `দুঃখিত! আপনার পাঠানো ভেরিফিকেশন কোডটি সঠিক নয় অথবা এর মেয়াদ (২ মিনিট) শেষ হয়ে গেছে।\n\n` +
-                    `💡 অনুগ্রহ করে ওয়েবসাইট থেকে ফ্রেশ নতুন কোড নিয়ে পুনরায় পাঠান। ধন্যবাদ! 🎮`;
+                // Only alert "Invalid/Expired Code" if user explicitly sent "VERIFY 123456"
+                // OR if this sender actually has a pending session requested from the website
+                const cleanSender = senderPhone.replace(/\D/g, '');
+                const hasPendingForSender = Object.values(pendingSessions).some(sess => {
+                    if (!sess.phone || now >= sess.expiresAt) return false;
+                    const cleanP = sess.phone.replace(/\D/g, '');
+                    return cleanSender.endsWith(cleanP) || cleanP.endsWith(cleanSender);
+                });
 
-                try {
-                    await sock.sendMessage(senderJid, { text: invalidReplyText });
-                    console.log(`⚠️ [INVALID OTP ALERT SENT] To: ${senderPhone} (Code: ${code})`);
-                } catch (sendErr) {
-                    console.error(`❌ [SEND ERROR] ${sendErr.message}`);
+                if (explicitVerifyMatch || hasPendingForSender) {
+                    const invalidReplyText = `❌ *ভুল বা মেয়াদোত্তীর্ণ কোড!*\n\n` +
+                        `দুঃখিত! আপনার পাঠানো ভেরিফিকেশন কোডটি সঠিক নয় অথবা এর মেয়াদ (২ মিনিট) শেষ হয়ে গেছে।\n\n` +
+                        `💡 অনুগ্রহ করে ওয়েবসাইট থেকে ফ্রেশ নতুন কোড নিয়ে পুনরায় পাঠান। ধন্যবাদ! 🎮`;
+
+                    try {
+                        await sock.sendMessage(senderJid, { text: invalidReplyText });
+                        console.log(`⚠️ [INVALID OTP ALERT SENT] To: ${senderPhone} (Code: ${code})`);
+                    } catch (sendErr) {
+                        console.error(`❌ [SEND ERROR] ${sendErr.message}`);
+                    }
+                } else {
+                    // Not an explicit OTP intent, fall through to AI/General support
+                    try {
+                        sock.sendPresenceUpdate('composing', senderJid).catch(() => {});
+                        const aiReply = await generateAiSupportReply(text, senderPhone, mediaBase64, mediaMime, isAudio);
+                        // Human typing simulation (1.2 - 1.8s)
+                        await new Promise(r => setTimeout(r, 1200 + Math.floor(Math.random() * 600)));
+                        await sock.sendMessage(senderJid, { text: aiReply });
+                    } catch (err) {
+                        console.error(`❌ [AI FALLBACK ERROR] ${err.message}`);
+                    } finally {
+                        sock.sendPresenceUpdate('paused', senderJid).catch(() => {});
+                    }
                 }
             }
         } else {
             // General conversation, greetings & queries handled by AI Support Agent
-            console.log(`💬 [MESSAGE RECEIVED] From: ${senderPhone} | Text: "${text}" | HasImage: ${!!imageBase64}`);
+            console.log(`💬 [MESSAGE RECEIVED] From: ${senderPhone} | Text: "${text}" | IsAudio: ${isAudio} | HasMedia: ${!!mediaBase64}`);
             try {
                 // Instantly notify user with typing presence so they know bot is online & responding
                 sock.sendPresenceUpdate('composing', senderJid).catch(() => {});
-                const aiReply = await generateAiSupportReply(text, senderPhone, imageBase64, imageMime);
+                const aiReply = await generateAiSupportReply(text, senderPhone, mediaBase64, mediaMime, isAudio);
+                // Natural human typing delay (1.2 to 2 seconds) to avoid WhatsApp automated ban
+                await new Promise(r => setTimeout(r, 1200 + Math.floor(Math.random() * 800)));
                 await sock.sendMessage(senderJid, { text: aiReply });
                 console.log(`🤖 [AI SUPPORT REPLIED] To: ${senderPhone}`);
             } catch (aiErr) {

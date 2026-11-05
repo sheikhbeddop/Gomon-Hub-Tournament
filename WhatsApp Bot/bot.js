@@ -812,6 +812,17 @@ async function startWhatsAppBot() {
         await sock.sendMessage(targetJid, { text: finalReply });
     }
 
+    function getBotIdentities() {
+        const ids = [];
+        if (sock?.user?.id) {
+            ids.push(sock.user.id.split(':')[0].replace(/\D/g, ''));
+        }
+        if (sock?.user?.lid) {
+            ids.push(sock.user.lid.split(':')[0].replace(/\D/g, ''));
+        }
+        return ids.filter(Boolean);
+    }
+
     async function processSingleMessage(msg) {
         if (!msg || !msg.message || msg.key.remoteJid === 'status@broadcast') return;
 
@@ -819,11 +830,16 @@ async function startWhatsAppBot() {
         const senderPhone = senderJid.replace(/@.*$/, '');
         const cleanSender = senderPhone.replace(/\D/g, '');
 
-        const botNum = (sock?.user?.id || '').split(':')[0].replace(/\D/g, '');
-        const isSelfChat = msg.key.fromMe && botNum && (cleanSender === botNum || cleanSender.endsWith(botNum) || botNum.endsWith(cleanSender));
+        const botIds = getBotIdentities();
+        const isSelfChat = msg.key.fromMe && botIds.some(id => cleanSender === id || cleanSender.endsWith(id) || id.endsWith(cleanSender));
 
         // Skip messages sent by me unless it is a direct self-chat (Note to Self)
         if (msg.key.fromMe && !isSelfChat) return;
+
+        let targetReplyJid = senderJid;
+        if (isSelfChat && sock?.user?.id) {
+            targetReplyJid = sock.user.id.split(':')[0] + '@s.whatsapp.net';
+        }
 
         const imgMessage = msg.message.imageMessage ||
             msg.message.viewOnceMessage?.message?.imageMessage ||
@@ -864,14 +880,14 @@ async function startWhatsAppBot() {
 
         if (isAuthorizedAdmin && text) {
             const cleanCmd = text.trim();
-            const isStatusCmd = /^(?:!status|\/status|status|bot\s+status)$/i.test(cleanCmd);
-            const isOffCmd = /^(?:!off|\/off|bot\s+off|off)$/i.test(cleanCmd);
-            const isOnCmd = /^(?:!on|\/on|bot\s+on|on)$/i.test(cleanCmd);
+            const isStatusCmd = /^(?:[!/#]?status|[!/#]?bot\s+status|[!/#]bot)$/i.test(cleanCmd);
+            const isOffCmd = /^(?:[!/#]?off|[!/#]?bot\s+off)$/i.test(cleanCmd);
+            const isOnCmd = /^(?:[!/#]?on|[!/#]?bot\s+on)$/i.test(cleanCmd);
 
             if (isOffCmd) {
                 setBotPaused(true, cleanSender);
                 console.log(`🔴 [BOT REMOTE CONTROL] Bot PAUSED by Admin (${cleanSender})`);
-                await sock.sendMessage(senderJid, {
+                await sock.sendMessage(targetReplyJid, {
                     text: `🔴 *[BOT PAUSED - অফ করা হয়েছে]*\n━━━━━━━━━━━━━━━━━━━━\nবট সফলভাবে বন্ধ করা হয়েছে ভাই!\nএখন থেকে কোনো সাধারণ প্লেয়ারের মেসেজের রিপ্লাই দেওয়া হবে না (বট সম্পূর্ণ সাইলেন্ট থাকবে)।\n\n👉 পুনরায় চালু করতে লিখুন: *bot on* বা *!on*`
                 });
                 return;
@@ -880,7 +896,7 @@ async function startWhatsAppBot() {
             if (isOnCmd) {
                 setBotPaused(false, cleanSender);
                 console.log(`🟢 [BOT REMOTE CONTROL] Bot ACTIVATED by Admin (${cleanSender})`);
-                await sock.sendMessage(senderJid, {
+                await sock.sendMessage(targetReplyJid, {
                     text: `🟢 *[BOT ACTIVE - চালু করা হয়েছে]*\n━━━━━━━━━━━━━━━━━━━━\nবট সফলভাবে চালু করা হয়েছে ভাই!\nএখন থেকে সাধারণ প্লেয়ারদের ২৪/৭ AI সাপোর্ট ও উইথড্র ভেরিফিকেশন পুরোদমে সচল।\n\n👉 লাইভ স্ট্যাটাস দেখতে লিখুন: *status* বা *!status*`
                 });
                 return;
@@ -901,7 +917,7 @@ async function startWhatsAppBot() {
 ━━━━━━━━━━━━━━━━━━━━
 ${state.isPaused ? '👉 বট চালু করতে লিখুন: *bot on* বা *!on*' : '👉 বট বন্ধ করতে লিখুন: *bot off* বা *!off*'}`;
 
-                await sock.sendMessage(senderJid, { text: statusCard });
+                await sock.sendMessage(targetReplyJid, { text: statusCard });
                 return;
             }
 
@@ -1093,9 +1109,9 @@ ${state.isPaused ? '👉 বট চালু করতে লিখুন: *bot 
         for (const msg of messages) {
             if (!msg || !msg.message || msg.key.remoteJid === 'status@broadcast') continue;
 
-            const botNum = (sock?.user?.id || '').split(':')[0].replace(/\D/g, '');
-            const remoteNum = (msg.key.remoteJid || '').replace(/\D/g, '');
-            const isSelfChat = msg.key.fromMe && botNum && (remoteNum === botNum || remoteNum.endsWith(botNum) || botNum.endsWith(remoteNum));
+            const botIds = getBotIdentities();
+            const remoteClean = (msg.key.remoteJid || '').replace(/\D/g, '');
+            const isSelfChat = msg.key.fromMe && botIds.some(id => remoteClean === id || remoteClean.endsWith(id) || id.endsWith(remoteClean));
 
             // Never process outgoing messages sent to customers; only allow direct notes to self
             if (msg.key.fromMe && !isSelfChat) continue;

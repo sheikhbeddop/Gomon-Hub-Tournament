@@ -14,9 +14,9 @@
     width: 100vw;
     height: 100vh;
     height: 100dvh;
-    background: linear-gradient(180deg, #465c7d 0%, #5b83ad 40%, #56a5dc 75%, #4faef1 100%);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
+    background: rgba(13, 17, 23, 0.72);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
     display: none;
     align-items: center;
     justify-content: center;
@@ -35,15 +35,20 @@
     background: #ffffff;
     color: #1a2233;
     width: 100%;
-    max-width: 375px;
-    border-radius: 28px;
-    box-shadow: 0 25px 65px rgba(10, 25, 55, 0.35);
-    padding: 55px 24px 28px 24px;
+    max-width: 384px;
+    border-radius: 16px;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.12);
+    padding: 48px 24px 24px 24px;
     position: relative;
     margin: auto;
     box-sizing: border-box;
-    border: 1px solid rgba(255, 255, 255, 0.4);
-    animation: authCardPopIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    border: 1px solid #e2e8f0;
+    animation: authCardFadeIn 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes authCardFadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
 }
 
 @keyframes authCardPopIn {
@@ -131,35 +136,36 @@
 
 #authModal .auth-input-group {
     position: relative;
-    margin-bottom: 14px;
+    margin-bottom: 16px;
     display: flex;
     align-items: center;
 }
 
 #authModal .auth-input-icon {
     position: absolute;
-    left: 15px;
-    color: #7b889d;
+    left: 12px;
+    color: #64748b;
     display: flex;
     align-items: center;
     justify-content: center;
     pointer-events: none;
-    font-size: 1.05rem;
+    font-size: 1rem;
     z-index: 2;
 }
 
 #authModal .auth-input {
     width: 100%;
-    padding: 13px 16px 13px 44px;
-    border-radius: 12px;
-    border: 1.5px solid #e2e8f0;
+    padding: 8px 12px 8px 36px;
+    min-height: 40px;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
     background: #f8fafc;
-    font-size: 0.95rem;
-    color: #1a2233;
+    font-size: 0.875rem;
+    color: #0f172a;
     outline: none;
     box-sizing: border-box;
     font-family: inherit;
-    transition: all 0.2s ease;
+    transition: border-color 0.15s ease, background-color 0.15s ease;
 }
 
 #authModal .auth-input::placeholder {
@@ -167,72 +173,71 @@
 }
 
 #authModal .auth-input:focus {
-    border-color: #1e2538;
+    border-color: #059669;
     background: #ffffff;
-    box-shadow: 0 0 0 3px rgba(30, 37, 56, 0.12);
+    box-shadow: 0 0 0 2px rgba(5, 150, 105, 0.15);
 }
 
 #authModal .auth-input-password {
-    padding-right: 46px;
+    padding-right: 40px;
 }
 
 #authModal .auth-eye-icon {
     position: absolute;
-    right: 14px;
-    color: #7b889d;
+    right: 12px;
+    color: #64748b;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 6px;
+    padding: 4px;
     z-index: 2;
-    transition: color 0.2s ease;
+    transition: color 0.15s ease;
 }
 #authModal .auth-eye-icon:hover {
-    color: #1e2538;
+    color: #0f172a;
 }
 
 #authModal .auth-forgot-row {
     display: flex;
     justify-content: flex-end;
-    margin-top: -4px;
-    margin-bottom: 20px;
+    margin-top: 4px;
+    margin-bottom: 16px;
 }
 
 #authModal .auth-forgot-link {
-    font-size: 0.84rem;
+    font-size: 0.8125rem;
     color: #64748b;
     text-decoration: none;
     font-weight: 500;
-    transition: color 0.2s ease;
+    transition: color 0.15s ease;
 }
 #authModal .auth-forgot-link:hover {
-    color: #1e2538;
+    color: #0f172a;
 }
 
 #authModal .auth-submit-btn {
     width: 100%;
-    padding: 14px 20px;
-    border-radius: 12px;
-    background: #1e2538;
+    padding: 10px 16px;
+    min-height: 40px;
+    border-radius: 8px;
+    background: #0f172a;
     color: #ffffff;
     border: none;
-    font-size: 1rem;
-    font-weight: 700;
+    font-size: 0.875rem;
+    font-weight: 500;
     cursor: pointer;
-    box-shadow: 0 8px 20px rgba(30, 37, 56, 0.25);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all 0.2s ease;
-    letter-spacing: 0.3px;
+    transition: background-color 0.15s ease, transform 0.15s ease;
 }
 #authModal .auth-submit-btn:hover {
-    background: #2c364e;
-    transform: translateY(-1px);
+    background: #1e293b;
 }
 #authModal .auth-submit-btn:active {
-    transform: translateY(0);
+    transform: scale(0.98);
 }
 
 #authModal .auth-toggle-prompt {

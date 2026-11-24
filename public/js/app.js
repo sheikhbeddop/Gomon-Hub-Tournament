@@ -261,33 +261,41 @@ async function startApp() {
 // -------------------------------------------------------------
 // Dark / Light Theme Management
 // -------------------------------------------------------------
+function updateThemeIcon(isDark) {
+    const icon = document.getElementById('themeToggleIcon');
+    if (!icon) return;
+    if (isDark) {
+        icon.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>`;
+    } else {
+        icon.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>`;
+    }
+}
+
 function initTheme() {
     const saved = localStorage.getItem('gomon_theme');
-    const icon = document.getElementById('themeToggleIcon');
     if (saved === 'dark') {
         document.documentElement.setAttribute('data-theme', 'dark');
-        if (icon) icon.innerText = '☀️';
+        updateThemeIcon(true);
     } else {
         document.documentElement.removeAttribute('data-theme');
-        if (icon) icon.innerText = '🌙';
+        updateThemeIcon(false);
     }
 }
 
 function toggleTheme() {
     const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
     const newTheme = isDark ? 'light' : 'dark';
-    const icon = document.getElementById('themeToggleIcon');
 
     if (newTheme === 'dark') {
         document.documentElement.setAttribute('data-theme', 'dark');
         localStorage.setItem('gomon_theme', 'dark');
-        if (icon) icon.innerText = '☀️';
-        showToast('Dark mode enabled 🌙', 'info');
+        updateThemeIcon(true);
+        showToast('Dark mode enabled', 'info');
     } else {
         document.documentElement.removeAttribute('data-theme');
         localStorage.setItem('gomon_theme', 'light');
-        if (icon) icon.innerText = '🌙';
-        showToast('Light mode enabled ☀️', 'info');
+        updateThemeIcon(false);
+        showToast('Light mode enabled', 'info');
     }
 }
 
@@ -2843,13 +2851,13 @@ function renderMatches() {
                     <div>
                         <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 4px;">
                             <span class="match-code-badge">#${escapeHtml(m.match_code || ('MATCH-' + m.id))}</span>
-                            <span class="match-category" style="margin-bottom: 0;">🔥 ${escapeHtml(catName)}</span>
-                            <span class="match-format-monitor ${fmt.cssClass}" style="display: inline-flex; align-items: center; gap: 4px; font-size: 0.74rem; font-weight: 800; padding: 2.5px 9px; border-radius: 999px; letter-spacing: 0.5px; text-transform: uppercase; font-family: 'Rajdhani', sans-serif; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05); line-height: 1.2; ${fmt.inlineStyle}">${fmt.icon} ${fmt.label}</span>
+                            <span class="match-category" style="margin-bottom: 0;">${escapeHtml(catName)}</span>
+                            <span class="match-format-monitor ${fmt.cssClass}" style="display: inline-flex; align-items: center; gap: 4px; font-size: 0.75rem; font-weight: 500; padding: 2px 8px; border-radius: var(--radius-sm); letter-spacing: 0.2px; text-transform: uppercase; line-height: 1.2; ${fmt.inlineStyle}">${fmt.label}</span>
                         </div>
                         <div class="match-title">${escapeHtml(m.title)}</div>
-                        <div class="match-time-badge">⏰ ${escapeHtml(formatMatchTime12Hour(m.match_time))}</div>
+                        <div class="match-time-badge"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px; vertical-align: -1px;"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>${escapeHtml(formatMatchTime12Hour(m.match_time))}</div>
                     </div>
-                    <div class="match-map">🗺️ ${escapeHtml(m.map_name || 'Bermuda')}</div>
+                    <div class="match-map"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px; vertical-align: -1px;"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"></polygon><line x1="8" y1="2" x2="8" y2="18"></line><line x1="16" y1="6" x2="16" y2="22"></line></svg>${escapeHtml(m.map_name || 'Bermuda')}</div>
                 </div>
 
                 <div class="match-stats-row">
@@ -2863,13 +2871,13 @@ function renderMatches() {
                     </div>
                     <div class="stat-item">
                         <span class="stat-label">Entry Fee</span>
-                        <span class="stat-val fee">${m.entry_fee || 0}🪙</span>
+                        <span class="stat-val fee">৳${m.entry_fee || 0}</span>
                     </div>
                 </div>
 
                 <div class="slot-progress-wrapper">
                     <div class="slot-text-row">
-                        <span>Slot Booking <span style="font-weight: 800; color: ${fmt.slotColor}; font-size: 0.78rem; margin-left: 2px;">(${fmt.label})</span></span>
+                        <span>Slots <span style="font-weight: 500; color: var(--text-muted); font-size: 0.75rem; margin-left: 2px;">(${fmt.label})</span></span>
                         <span><b>${m.joined_count || 0}</b> / ${m.total_slots || 48} players</span>
                     </div>
                     <div class="slot-bar-bg">
@@ -2881,7 +2889,7 @@ function renderMatches() {
                     ${actionHtml}
                     <div class="match-countdown-pill" data-match-time="${escapeHtml(m.match_time || '')}" data-match-status="${escapeHtml(m.status || '')}">
                         <span class="countdown-pulse-dot"></span>
-                        <span class="countdown-timer-text">⏰ Starts in: calculating...</span>
+                        <span class="countdown-timer-text">Starts in: calculating...</span>
                     </div>
                 </div>
             </div>
@@ -2932,20 +2940,20 @@ function selectJoinEntrySlots(count) {
                 tmHtml += `
                     <div class="teammate-input-card">
                         <div class="teammate-header">
-                            <span>👥 Player ${i} (Teammate)</span>
-                            <span style="font-size: 0.72rem; color: #94a3b8;">Slot #${i}</span>
+                            <span>Player ${i} (Teammate)</span>
+                            <span style="font-size: 0.75rem; color: var(--text-muted);">Slot #${i}</span>
                         </div>
                         <div class="form-group" style="margin-bottom: 8px;">
-                            <label style="display: block; font-size: 0.8rem; font-weight: 700; color: #cbd5e1; margin-bottom: 4px;">
-                                Player ${i} In-Game Name (IGN) *
+                            <label style="display: block; font-size: 0.8125rem; font-weight: 500; color: var(--text-secondary); margin-bottom: 4px;">
+                                Player ${i} in-game name (IGN) *
                             </label>
-                            <input type="text" class="form-input join-tm-ign" data-index="${i}" required placeholder="Enter Player ${i} Free Fire name" style="width: 100%; box-sizing: border-box;">
+                            <input type="text" class="form-input join-tm-ign" data-index="${i}" required placeholder="Player ${i} in-game name" style="width: 100%; box-sizing: border-box;">
                         </div>
                         <div class="form-group" style="margin-bottom: 0;">
-                            <label style="display: block; font-size: 0.8rem; font-weight: 700; color: #cbd5e1; margin-bottom: 4px;">
+                            <label style="display: block; font-size: 0.8125rem; font-weight: 500; color: var(--text-secondary); margin-bottom: 4px;">
                                 Player ${i} Free Fire UID *
                             </label>
-                            <input type="text" class="form-input join-tm-uid" data-index="${i}" required inputmode="numeric" pattern="[0-9]{6,15}" placeholder="Enter Player ${i} numeric UID" style="width: 100%; box-sizing: border-box;">
+                            <input type="text" class="form-input join-tm-uid" data-index="${i}" required inputmode="numeric" pattern="[0-9]{6,15}" placeholder="Player ${i} UID" style="width: 100%; box-sizing: border-box;">
                         </div>
                     </div>
                 `;
@@ -3888,18 +3896,18 @@ function renderMyMatches() {
         const jsRoomPass = String(m.room_pass || '').replace(/'/g, "\\'");
 
         return `
-            <div class="match-card" style="border: 1px solid rgba(0, 245, 155, 0.35); box-shadow: 0 4px 20px rgba(0, 245, 155, 0.08);">
+            <div class="match-card" style="border: 1px solid var(--border-hairline); box-shadow: var(--shadow-card);">
                 <div class="match-card-header">
                     <div>
                         <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 4px;">
                             <span class="match-code-badge">#${escapeHtml(m.match_code || ('MATCH-' + m.id))}</span>
-                            <span class="match-category" style="background: rgba(0, 245, 155, 0.15); color: #00f59b; margin-bottom: 0;">✅ Registered</span>
-                            <span class="match-format-monitor ${fmt.cssClass}" style="display: inline-flex; align-items: center; gap: 4px; font-size: 0.74rem; font-weight: 800; padding: 2.5px 9px; border-radius: 999px; letter-spacing: 0.5px; text-transform: uppercase; font-family: 'Rajdhani', sans-serif; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05); line-height: 1.2; ${fmt.inlineStyle}">${fmt.icon} ${fmt.label}</span>
+                            <span class="match-category" style="background: var(--accent-subtle); color: var(--accent); margin-bottom: 0;">Registered</span>
+                            <span class="match-format-monitor ${fmt.cssClass}" style="display: inline-flex; align-items: center; gap: 4px; font-size: 0.75rem; font-weight: 500; padding: 2px 8px; border-radius: var(--radius-sm); letter-spacing: 0.2px; text-transform: uppercase; line-height: 1.2; ${fmt.inlineStyle}">${fmt.label}</span>
                         </div>
                         <div class="match-title">${escapeHtml(m.title)}</div>
-                        <div class="match-time-badge">⏰ ${escapeHtml(formatMatchTime12Hour(m.match_time))}</div>
+                        <div class="match-time-badge"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px; vertical-align: -1px;"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>${escapeHtml(formatMatchTime12Hour(m.match_time))}</div>
                     </div>
-                    <div class="match-map">🗺️ ${escapeHtml(m.map_name || 'Bermuda')}</div>
+                    <div class="match-map"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px; vertical-align: -1px;"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"></polygon><line x1="8" y1="2" x2="8" y2="18"></line><line x1="16" y1="6" x2="16" y2="22"></line></svg>${escapeHtml(m.map_name || 'Bermuda')}</div>
                 </div>
 
                 <div class="match-stats-row">
@@ -3913,13 +3921,13 @@ function renderMyMatches() {
                     </div>
                     <div class="stat-item">
                         <span class="stat-label">Entry Fee</span>
-                        <span class="stat-val fee">${m.entry_fee || 0}🪙</span>
+                        <span class="stat-val fee">৳${m.entry_fee || 0}</span>
                     </div>
                 </div>
 
                 <div class="slot-progress-wrapper" style="margin-bottom: 10px;">
                     <div class="slot-text-row">
-                        <span>Slot Booking <span style="font-weight: 800; color: ${fmt.slotColor}; font-size: 0.78rem; margin-left: 2px;">(${fmt.label})</span></span>
+                        <span>Slots <span style="font-weight: 500; color: var(--text-muted); font-size: 0.75rem; margin-left: 2px;">(${fmt.label})</span></span>
                         <span><b>${m.joined_count || 0}</b> / ${m.total_slots || 48} players</span>
                     </div>
                     <div class="slot-bar-bg">

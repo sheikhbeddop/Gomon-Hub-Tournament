@@ -81,11 +81,11 @@
       ]
     }
     </script>
-    <!-- Fast Preconnect & Font Loading (Zero Render-Blocking) -->
+    <!-- Fast Preconnect & Font Loading (Inter + JetBrains Mono) -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet"
-        href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Rajdhani:wght@600;700;800&display=swap">
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap">
     <link rel="stylesheet" href="/static/css/style.css?v=5.6.2">
     <link rel="stylesheet" href="/static/css/auth-components.css?v=5.4.3">
 
@@ -142,21 +142,25 @@
             <div class="nav-container" style="justify-content: center; text-align: center; position: relative;">
                 <div class="brand-logo" onclick="switchTab('tab-matches')" style="justify-content: center; gap: 10px;">
                     <div class="brand-icon"
-                        style="width: 38px; height: 38px; display: flex; align-items: center; justify-content: center;">
+                        style="width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;">
                         <img src="/gomon_hub_logo.png?v=3" alt="GOMON HUB TOURNAMENT"
-                            style="width: 36px; height: 36px; border-radius: 50%; object-fit: cover; border: 2px solid #00f59b; box-shadow: 0 0 10px rgba(0, 245, 155, 0.4);">
+                            style="width: 32px; height: 32px; border-radius: var(--radius-sm); object-fit: cover;">
                     </div>
                     <div>
                         <h1 class="brand-title" id="siteTitleNav"
-                            style="font-family: 'Rajdhani', sans-serif; font-size: 1.4rem; font-weight: 800; letter-spacing: 0.5px; margin: 0; display: inline-block;">
+                            style="font-size: 1.125rem; font-weight: 600; letter-spacing: -0.01em; margin: 0; display: inline-block;">
                             GOMON HUB TOURNAMENT</h1>
                     </div>
                 </div>
 
                 <!-- Dark / Light Mode Toggle Button (Top Right Corner) -->
                 <button type="button" class="theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()"
-                    title="Toggle Dark/Light Mode" aria-label="Toggle Dark Mode">
-                    <span id="themeToggleIcon">🌙</span>
+                    title="Toggle Dark/Light Mode" aria-label="Toggle Theme">
+                    <span id="themeToggleIcon" style="display: flex; align-items: center; justify-content: center;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                        </svg>
+                    </span>
                 </button>
 
                 <!-- Hidden placeholders for script safety so element lookups never throw null errors -->
@@ -171,44 +175,50 @@
 
         <!-- Mobile Push Notification Permission Prompt Banner -->
         <div id="pushPromptBanner"
-            style="display: none; background: rgba(255, 183, 3, 0.15); border-bottom: 1px solid var(--neon-amber); padding: 8px 16px; font-size: 0.85rem; align-items: center; justify-content: space-between; gap: 10px; color: #ffdd57;">
+            style="display: none; background: var(--bg-surface); border-bottom: 1px solid var(--border-hairline); padding: 8px 16px; font-size: 0.8125rem; align-items: center; justify-content: space-between; gap: 10px; color: var(--text-secondary);">
             <div style="display: flex; align-items: center; gap: 8px;">
-                <span style="font-size: 1.1rem;">🔔</span>
-                <span>Enable push notifications to receive Room ID and live match updates instantly!</span>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                    <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                </svg>
+                <span>Enable push notifications for match credentials and tournament updates</span>
             </div>
-            <div style="display: flex; gap: 6px;">
-                <button class="btn btn-sm"
-                    style="background: var(--neon-amber); color: #000; font-weight: 800; padding: 4px 10px; border-radius: 4px;"
+            <div style="display: flex; gap: 8px; align-items: center;">
+                <button class="btn btn-sm btn-neon"
+                    style="padding: 4px 12px; border-radius: var(--radius-sm); font-size: 0.75rem;"
                     onclick="requestPushPermission()">
-                    Enable Now
+                    Enable
                 </button>
                 <button
-                    style="background: transparent; border: none; color: #aaa; cursor: pointer; font-size: 1.1rem; padding: 0 4px;"
+                    style="background: transparent; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.1rem; padding: 0 4px; line-height: 1;"
                     onclick="document.getElementById('pushPromptBanner').style.display='none'">&times;</button>
             </div>
         </div>
 
         <!-- PWA App Install Banner -->
         <div id="pwaInstallBanner"
-            style="display: none; background: linear-gradient(90deg, #00f59b, #00d2ff); color: #080b11; padding: 6px 14px; font-weight: 600; align-items: center; justify-content: space-between; gap: 8px; font-size: 0.75rem; box-shadow: 0 2px 10px rgba(0,245,155,0.25);">
-            <div style="display: flex; align-items: center; gap: 6px;">
-                <span style="font-size: 1rem;">📲</span>
-                <span>Install <b>GOMON HUB</b> app directly on your Android device or PC!</span>
+            style="display: none; background: var(--bg-surface); color: var(--text-primary); border-bottom: 1px solid var(--border-hairline); padding: 8px 16px; font-weight: 500; align-items: center; justify-content: space-between; gap: 8px; font-size: 0.8125rem;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect>
+                    <line x1="12" y1="18" x2="12.01" y2="18"></line>
+                </svg>
+                <span>Install Gomon Hub app on your Android device or PC</span>
             </div>
             <button class="btn btn-sm"
-                style="background: #080b11; color: #00f59b; font-weight: 700; border-radius: 5px; padding: 3px 9px; font-size: 0.72rem; white-space: nowrap;"
+                style="background: var(--text-primary); color: var(--bg-surface); font-weight: 500; border-radius: var(--radius-sm); padding: 4px 12px; font-size: 0.75rem; white-space: nowrap;"
                 onclick="triggerPwaInstall()">
-                Install Now
+                Install app
             </button>
         </div>
 
         <!-- Impersonation Alert Banner (Shown when admin is viewing as another user) -->
         <div id="impersonationBanner"
-            style="display: none; background: #ff2a5f; color: white; padding: 6px 20px; text-align: center; font-size: 0.85rem; font-weight: 700;">
-            ⚠️ You are currently viewing as <span id="impersonatedUserText"></span>.
+            style="display: none; background: var(--bg-surface); color: var(--text-primary); border-bottom: 1px solid var(--border-hairline); padding: 8px 16px; text-align: center; font-size: 0.8125rem; font-weight: 500;">
+            Viewing session as <span id="impersonatedUserText" style="font-weight: 600;"></span>.
             <button onclick="exitImpersonation()"
-                style="background: white; color: #ff2a5f; border: none; padding: 2px 8px; border-radius: 4px; font-weight: 800; cursor: pointer; margin-left: 8px;">Return
-                to Admin</button>
+                class="btn btn-sm btn-outline"
+                style="padding: 2px 8px; margin-left: 8px; font-size: 0.75rem;">Return to Admin</button>
         </div>
 
         <!-- Main Navigation Tabs -->
@@ -216,20 +226,45 @@
             <!-- Shop Tab Removed as requested (All Deposit moved to Profile) -->
             <button class="tab-btn" id="tabBtn-shop" onclick="switchTab('tab-shop')" style="display: none;"></button>
             <button class="tab-btn active" id="tabBtn-matches" onclick="switchTab('tab-matches')">
-                🎮 Play
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="6" y1="12" x2="10" y2="12"></line>
+                    <line x1="8" y1="10" x2="8" y2="14"></line>
+                    <line x1="15" y1="13" x2="15.01" y2="13"></line>
+                    <line x1="18" y1="11" x2="18.01" y2="11"></line>
+                    <rect x="2" y="6" width="20" height="12" rx="2"></rect>
+                </svg>
+                <span>Play</span>
             </button>
             <button class="tab-btn" id="tabBtn-mymatches" onclick="switchTab('tab-mymatches')">
-                📋 My Matches
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+                    <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
+                    <line x1="9" y1="12" x2="15" y2="12"></line>
+                    <line x1="9" y1="16" x2="13" y2="16"></line>
+                </svg>
+                <span>My Matches</span>
             </button>
             <button class="tab-btn" id="tabBtn-results" onclick="switchTab('tab-results')">
-                📊 Results
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="18" y1="20" x2="18" y2="10"></line>
+                    <line x1="12" y1="20" x2="12" y2="4"></line>
+                    <line x1="6" y1="20" x2="6" y2="14"></line>
+                </svg>
+                <span>Results</span>
             </button>
             <button class="tab-btn" id="tabBtn-profile" onclick="switchTab('tab-profile')">
-                👤 Profile
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="12" cy="7" r="4"></circle>
+                </svg>
+                <span>Profile</span>
             </button>
             <button class="tab-btn" id="tabBtn-admin" onclick="switchTab('tab-admin')" style="display: none;">
-                <span id="tabBtn-admin-text">👑 Admin</span> <span class="tab-admin-badge"
-                    id="tabBtn-admin-badge">MASTER</span>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                </svg>
+                <span id="tabBtn-admin-text">Admin</span>
+                <span class="tab-admin-badge" id="tabBtn-admin-badge">Admin</span>
             </button>
         </nav>
 
@@ -241,18 +276,20 @@
             <section class="tab-content" id="tab-profile">
                 <!-- Unauthenticated Banner -->
                 <div id="notAuthProfileCard"
-                    style="display: none; max-width: 480px; margin: 30px auto; background: #ffffff; border-radius: 20px; padding: 32px 20px; text-align: center; box-shadow: 0 4px 20px rgba(0,0,0,0.06); border: 1px solid #e2e8f0;">
+                    style="display: none; max-width: 440px; margin: 32px auto; background: var(--bg-card); border-radius: var(--radius-lg); padding: var(--space-6); text-align: center; box-shadow: var(--shadow-card); border: 1px solid var(--border-hairline);">
                     <div
-                        style="width: 70px; height: 70px; border-radius: 50%; background: #e0e7ff; color: #4f46e5; display: flex; align-items: center; justify-content: center; font-size: 2.2rem; margin: 0 auto 16px auto;">
-                        👤
+                        style="width: 48px; height: 48px; border-radius: 50%; background: var(--bg-raised); color: var(--text-secondary); display: flex; align-items: center; justify-content: center; margin: 0 auto var(--space-4) auto;">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="12" cy="7" r="4"></circle>
+                        </svg>
                     </div>
                     <h3
-                        style="font-family: 'Rajdhani', sans-serif; font-size: 1.4rem; font-weight: 800; color: #0f172a; margin-bottom: 8px;">
-                        Sign in to access your profile</h3>
-                    <p style="color: #64748b; font-size: 0.9rem; margin-bottom: 22px;">Sign in or register to view your
-                        balance, win points, joined matches, and wallet.</p>
-                    <button class="btn btn-neon" style="padding: 12px 30px; font-weight: 800;"
-                        onclick="openModal('authModal')">🔑 Sign In / Register</button>
+                        style="font-size: 1.125rem; font-weight: 600; color: var(--text-primary); margin-bottom: 6px;">
+                        Sign in to view profile</h3>
+                    <p style="color: var(--text-muted); font-size: 0.8125rem; margin-bottom: 20px; line-height: 1.4;">Sign in or create an account to view your balance, joined matches, and wallet.</p>
+                    <button class="btn btn-neon" style="padding: 8px 24px; font-weight: 500;"
+                        onclick="openModal('authModal')">Sign In / Register</button>
                 </div>
 
                 <!-- Authenticated Profile Interface (Native Mobile Layout) -->
@@ -328,10 +365,9 @@
                                 </svg>
                             </div>
                             <div class="ref-menu-label" style="display: flex; align-items: center; gap: 8px;">
-                                <span style="font-weight: 700; color: #0f172a;">Video Promotion & Earn</span>
+                                <span style="font-weight: 500; color: var(--text-primary);">Video Promotion & Earn</span>
                                 <span
-                                    style="background: linear-gradient(135deg, #ef4444, #f59e0b); color: #fff; font-size: 0.65rem; font-weight: 800; padding: 2px 7px; border-radius: 99px; text-transform: uppercase;">🎁
-                                    Bonus</span>
+                                    style="background: var(--bg-raised); border: 1px solid var(--border-hairline); color: var(--text-secondary); font-size: 0.6875rem; font-weight: 500; padding: 2px 6px; border-radius: var(--radius-xs); text-transform: uppercase;">Bonus</span>
                             </div>
                             <div class="ref-menu-arrow">&#8250;</div>
                         </button>
@@ -347,9 +383,9 @@
                                 </svg>
                             </div>
                             <div class="ref-menu-label" style="display: flex; align-items: center; gap: 8px;">
-                                <span style="font-weight: 700; color: #0f172a;">Create Your Own Challenge</span>
+                                <span style="font-weight: 500; color: var(--text-primary);">Create Your Own Challenge</span>
                                 <span
-                                    style="background: linear-gradient(135deg, #10b981, #059669); color: #fff; font-size: 0.65rem; font-weight: 800; padding: 2px 7px; border-radius: 99px; text-transform: uppercase;">Custom</span>
+                                    style="background: var(--bg-raised); border: 1px solid var(--border-hairline); color: var(--text-secondary); font-size: 0.6875rem; font-weight: 500; padding: 2px 6px; border-radius: var(--radius-xs); text-transform: uppercase;">Custom</span>
                             </div>
                             <div class="ref-menu-arrow">&#8250;</div>
                         </button>
@@ -449,19 +485,18 @@
                 <div style="max-width: 680px; margin: 0 auto;">
                     <!-- Header Banner -->
                     <div
-                        style="background: linear-gradient(135deg, #0f766e 0%, #0d9488 100%); color: white; padding: 22px 20px; border-radius: 18px; margin-bottom: 20px; box-shadow: 0 6px 20px rgba(15, 118, 110, 0.25);">
+                        style="background: var(--bg-card); border: 1px solid var(--border-hairline); color: var(--text-primary); padding: var(--space-5); border-radius: var(--radius-lg); margin-bottom: var(--space-5); box-shadow: var(--shadow-card);">
                         <div
                             style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
                             <div>
                                 <span
-                                    style="font-size: 0.82rem; text-transform: uppercase; letter-spacing: 1px; color: #a7f3d0; font-weight: 700;">DIGIT
-                                    SHOP & WALLET</span>
+                                    style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); font-weight: 500;">Wallet & Recharge</span>
                                 <h2
-                                    style="font-family: 'Rajdhani', sans-serif; font-size: 1.6rem; font-weight: 800; margin: 4px 0 0 0;">
-                                    🪙 Coin & Digit Recharge</h2>
+                                    style="font-size: 1.25rem; font-weight: 600; margin: 4px 0 0 0;">
+                                    Coin & Balance Recharge</h2>
                             </div>
                             <div
-                                style="background: rgba(255, 255, 255, 0.18); padding: 8px 16px; border-radius: 99px; font-weight: 800; font-size: 0.95rem;">
+                                style="background: var(--bg-raised); border: 1px solid var(--border-hairline); color: var(--text-secondary); padding: 4px 12px; border-radius: var(--radius-sm); font-weight: 500; font-size: 0.8125rem; font-variant-numeric: tabular-nums;">
                                 1 Digit = 1 BDT
                             </div>
                         </div>
@@ -614,8 +649,12 @@
                                 standings, and prize distribution history</p>
                         </div>
                         <button class="btn btn-sm btn-outline" onclick="loadCompletedResults()"
-                            style="padding: 4px 10px; font-size: 0.74rem; border-radius: 6px; white-space: nowrap;">🔄
-                            Refresh</button>
+                            style="padding: 4px 10px; font-size: 0.75rem; border-radius: var(--radius-sm); white-space: nowrap;">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px; vertical-align: -1px;">
+                                <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+                            </svg>
+                            Refresh
+                        </button>
                     </div>
 
 
@@ -643,28 +682,20 @@
 
                 <!-- VIEW 1: 6 CATEGORIES SELECTION HUB -->
                 <div id="categoryHubView">
-                    <!-- Top Notice Strip (Animated Moving Marquee Ticker) -->
+                    <!-- Top Notice Strip (Calm System Notice) -->
                     <div class="maintenance-notice-strip" title="জরুরি নোটিশ / Notice">
                         <div class="notice-marquee-track">
                             <div class="notice-marquee-content">
-                                <span class="notice-text notice-text-bn" id="announcementText">⚠️ পুরো অ্যাপটি
-                                    মেইনটেনেন্সে আছে.. যেকোনো সমস্যায় তাৎক্ষনাৎ সাপোর্টে যোগাযোগ করুন... অন্যথায় GOMON
-                                    HUB কর্তৃপক্ষ দায়ী থাকবে না ⚠️</span>
-                                <span class="notice-sep">✦</span>
-                                <span class="notice-text notice-text-en">⚠️ The app is currently under maintenance..
-                                    Please contact support immediately for any issues... Otherwise GOMON HUB authorities
-                                    will not be held responsible ⚠️</span>
-                                <span class="notice-sep">✦</span>
+                                <span class="notice-text notice-text-bn" id="announcementText">সিস্টেম নোটিশ: নিয়মিত রক্ষণাবেক্ষণ চলছে। যেকোনো জিজ্ঞাসায় ২৪/৭ সাপোর্ট সেন্টারে যোগাযোগ করুন।</span>
+                                <span class="notice-sep">·</span>
+                                <span class="notice-text notice-text-en">System notice: Scheduled system maintenance in progress. For assistance, contact 24/7 support.</span>
+                                <span class="notice-sep">·</span>
                             </div>
                             <div class="notice-marquee-content" aria-hidden="true">
-                                <span class="notice-text notice-text-bn">⚠️ পুরো অ্যাপটি মেইনটেনেন্সে আছে.. যেকোনো
-                                    সমস্যায় তাৎক্ষনাৎ সাপোর্টে যোগাযোগ করুন... অন্যথায় GOMON HUB কর্তৃপক্ষ দায়ী থাকবে না
-                                    ⚠️</span>
-                                <span class="notice-sep">✦</span>
-                                <span class="notice-text notice-text-en">⚠️ The app is currently under maintenance..
-                                    Please contact support immediately for any issues... Otherwise GOMON HUB authorities
-                                    will not be held responsible ⚠️</span>
-                                <span class="notice-sep">✦</span>
+                                <span class="notice-text notice-text-bn">সিস্টেম নোটিশ: নিয়মিত রক্ষণাবেক্ষণ চলছে। যেকোনো জিজ্ঞাসায় ২৪/৭ সাপোর্ট সেন্টারে যোগাযোগ করুন।</span>
+                                <span class="notice-sep">·</span>
+                                <span class="notice-text notice-text-en">System notice: Scheduled system maintenance in progress. For assistance, contact 24/7 support.</span>
+                                <span class="notice-sep">·</span>
                             </div>
                         </div>
                     </div>
